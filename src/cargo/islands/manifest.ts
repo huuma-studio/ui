@@ -3,6 +3,9 @@ import { EOL, walk } from "std/fs/mod.ts";
 
 import { type EntryPoints } from "../bundler/bundler.ts";
 
+// TODO: remove EOL.LF and only rely on EOL in future versions
+const LINEBREAK = EOL.LF ?? EOL;
+
 export type Island = [string, string];
 type IslandManifestConfig = {
   path: string;
@@ -65,13 +68,15 @@ ${exports(islands)}`;
 
 function imports(islands: Island[]) {
   return islands.map((island) =>
-    `import ${island[1]} from "../${island[0]}";${EOL.LF}`
+    `import ${island[1]} from "../${island[0]}";${LINEBREAK}`
   ).join("");
 }
 
 function exports(islands: Island[]) {
   return `export default {
 ${
-    islands.map((island) => `  "${island[0]}": ${island[1]},${EOL.LF}`).join("")
+    islands.map((island) => `  "${island[0]}": ${island[1]},${LINEBREAK}`).join(
+      "",
+    )
   }}`;
 }
