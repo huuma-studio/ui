@@ -9,6 +9,8 @@ import { BUILD_ID } from "../constants.ts";
 import { PageLike } from "../tasks/parcel.ts";
 import { EOL } from "std/fs/mod.ts";
 
+const LINEBREAK = EOL.LF ?? EOL;
+
 interface PageFromProps {
   page: PageLike;
   layouts?: PageLike[];
@@ -52,7 +54,7 @@ ${
               parse(island.path).name.replaceAll("-", "")
             } from "/_parcel/${BUILD_ID}/island-${
               parse(island.path).name
-            }.js";${EOL.LF}`
+            }.js";${LINEBREAK}`
           ).join("")
         }
 launch([${
