@@ -19,6 +19,20 @@ export enum VType {
   COMPONENT,
 }
 
+export enum VNodeProps {
+  TYPE,
+  HOOKS,
+  NODE_REF,
+  EVENT_REFS,
+  CHILDREN,
+  TAG,
+  FN,
+  PROPS,
+  MODE,
+  ID,
+  AST,
+  CLEANUP,
+}
 export type VState = JSX.StateLike;
 
 export interface ElementProps<T> {
@@ -28,7 +42,6 @@ export interface ElementProps<T> {
 
 export interface VBase {
   type: VType;
-  hooks?: VHooks;
 }
 
 export interface VHooks {
@@ -60,7 +73,8 @@ export interface VComponent<T> extends VBase {
   fn: JSX.Component;
   props: JSX.ElementProps;
   ast: VNode<T>;
-  unsubs: Unsubscribe[];
+  [VNodeProps.CLEANUP]: Unsubscribe[];
+  hooks?: VHooks;
 }
 
 export type VNode<T> =
@@ -149,7 +163,7 @@ function createVComponent<T>(node: JSX.Element) {
     id: Symbol(),
     mode: VMode.NotCreated,
     fn: tag,
-    unsubs: [],
+    [VNodeProps.CLEANUP]: [],
     props,
   };
 
@@ -177,7 +191,7 @@ function update<T>(node: JSX.Node, vNode: VNode<T>): VNode<T> {
 
   if (isEmptyNode(node)) {
     if (vNode?.type === VType.COMPONENT) {
-      vNode.unsubs.forEach((unsub) => unsub());
+      unsubscribe(vNode);
     }
 
     return null;
@@ -220,6 +234,19 @@ function isTextNode(
 
 function isEmptyNode(value: unknown): value is boolean | null {
   return (typeof value === "boolean" || value === null);
+}
+
+// TODO: Integrate more performant solution so unsubscribe from states
+function unsubscribe(vNode: VNode<unknown>) {
+  if (vNode?.type === VType.COMPONENT) {
+    vNode[VNodeProps.CLEANUP].forEach((unsub) => unsub());
+    unsubscribe(vNode.ast);
+  }
+  if (vNode?.type === VType.ELEMENT && vNode.children) {
+    for (const child of vNode.children) {
+      unsubscribe(child);
+    }
+  }
 }
 
 export function copy<T>(vNode: VNode<T>): VNode<T> {
