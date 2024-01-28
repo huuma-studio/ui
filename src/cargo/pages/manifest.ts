@@ -1,6 +1,8 @@
 import { dirname, join } from "std/path/mod.ts";
 import { EOL, walk } from "std/fs/mod.ts";
 
+const LINEBREAK = EOL.LF ?? EOL;
+
 interface FileImport {
   id: string;
   path: string;
@@ -154,7 +156,7 @@ function imports(pages: FileImport[], type: string): string {
       ...pages.map((route) => {
         return `import * as ${route.id} from "../${route.path}/${route.fileName}";`;
       }),
-    ].join(EOL.LF)
+    ].join(LINEBREAK)
     : "";
 }
 
@@ -169,7 +171,7 @@ function exports(path: string, pages: Page[]): string {
     layouts: [${page.layouts.join()}],
     middleware: [${page.middleware.reverse().join()}]
   },`;
-  }).join(`${EOL.LF}  `);
+  }).join(`${LINEBREAK}  `);
 }
 
 function sortImports(imports: FileImport[], basePath?: string): FileImport[] {
