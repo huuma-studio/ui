@@ -1,5 +1,5 @@
-import { type VElement, VType } from "../deps.ts";
-import { Action, type ChangeSet, Props, Type } from "../mod.ts";
+import { VElement, VType } from "../../../../ast.ts";
+import { Action, ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseElementChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Element;
@@ -8,6 +8,11 @@ interface BaseElementChangeSet<T> extends ChangeSet<T> {
 export interface CreateElementPayload {
   parentVNode: VElement<Node>;
   vNode: VElement<Node>;
+}
+
+export interface LinkElementPayload {
+  vNode: VElement<Node>;
+  node: Node;
 }
 
 export interface MountElementPayload {
@@ -30,8 +35,7 @@ export interface UpdateElementPayload {
   vNode: VElement<Node>;
 }
 
-export interface DeleteElementPayload {
-  parentVNode: VElement<Node>;
+export interface RemoveElementPayload {
   vNode: VElement<Node>;
 }
 
@@ -40,14 +44,14 @@ export interface CreateElementChangeSet
   [Props.Action]: Action.Create;
 }
 
+export interface LinkElementChangeSet
+  extends BaseElementChangeSet<LinkElementPayload> {
+  [Props.Action]: Action.Link;
+}
+
 export interface AttachElementChangeSet
   extends BaseElementChangeSet<AttachElementPayload> {
   [Props.Action]: Action.Attach;
-}
-
-export interface MountElementChangeSet
-  extends BaseElementChangeSet<MountElementPayload> {
-  [Props.Action]: Action.Mount;
 }
 
 export interface ReplaceElementChangeSet
@@ -60,33 +64,33 @@ export interface UpdateElementChangeSet
   [Props.Action]: Action.Update;
 }
 
-export interface DeleteElementChangeSet
-  extends BaseElementChangeSet<DeleteElementPayload> {
+export interface RemoveElementChangeSet
+  extends BaseElementChangeSet<RemoveElementPayload> {
   [Props.Action]: Action.Delete;
 }
 
 export type ElementChangeSet =
   | CreateElementChangeSet
+  | LinkElementChangeSet
   | AttachElementChangeSet
-  | MountElementChangeSet
   | ReplaceElementChangeSet
   | UpdateElementChangeSet
-  | DeleteElementChangeSet;
+  | RemoveElementChangeSet;
 
 export function element(change: ElementChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
       return create(<CreateElementPayload> change[Props.Payload]);
+    case Action.Link:
+      return link(<LinkElementPayload> change[Props.Payload]);
     case Action.Attach:
       return attach(<AttachElementPayload> change[Props.Payload]);
-    case Action.Mount:
-      return mount(<MountElementPayload> change[Props.Payload]);
     case Action.Replace:
       return replace(<ReplaceElementPayload> change[Props.Payload]);
     case Action.Update:
       return update(<UpdateElementPayload> change[Props.Payload]);
     case Action.Delete:
-      return remove(<DeleteElementPayload> change[Props.Payload]);
+      return remove(<RemoveElementPayload> change[Props.Payload]);
   }
 }
 
@@ -98,24 +102,14 @@ function create(payload: CreateElementPayload): void {
   );
 }
 
+function link(payload: LinkElementPayload): void {
+  payload.vNode.nodeRef = payload.node;
+}
+
 function attach(payload: AttachElementPayload): void {
   if (payload.vNode.type === VType.ELEMENT && payload.vNode.nodeRef) {
     (<Node> payload.parentVNode.nodeRef)?.appendChild(payload.vNode.nodeRef);
   }
-}
-
-function mount(payload: MountElementPayload) {
-  // Run lifecycle "onMount" hooks associated with this element.
-  payload.vNode.hooks?.onMount?.forEach((hook) => {
-    const onDestroy = hook();
-    if (typeof onDestroy === "function" && payload.vNode.hooks) {
-      if (Array.isArray(payload.vNode.hooks.onDestroy)) {
-        payload.vNode.hooks.onDestroy.push(onDestroy);
-        return;
-      }
-      payload.vNode.hooks.onDestroy = [onDestroy];
-    }
-  });
 }
 
 function replace(payload: ReplaceElementPayload): void {
@@ -143,13 +137,9 @@ function update(
   );
 }
 
-function remove(payload: DeleteElementPayload): void {
-  (<Node> payload.parentVNode.nodeRef).removeChild(
-    <Node> payload.vNode.nodeRef,
-  );
-  payload.vNode.hooks?.onDestroy?.forEach((hook) => {
-    hook();
-  });
+function remove(payload: RemoveElementPayload): void {
+  (<HTMLElement> payload.vNode.nodeRef).remove();
+  payload.vNode.nodeRef = undefined;
 }
 
 function createElement(vNode: VElement<Node>, parentNode: Node): Node {
@@ -159,12 +149,6 @@ function createElement(vNode: VElement<Node>, parentNode: Node): Node {
 }
 
 function isSVG(tag: string, parentNode: Node): boolean {
-  if (
-    tag === "svg" ||
-    typeof (<SVGElement> parentNode).ownerSVGElement !==
-      "undefined"
-  ) {
-    return true;
-  }
-  return false;
+  return tag === "svg" ||
+    typeof (<SVGElement> parentNode).ownerSVGElement !== "undefined";
 }

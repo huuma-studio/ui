@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
-import { VNode, VNodeRef } from "../deps.ts";
-import { Action, type ChangeSet, Props, Type } from "../mod.ts";
+import { VNode, VNodeRef } from "../../../../ast.ts";
+import { Action, ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseEventChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Event;
@@ -46,7 +46,7 @@ function create(
 
 function remove(
   payload: DeleteEventPayload,
-) {
+): void {
   (<VNodeRef<Node>> payload.vNode).nodeRef?.removeEventListener(
     payload.name,
     payload.listener,

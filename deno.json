@@ -6,8 +6,5 @@
   },
   "tasks": {
     "check": "deno check src/**/*.tsx src/**/*.ts"
-  },
-  "compilerOptions": {
-    "jsxFactory": "tag"
   }
 }

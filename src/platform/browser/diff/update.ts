@@ -1,39 +1,65 @@
 // TODO: replace "State" with dedicated VState type
-import { VElement, VNode, VState, VText, VType } from "./deps.ts";
-
 import {
-  Action,
-  ChangeSet,
-  compareAttributes,
-  diff,
-  ElementChangeSet,
-  EventChangeSet,
-  Props,
-  Type,
-  UpdateTextPayload,
-} from "./mod.ts";
+  VComponent,
+  VElement,
+  VNode,
+  VState,
+  VText,
+  VType,
+} from "../../../ast.ts";
+import { diff } from "./diff.ts";
+import { Action, ChangeSet, Props, Type } from "./dispatch.ts";
+import { remove } from "./remove.ts";
+import { compareAttributes } from "./types/attribute.ts";
+import { ElementChangeSet } from "./types/element.ts";
+import { EventChangeSet } from "./types/event.ts";
+import { UpdateTextPayload } from "./types/text.ts";
 
 export function update(
-  vNode?: VElement<Node> | VText<Node>,
-  previousVNode?: VElement<Node> | VText<Node>,
+  vNode: VNode<Node>,
+  previousVNode: VNode<Node>,
 ): ChangeSet<unknown>[] {
-  if (vNode?.type === VType.ELEMENT && previousVNode?.type === VType.ELEMENT) {
+  if (vNode == null || previousVNode == null) {
+    console.log("VNode could not be updated", vNode, previousVNode);
+    return [];
+  }
+
+  if (
+    vNode.type === VType.COMPONENT && previousVNode.type === VType.COMPONENT
+  ) {
+    return updateComponent(vNode, previousVNode);
+  }
+
+  if (vNode.type === VType.ELEMENT && previousVNode.type === VType.ELEMENT) {
     return updateElement(vNode, previousVNode);
   }
 
-  if (vNode?.type === VType.ELEMENT && previousVNode?.type === VType.TEXT) {
+  if (vNode.type === VType.ELEMENT && previousVNode.type === VType.TEXT) {
     return replaceTextWithElement(vNode, previousVNode);
   }
 
-  if (vNode?.type === VType.TEXT && previousVNode?.type === VType.TEXT) {
+  if (vNode.type === VType.TEXT && previousVNode.type === VType.TEXT) {
     return updateText(vNode, previousVNode);
   }
 
-  if (vNode?.type === VType.TEXT && previousVNode?.type === VType.ELEMENT) {
+  if (vNode.type === VType.TEXT && previousVNode.type === VType.ELEMENT) {
     return replaceElementWithText(vNode, previousVNode);
   }
 
   return [];
+}
+
+function updateComponent(
+  vNode: VComponent<Node>,
+  previousVNode: VComponent<Node>,
+) {
+  // Same kind of component
+  if (vNode.id === previousVNode.id) {
+    return update(vNode.ast, previousVNode.ast);
+  }
+
+  // Other component destroy old and render new
+  return [...remove(previousVNode)];
 }
 
 function updateElement(
@@ -42,8 +68,6 @@ function updateElement(
 ): ChangeSet<unknown>[] {
   const changes: ChangeSet<unknown>[] = [];
   let skipPrevious = false;
-
-  vNode.hooks = previousVNode.hooks;
 
   // Tag did change
   if (vNode.tag !== (<VElement<Node>> previousVNode).tag) {
@@ -212,13 +236,9 @@ export function updateChildren(
   props: UpdateChildrenProps,
 ): ChangeSet<unknown>[] {
   const changes: ChangeSet<unknown>[] = [];
-  let previousChildren: VNode<Node>[] = [];
-  if (props.previousVNode && Array.isArray(props.previousVNode.children)) {
-    previousChildren = [...props.previousVNode.children].filter((c) =>
-      c != null
-    );
-  }
-  props.vNode?.children?.filter((c) => c != null)?.forEach((child) => {
+  const previousChildren: VNode<Node>[] = props.previousVNode?.children || [];
+
+  props.vNode?.children?.forEach((child) => {
     changes.push(...diff({
       parentVNode: props.vNode,
       vNode: child,

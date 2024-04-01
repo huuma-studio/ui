@@ -1,14 +1,14 @@
 export enum SubscriberProps {
   update,
-  unsubscribeCallback,
+  cleanupCallback,
 }
 
 export interface Subscriber<T> {
   update: (value: T) => void;
-  unsubscribeCallback?: (unsubscribe: Unsubscribe) => void;
+  cleanupCallback?: (cleanup: Cleanup) => void;
 }
 
-export type Unsubscribe = () => void;
+export type Cleanup = () => void;
 
 let subscriber: Subscriber<unknown> | undefined;
 
@@ -41,10 +41,10 @@ export class State<T> {
     return value;
   }
 
-  subscribe(subscriber: Subscriber<T>): Unsubscribe {
+  subscribe(subscriber: Subscriber<T>): Cleanup {
     if (!this.#subscribers.find((existing) => existing === subscriber)) {
       this.#subscribers.push(subscriber);
-      subscriber.unsubscribeCallback?.call(this, () => {
+      subscriber.cleanupCallback?.call(this, () => {
         this.#subscribers = this.#subscribers.filter((existing) =>
           existing !== subscriber
         );

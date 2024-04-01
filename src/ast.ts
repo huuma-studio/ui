@@ -1,10 +1,10 @@
+import { Fragment } from "./jsx.ts";
 import {
+  Cleanup,
   clearSubscriber,
   setSubscriber,
   type Subscriber,
-  Unsubscribe,
-} from "./state/mod.ts";
-import "./types.ts";
+} from "./state/state.ts";
 
 export const scope: VComponent<unknown>[] = [];
 
@@ -17,6 +17,7 @@ export enum VType {
   TEXT,
   ELEMENT,
   COMPONENT,
+  FRAGMENT,
 }
 
 export enum VNodeProps {
@@ -35,18 +36,18 @@ export enum VNodeProps {
 }
 export type VState = JSX.StateLike;
 
-export interface ElementProps<T> {
-  [key: string]: unknown;
-  children?: VNode<T>[];
-}
-
 export interface VBase {
   type: VType;
 }
 
 export interface VHooks {
-  onMount?: ((() => () => void) | (() => void))[];
-  onDestroy?: (() => void)[];
+  [VHook.ON_MOUNT]?: ((() => () => void) | (() => void))[];
+  [VHook.ON_DESTROY]?: (() => void)[];
+}
+
+export enum VHook {
+  ON_MOUNT,
+  ON_DESTROY,
 }
 
 export interface VNodeRef<T> extends VBase {
@@ -58,7 +59,7 @@ export interface VNodeRef<T> extends VBase {
 export interface VElement<T> extends VNodeRef<T> {
   type: VType.ELEMENT;
   tag: string;
-  props: ElementProps<T>;
+  props: JSX.ElementProps;
 }
 
 export interface VText<T> extends VNodeRef<T> {
@@ -69,18 +70,23 @@ export interface VText<T> extends VNodeRef<T> {
 export interface VComponent<T> extends VBase {
   type: VType.COMPONENT;
   mode: VMode;
-  id: symbol;
   fn: JSX.Component;
   props: JSX.ElementProps;
   ast: VNode<T>;
-  [VNodeProps.CLEANUP]: Unsubscribe[];
-  hooks?: VHooks;
+  [VNodeProps.CLEANUP]: Cleanup[];
+  [VNodeProps.HOOKS]?: VHooks;
+}
+
+export interface VFragment<T> extends VBase {
+  type: VType.FRAGMENT;
+  children?: VNode<T>[];
 }
 
 export type VNode<T> =
   | VComponent<T>
   | VElement<T>
   | VText<T>
+  | VFragment<T>
   | undefined
   | null;
 
@@ -94,7 +100,7 @@ export function setComponentUpdater(
   vComponentUpdater = updater;
 }
 
-export function create<T>(node: JSX.Node | VComponent<T>): VNode<T> {
+export function create<T>(node: JSX.Node): VNode<T> {
   if (typeof node === "undefined") return;
 
   if (isEmptyNode(node)) {
@@ -105,64 +111,54 @@ export function create<T>(node: JSX.Node | VComponent<T>): VNode<T> {
     return vText(node);
   }
 
-  if ("tag" in node && typeof node.tag === "string") {
-    return vElement(node);
+  if (node.type === 0) {
+    return vFragment(<JSX.Element<0>>node);
   }
 
-  if (("tag" in node && typeof node.tag === "function")) {
-    return createVComponent(node);
+  if (typeof node.type === "string") {
+    return vElement(<JSX.Element<string>>node);
   }
 
-  if (
-    ("fn" in node && typeof node.fn === "function")
-  ) {
-    return updateVComponent(node);
+  if (typeof node.type === "function") {
+    return vComponent(<JSX.Element<JSX.Component>>node);
   }
 }
 
-function vText<T>(node: string | number | JSX.StateLike): VText<T> {
+export function vText<T>(node: string | number | JSX.StateLike): VText<T> {
   return {
     type: VType.TEXT,
-    text: (typeof node === "object" && "get" in node) ? node : `${node}`,
+    text: typeof node === "object" && "get" in node ? node : `${node}`,
     eventRefs: [],
   };
 }
 
-function vElement<T>(node: JSX.Element, vNode?: VElement<T>): VElement<T> {
-  const { tag, children, eventRefs, props, ...rest } = node;
+export function vElement<T>(node: JSX.Element<string>): VElement<T> {
+  const { type, eventRefs, props, ...rest } = node;
 
   return {
     type: VType.ELEMENT,
-    tag: <string> tag,
-    props: <ElementProps<T>> props,
+    tag: type,
+    props: <JSX.ElementProps>props,
     eventRefs,
-    children: children?.map((child, i) => {
-      // TODO: Find a way to track VComponents with state.
-      return vNode
-        ? update(child, vNode.children ? vNode.children[i] : null)
-        : create(child);
+    children: props.children?.map((child) => {
+      return create(child);
     }),
     ...rest,
   };
 }
 
-function createVComponent<T>(node: JSX.Element) {
-  if (typeof node.tag !== "function") {
-    throw new Error(
-      "Component is not a function",
-    );
+function vComponent<T>(node: JSX.Element<JSX.Component>) {
+  if (typeof node.type !== "function" || node.type === Fragment) {
+    throw new Error("Component is not a function");
   }
 
-  const { tag, props, children } = node;
-
-  props.children = children;
+  const { type, props } = node;
 
   const component: VComponent<T> = {
     type: VType.COMPONENT,
     ast: undefined,
-    id: Symbol(),
     mode: VMode.NotCreated,
-    fn: tag,
+    fn: type,
     [VNodeProps.CLEANUP]: [],
     props,
   };
@@ -177,91 +173,25 @@ function createVComponent<T>(node: JSX.Element) {
   return component;
 }
 
-function updateVComponent<T>(vComponent: VComponent<T>) {
-  scope.push(vComponent);
-  const node = vComponent.fn(vComponent.props);
-  scope.shift();
-
-  vComponent.ast = update(node, vComponent.ast);
-  return vComponent;
-}
-
-function update<T>(node: JSX.Node, vNode: VNode<T>): VNode<T> {
-  if (typeof node === "undefined") return;
-
-  if (isEmptyNode(node)) {
-    if (vNode?.type === VType.COMPONENT) {
-      unsubscribe(vNode);
-    }
-
-    return null;
-  }
-
-  if (isTextNode(node)) {
-    return vText(node);
-  }
-
-  if (typeof node.tag === "string") {
-    if (vNode?.type === VType.ELEMENT && node.tag === vNode.tag) {
-      return vElement(node, vNode);
-    }
-    return vElement(node);
-  }
-
-  if (typeof node.tag === "function") {
-    if (vNode?.type === VType.COMPONENT && vNode.fn === node.tag) {
-      const { children, props } = node;
-      props.children = children;
-      vNode.props = props;
-      return updateVComponent(vNode);
-    }
-    return createVComponent(node);
-  }
+function vFragment<T>(node: JSX.Element<0>): VFragment<T> {
+  return {
+    type: VType.FRAGMENT,
+    children: node.props.children?.map((child) => create(child)),
+  };
 }
 
 // TODO: Move type-guard to appropriate location
-function isTextNode(
+export function isTextNode(
   value: unknown,
 ): value is string | number | JSX.StateLike {
   return (
-    value != null && (
-      typeof value === "string" ||
-      (Number.isFinite(value)) ||
-      (typeof value === "object" && "get" in value)
-    )
+    value != null &&
+    (typeof value === "string" ||
+      Number.isFinite(value) ||
+      (typeof value === "object" && "get" in value))
   );
 }
 
-function isEmptyNode(value: unknown): value is boolean | null {
-  return (typeof value === "boolean" || value === null);
-}
-
-// TODO: Integrate more performant solution so unsubscribe from states
-function unsubscribe(vNode: VNode<unknown>) {
-  if (vNode?.type === VType.COMPONENT) {
-    vNode[VNodeProps.CLEANUP].forEach((unsub) => unsub());
-    unsubscribe(vNode.ast);
-  }
-  if (vNode?.type === VType.ELEMENT && vNode.children) {
-    for (const child of vNode.children) {
-      unsubscribe(child);
-    }
-  }
-}
-
-export function copy<T>(vNode: VNode<T>): VNode<T> {
-  if (vNode?.type === VType.COMPONENT) {
-    const copyAst = copy(vNode.ast);
-    return { ...vNode, ast: copyAst };
-  }
-  if (vNode?.type === VType.ELEMENT) {
-    const copyChildren = vNode.children?.map((child) => copy(child));
-    return { ...vNode, children: copyChildren };
-  }
-  if (vNode?.type === VType.TEXT) {
-    return {
-      ...vNode,
-    };
-  }
-  return vNode;
+export function isEmptyNode(value: unknown): value is boolean | null {
+  return typeof value === "boolean" || value === null;
 }

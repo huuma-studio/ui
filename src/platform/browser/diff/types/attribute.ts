@@ -1,5 +1,5 @@
-import { VElement, VNodeRef } from "../deps.ts";
-import { Action, ChangeSet, Props, Type } from "../mod.ts";
+import { VElement, VNodeRef } from "../../../../ast.ts";
+import { Action, ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Attribute;
@@ -53,7 +53,7 @@ export function attribute(change: AttributeChangeSet) {
   }
 }
 
-function createOrUpdate({ vNode, name, value }: CreateAttributePayload) {
+function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
   if (
     name === "checked" && typeof value === "boolean"
   ) {
@@ -63,7 +63,8 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload) {
     (<HTMLFormElement> vNode.nodeRef)[name] = `${value}`;
   }
   if (name === "unsafeInnerHTML") {
-    return (<HTMLFormElement> vNode.nodeRef).innerHTML = `${value}`;
+    (<HTMLFormElement> vNode.nodeRef).innerHTML = `${value}`;
+    return;
   }
   (<HTMLElement> vNode.nodeRef).setAttribute(
     name,
@@ -71,7 +72,7 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload) {
   );
 }
 
-function remove({ name, vNode }: DeleteAttributePayload) {
+function remove({ name, vNode }: DeleteAttributePayload): void {
   if (name === "checked") {
     (<HTMLFormElement> vNode.nodeRef)[name] = false;
   }

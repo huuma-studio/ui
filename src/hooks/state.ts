@@ -1,13 +1,13 @@
 import { State } from "../state/state.ts";
 
-import { scope, VComponent, VMode } from "./deps.ts";
+import { scope, VComponent, VMode } from "../ast.ts";
 
 interface VComponentWithState<T> extends VComponent<unknown> {
   state?: State<T>[];
 }
 
 interface StateScope<T> {
-  componentId: symbol;
+  component: VComponentWithState<unknown>;
   state: State<T>;
 }
 
@@ -22,7 +22,7 @@ export function $<T>(value: T) {
 
   // If state is left in the current VComponent return it.
   if (statesCache.length) {
-    if (statesCache[statesCache.length - 1].componentId === vComponent.id) {
+    if (statesCache[statesCache.length - 1].component === vComponent) {
       const current = <StateScope<T>> statesCache.shift();
       vComponent.state?.push(current.state);
       return current.state;
@@ -35,7 +35,7 @@ export function $<T>(value: T) {
   if (vComponent.mode === VMode.Created && vComponent.state?.length) {
     statesCache.push(
       ...<StateScope<unknown>[]> vComponent.state.map((state) => ({
-        componentId: vComponent.id,
+        component: vComponent,
         state,
       })),
     );
@@ -46,10 +46,9 @@ export function $<T>(value: T) {
   }
 
   const state = new State(value);
-  if (Array.isArray(vComponent.state)) {
-    vComponent.state.push(state);
-  } else {
-    vComponent.state = [state];
-  }
+  Array.isArray(vComponent.state)
+    ? vComponent.state.push(state)
+    : vComponent.state = [state];
+
   return state;
 }

@@ -1,6 +1,7 @@
 // TODO: replace with dedicated VState type
-import type { VNode, VNodeRef, VState, VText } from "../deps.ts";
-import { Action, type ChangeSet, isState, Props, Type } from "../mod.ts";
+import { VNode, VNodeRef, VState, VText } from "../../../../ast.ts";
+import { Action, ChangeSet, Props, Type } from "../dispatch.ts";
+import { isState } from "../update.ts";
 
 interface BaseTextChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Text;
@@ -74,7 +75,7 @@ export function text(change: TextChangeSet): void {
   }
 }
 
-function create(payload: CreateTextPayload) {
+function create(payload: CreateTextPayload): void {
   let text: Text;
 
   if (typeof payload.vNode.text === "object" && "get" in payload.vNode.text) {
@@ -93,13 +94,13 @@ function create(payload: CreateTextPayload) {
   vNode.nodeRef = text;
 }
 
-function attach(payload: AttachTextPayload) {
+function attach(payload: AttachTextPayload): void {
   (<Node> (<VNodeRef<Node>> payload.parentVNode).nodeRef).appendChild(
     <Node> payload.vNode.nodeRef,
   );
 }
 
-function replace(payload: ReplaceTextPayload) {
+function replace(payload: ReplaceTextPayload): void {
   let text: Text;
 
   if (typeof payload.vNode.text === "object" && "get" in payload.vNode.text) {
@@ -118,12 +119,12 @@ function replace(payload: ReplaceTextPayload) {
   payload.vNode.nodeRef = text;
 }
 
-function update(payload: UpdateTextPayload) {
+function update(payload: UpdateTextPayload): void {
   (<Text> payload.vNode.nodeRef).textContent = isState(payload.vNode)
     ? `${(<VState> payload.vNode.text).get}`
     : `${payload.vNode.text}`;
 }
 
-function remove(payload: DeleteTextPayload) {
+function remove(payload: DeleteTextPayload): void {
   (<Text> payload.vNode.nodeRef).remove();
 }

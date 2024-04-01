@@ -2,18 +2,19 @@
 /// <reference lib="DOM" />
 /// <reference lib="deno.ns" />
 
-import { Unsubscribe } from "../../state/mod.ts";
-import { tag } from "../../tag.ts";
 import {
-  copy,
   create,
-  diff,
-  dispatch,
   setComponentUpdater,
+  snapshot,
   VComponent,
   VElement,
   VNode,
-} from "./deps.ts";
+  VNodeProps,
+} from "../../ast.ts";
+import { Cleanup } from "../../state/state.ts";
+import { tag } from "../../tag.ts";
+import { diff } from "./diff/diff.ts";
+import { dispatch } from "./diff/dispatch.ts";
 
 interface Island {
   class: string;
@@ -30,15 +31,16 @@ export function launch(islands: Island[]) {
   setComponentUpdater((vComponent: VComponent<unknown>) => {
     return {
       update: () => {
-        const vNodeSnapshot = <VComponent<Node>> copy(vComponent);
+        const vNodeSnapshot = <VComponent<Node>> snapshot(vComponent);
+        //const vNode = create(vComponent);
         const changeSet = diff({
-          vNode: <VComponent<Node>> create(vComponent),
+          vNode: <VComponent<Node>> vNodeSnapshot,
           previousVNode: <VComponent<Node>> vNodeSnapshot,
         });
         dispatch(changeSet);
       },
-      unsubscribeCallback: (unsubscribe: Unsubscribe) => {
-        vComponent.unsubs.push(unsubscribe);
+      unsubscribeCallback: (cleanup: Cleanup) => {
+        vComponent[VNodeProps.CLEANUP].push(cleanup);
       },
     };
   });

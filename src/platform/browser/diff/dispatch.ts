@@ -1,15 +1,11 @@
-import {
-  attribute,
-  AttributeChangeSet,
-  element,
-  ElementChangeSet,
-  event,
-  EventChangeSet,
-  text,
-  TextChangeSet,
-} from "./mod.ts";
+import { attribute, AttributeChangeSet } from "./types/attribute.ts";
+import { component, ComponentChangeSet } from "./types/component.ts";
+import { element, ElementChangeSet } from "./types/element.ts";
+import { event, EventChangeSet } from "./types/event.ts";
+import { text, TextChangeSet } from "./types/text.ts";
 
 export enum Type {
+  Component,
   Element,
   Event,
   Attribute,
@@ -18,10 +14,12 @@ export enum Type {
 
 export enum Action {
   Create,
-  Update,
+  Link,
   Attach,
   Mount,
+  Update,
   Replace,
+  Destroy,
   Delete,
 }
 
@@ -43,6 +41,8 @@ function change(changeSet: ChangeSet<unknown>) {
       return attribute(<AttributeChangeSet> changeSet);
     case Type.Event:
       return event(<EventChangeSet> changeSet);
+    case Type.Component:
+      return component(<ComponentChangeSet> changeSet);
     case Type.Element:
       return element(<ElementChangeSet> changeSet);
     case Type.Text:

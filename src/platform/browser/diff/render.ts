@@ -1,5 +1,7 @@
-import { VElement, VNode, VText, VType } from "./deps.ts";
-import { Action, ChangeSet, diff, Props, TextChangeSet, Type } from "./mod.ts";
+import { VElement, VNode, VText, VType } from "../../../ast.ts";
+import { diff } from "./diff.ts";
+import { Action, ChangeSet, Props, Type } from "./dispatch.ts";
+import { TextChangeSet } from "./types/text.ts";
 
 interface RenderProps {
   parentVNode: VNode<Node>;
@@ -121,8 +123,5 @@ function text(
 export function toBeRendered(
   props: RenderProps,
 ) {
-  if (props.parentVNode && props.vNode) {
-    return true;
-  }
-  return false;
+  return props.parentVNode && props.vNode;
 }

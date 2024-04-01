@@ -1,93 +1,83 @@
-import { VElement, VNode, VText, VType } from "./deps.ts";
-import {
-  Action,
-  ChangeSet,
-  diff,
-  EventChangeSet,
-  Props,
-  setAttribute,
-  Type,
-} from "./mod.ts";
+import { VComponent, VElement, VNode, VText, VType } from "../../../ast.ts";
+import { diff } from "./diff.ts";
+import { Action, ChangeSet, Props, Type } from "./dispatch.ts";
+import { setAttribute } from "./types/attribute.ts";
+import { MountComponentChangeSet } from "./types/component.ts";
+import { EventChangeSet } from "./types/event.ts";
 
-interface HydrateProps {
-  vNode: VElement<Node> | VText<Node> | undefined;
-  node: Node;
-}
-
-/*
- * Compare VNode tree with DOM node tree and create a change set based on the difference.
- */
 export function hydrate(
-  props: HydrateProps,
+  vNode: VNode<Node>,
+  node: Node,
 ): ChangeSet<unknown>[] {
-  if (props.vNode?.type === VType.ELEMENT) {
-    return element(<HydrateElementProps> props);
+  if (vNode?.type === VType.COMPONENT) {
+    return component(vNode, node);
   }
-  if (props.vNode?.type === VType.TEXT) {
-    return text(props.node, props.vNode);
+  if (vNode?.type === VType.ELEMENT) {
+    return element(vNode, node);
+  }
+  if (vNode?.type === VType.TEXT) {
+    return text(vNode, node);
   }
   return [];
 }
 
-interface HydrateElementProps {
-  vNode: VElement<Node>;
-  parentVNode?: VElement<Node>;
-  node: Node;
+function component(vNode: VComponent<Node>, node: Node): ChangeSet<unknown>[] {
+  return [
+    <MountComponentChangeSet> {
+      [Props.Type]: Type.Component,
+      [Props.Action]: Action.Mount,
+      [Props.Payload]: {
+        vNode,
+      },
+    },
+    ...hydrate(
+      vNode.ast,
+      node,
+    ),
+  ];
 }
 
-/*
- * Hydrate "VElement"
- */
 function element(
-  props: HydrateElementProps,
+  vNode: VElement<Node>,
+  node: Node,
 ) {
   const changes: ChangeSet<unknown>[] = [];
 
   // Replace dom node with effective vnode type
-  if (props.node.nodeName.toLowerCase() !== props.vNode.tag) {
+  if (node.nodeName.toLowerCase() !== vNode.tag) {
     changes.push({
       [Props.Type]: Type.Element,
       [Props.Action]: Action.Replace,
-      [Props.Payload]: { vNode: props.vNode, node: props.node },
+      [Props.Payload]: { vNode, node: node },
     });
   } else {
     // Link current dom node with the vnode
-    props.vNode.nodeRef = props.node;
-
-    props.vNode.hooks?.onMount?.forEach((hook) => {
-      const onDestroy = hook();
-      if (typeof onDestroy === "function" && props.vNode.hooks) {
-        if (Array.isArray(props.vNode.hooks.onDestroy)) {
-          props.vNode.hooks.onDestroy.push(onDestroy);
-          return;
-        }
-        props.vNode.hooks.onDestroy = [onDestroy];
-      }
-    });
+    vNode.nodeRef = node;
   }
 
   // Attach events to the dom node
-  props.vNode.eventRefs?.forEach((eventRef) => {
+  vNode.eventRefs?.forEach((eventRef) => {
     changes.push(
       <EventChangeSet> {
         [Props.Type]: Type.Event,
         [Props.Action]: Action.Create,
-        [Props.Payload]: { vNode: props.vNode, ...eventRef },
+        [Props.Payload]: { vNode: vNode, ...eventRef },
       },
     );
   });
 
-  for (const prop in props.vNode.props) {
-    changes.push(...setAttribute(prop, props.vNode.props[prop], props.vNode));
+  for (const prop in vNode.props) {
+    changes.push(...setAttribute(prop, vNode.props[prop], vNode));
   }
 
-  const children = props.vNode.children?.filter((c) => c != null);
+  //TODO: Check if we need to filter out empty nodes here?
+  const children = vNode.children?.filter((c) => c != null);
   children?.forEach((child, index) => {
     changes.push(
       ...diff({
-        node: props.vNode.nodeRef?.childNodes.item(index),
+        node: vNode.nodeRef?.childNodes.item(index),
         vNode: child,
-        parentVNode: props.vNode,
+        parentVNode: vNode,
       }),
     );
   });
@@ -98,7 +88,7 @@ function element(
 /*
  * Hydrate "VText"
  */
-function text(node: Node, vText: VText<Node>) {
+function text(vText: VText<Node>, node: Node) {
   const changes: ChangeSet<unknown>[] = [];
   vText.nodeRef = node;
 
@@ -116,12 +106,9 @@ function text(node: Node, vText: VText<Node>) {
 }
 
 export function toBeHydrated<T>(
+  vNode: VNode<T>,
+  previousVNode: VNode<T>,
   node?: T | null,
-  vNode?: VNode<T>,
-  previousVNode?: VNode<T>,
 ): boolean {
-  if (node && vNode && !previousVNode) {
-    return true;
-  }
-  return false;
+  return !!(node && vNode && !previousVNode);
 }

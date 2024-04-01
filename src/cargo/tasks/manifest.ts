@@ -50,6 +50,8 @@ export const Manifest: (config?: ManifestTaskConfig) => Promise<Task> =
     _entryPoints["main"] =
       new URL("../../platform/browser/launch.ts", import.meta.url).href;
 
+    console.log(_entryPoints);
+
     // create scripts manifest
     await scriptsManifest({
       entryPoints: _entryPoints,

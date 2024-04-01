@@ -54,7 +54,7 @@ export class Bundler {
       treeShaking: true,
       splitting: true,
       outdir: ".",
-      minify: isProd,
+      minify: false,
       platform: "neutral",
       write: false,
       jsx: "automatic",
