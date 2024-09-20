@@ -1,5 +1,5 @@
-import { VElement, VType } from "../../../../ast.ts";
-import { Action, ChangeSet, Props, Type } from "../dispatch.ts";
+import { type VElement, VNodeProps, VType } from "../../../../ant/mod.ts";
+import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 
 interface BaseElementChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Element;
@@ -80,35 +80,40 @@ export type ElementChangeSet =
 export function element(change: ElementChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
-      return create(<CreateElementPayload> change[Props.Payload]);
+      return create(<CreateElementPayload>change[Props.Payload]);
     case Action.Link:
-      return link(<LinkElementPayload> change[Props.Payload]);
+      return link(<LinkElementPayload>change[Props.Payload]);
     case Action.Attach:
-      return attach(<AttachElementPayload> change[Props.Payload]);
+      return attach(<AttachElementPayload>change[Props.Payload]);
     case Action.Replace:
-      return replace(<ReplaceElementPayload> change[Props.Payload]);
+      return replace(<ReplaceElementPayload>change[Props.Payload]);
     case Action.Update:
-      return update(<UpdateElementPayload> change[Props.Payload]);
+      return update(<UpdateElementPayload>change[Props.Payload]);
     case Action.Delete:
-      return remove(<RemoveElementPayload> change[Props.Payload]);
+      return remove(<RemoveElementPayload>change[Props.Payload]);
   }
 }
 
 function create(payload: CreateElementPayload): void {
-  if (!payload.vNode && !payload.parentVNode.nodeRef) return;
-  payload.vNode.nodeRef = createElement(
+  if (!payload.vNode && !payload.parentVNode[VNodeProps.NODE_REF]) return;
+  payload.vNode[VNodeProps.NODE_REF] = createElement(
     payload.vNode,
-    <Node> payload.parentVNode.nodeRef,
+    <Node>payload.parentVNode[VNodeProps.NODE_REF],
   );
 }
 
 function link(payload: LinkElementPayload): void {
-  payload.vNode.nodeRef = payload.node;
+  payload.vNode[VNodeProps.NODE_REF] = payload.node;
 }
 
 function attach(payload: AttachElementPayload): void {
-  if (payload.vNode.type === VType.ELEMENT && payload.vNode.nodeRef) {
-    (<Node> payload.parentVNode.nodeRef)?.appendChild(payload.vNode.nodeRef);
+  if (
+    payload.vNode.type === VType.ELEMENT &&
+    payload.vNode[VNodeProps.NODE_REF]
+  ) {
+    (<Node>payload.parentVNode[VNodeProps.NODE_REF])?.appendChild(
+      payload.vNode[VNodeProps.NODE_REF],
+    );
   }
 }
 
@@ -116,39 +121,39 @@ function replace(payload: ReplaceElementPayload): void {
   if (payload.vNode.type === VType.ELEMENT) {
     const node = createElement(
       payload.vNode,
-      <Node> (<Node> payload.node).parentNode,
+      <Node>(<Node>payload.node).parentNode,
     );
 
-    payload.node?.parentNode?.replaceChild(
-      node,
-      payload.node,
-    );
+    payload.node?.parentNode?.replaceChild(node, payload.node);
 
-    payload.vNode.nodeRef = node;
+    payload.vNode[VNodeProps.NODE_REF] = node;
   }
 }
 
-function update(
-  payload: UpdateElementPayload,
-): void {
-  (<Node> payload.parentVNode.nodeRef).replaceChild(
-    <Node> payload.vNode.nodeRef,
+function update(payload: UpdateElementPayload): void {
+  (<Node>payload.parentVNode[VNodeProps.NODE_REF]).replaceChild(
+    <Node>payload.vNode[VNodeProps.NODE_REF],
     payload.node,
   );
 }
 
 function remove(payload: RemoveElementPayload): void {
-  (<HTMLElement> payload.vNode.nodeRef).remove();
-  payload.vNode.nodeRef = undefined;
+  (<HTMLElement>payload.vNode[VNodeProps.NODE_REF]).remove();
+  payload.vNode[VNodeProps.NODE_REF] = undefined;
 }
 
 function createElement(vNode: VElement<Node>, parentNode: Node): Node {
-  return isSVG(vNode.tag, parentNode)
-    ? document.createElementNS("http://www.w3.org/2000/svg", vNode.tag)
-    : document.createElement(vNode.tag);
+  return isSVG(vNode[VNodeProps.TAG], parentNode)
+    ? document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        vNode[VNodeProps.TAG],
+      )
+    : document.createElement(vNode[VNodeProps.TAG]);
 }
 
 function isSVG(tag: string, parentNode: Node): boolean {
-  return tag === "svg" ||
-    typeof (<SVGElement> parentNode).ownerSVGElement !== "undefined";
+  return (
+    tag === "svg" ||
+    typeof (<SVGElement>parentNode).ownerSVGElement !== "undefined"
+  );
 }

@@ -1,5 +1,5 @@
-import { VNode } from "../../../ast.ts";
-import { ChangeSet } from "./dispatch.ts";
+import type { VNode } from "../../../ant/mod.ts";
+import type { ChangeSet } from "./dispatch.ts";
 import { hydrate, toBeHydrated } from "./hydrate.ts";
 import { remove, toBeRemoved } from "./remove.ts";
 import { render, toBeRendered } from "./render.ts";
@@ -12,23 +12,15 @@ interface DiffProps<T> {
   node?: T;
 }
 
-export function diff(
-  props: DiffProps<Node>,
-): ChangeSet<unknown>[] {
+export function diff(props: DiffProps<Node>): ChangeSet<unknown>[] {
   const { vNode, previousVNode, parentVNode, node } = props;
 
   if (toBeHydrated(vNode, previousVNode, node)) {
-    return hydrate(
-      vNode,
-      <Node> node,
-    );
+    return hydrate(vNode, <Node>node);
   }
 
   if (toBeUpdated(vNode, previousVNode)) {
-    return update(
-      vNode,
-      previousVNode,
-    );
+    return update(vNode, previousVNode);
   }
 
   if (
@@ -43,9 +35,7 @@ export function diff(
     });
   }
 
-  if (
-    toBeRemoved(vNode, previousVNode, parentVNode)
-  ) {
+  if (toBeRemoved(vNode, previousVNode, parentVNode)) {
     return remove(previousVNode);
   }
   return [];

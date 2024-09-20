@@ -1,16 +1,21 @@
-import { VElement, VNode, VText, VType } from "../../../ast.ts";
+import {
+  type VElement,
+  type VNode,
+  type VText,
+  VType,
+  VNodeProps,
+  type VFragment,
+} from "../../../ant/mod.ts";
 import { diff } from "./diff.ts";
-import { Action, ChangeSet, Props, Type } from "./dispatch.ts";
-import { TextChangeSet } from "./types/text.ts";
+import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
+import type { TextChangeSet } from "./types/text.ts";
 
 interface RenderProps {
   parentVNode: VNode<Node>;
   vNode: VNode<Node>;
 }
 
-export function render(
-  props: RenderProps,
-): ChangeSet<unknown>[] {
+export function render(props: RenderProps): ChangeSet<unknown>[] {
   if (!props.vNode) {
     return [];
   }
@@ -18,7 +23,7 @@ export function render(
   if (props.vNode.type === VType.COMPONENT) {
     return render({
       parentVNode: props.parentVNode,
-      vNode: props.vNode?.ast,
+      vNode: props.vNode[VNodeProps.AST],
     });
   }
 
@@ -28,6 +33,10 @@ export function render(
 
   if (props.vNode.type === VType.TEXT) {
     return text(props.parentVNode, props.vNode);
+  }
+
+  if (props.vNode.type === VType.FRAGMENT) {
+    return fragment(props.parentVNode, props.vNode);
   }
 
   return [];
@@ -68,7 +77,7 @@ function element(
   });
 
   // Attach events
-  vNode.eventRefs.forEach((event) => {
+  vNode[VNodeProps.EVENT_REFS].forEach((event) => {
     changes.push({
       [Props.Type]: Type.Event,
       [Props.Action]: Action.Create,
@@ -81,47 +90,57 @@ function element(
   });
 
   // Add attributes
-  for (const prop in vNode.props) {
+  for (const prop in vNode[VNodeProps.EVENT_REFS]) {
     changes.push({
       [Props.Type]: Type.Attribute,
       [Props.Action]: Action.Create,
       [Props.Payload]: {
         vNode,
         name: prop,
-        value: <string> vNode.props[prop],
+        value: <string>vNode[VNodeProps.PROPS][prop],
       },
     });
   }
 
-  vNode.children?.filter((c) => c != null).forEach((child) => {
-    changes.push(...diff({ parentVNode: vNode, vNode: child }));
-  });
+  vNode[VNodeProps.CHILDREN]
+    ?.filter((c) => c != null)
+    .forEach((child) => {
+      changes.push(...diff({ parentVNode: vNode, vNode: child }));
+    });
 
   return changes;
 }
 
-function text(
-  parentVNode: VNode<Node>,
-  vNode: VText<Node>,
-): TextChangeSet[] {
-  return [{
-    [Props.Type]: Type.Text,
-    [Props.Action]: Action.Create,
-    [Props.Payload]: {
-      vNode: vNode,
+function text(parentVNode: VNode<Node>, vNode: VText<Node>): TextChangeSet[] {
+  return [
+    {
+      [Props.Type]: Type.Text,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: {
+        vNode: vNode,
+      },
     },
-  }, {
-    [Props.Type]: Type.Text,
-    [Props.Action]: Action.Attach,
-    [Props.Payload]: {
-      parentVNode,
-      vNode,
+    {
+      [Props.Type]: Type.Text,
+      [Props.Action]: Action.Attach,
+      [Props.Payload]: {
+        parentVNode,
+        vNode,
+      },
     },
-  }];
+  ];
 }
 
-export function toBeRendered(
-  props: RenderProps,
-) {
+function fragment(parentVNode: VNode<Node>, vNode: VFragment<Node>) {
+  const changes: ChangeSet<unknown>[] = [];
+  vNode[VNodeProps.CHILDREN]
+    ?.filter((c) => c != null)
+    .forEach((child) => {
+      changes.push(...diff({ parentVNode, vNode: child }));
+    });
+  return changes;
+}
+
+export function toBeRendered(props: RenderProps) {
   return props.parentVNode && props.vNode;
 }

@@ -1,31 +1,40 @@
-import { scope, VHook, VMode, VNodeProps } from "../ast.ts";
+import {
+  getScope,
+  isVComponent,
+  VHook,
+  VMode,
+  VNodeProps,
+} from "../ant/mod.ts";
 
 export function onMount(fn: (() => () => void) | (() => void)) {
-  const vComponent = scope[scope.length - 1];
-
-  if (vComponent.mode === VMode.NotCreated) {
-    if (!vComponent[VNodeProps.HOOKS]) {
-      vComponent[VNodeProps.HOOKS] = {};
-    }
-
-    vComponent[VNodeProps.HOOKS][VHook.ON_MOUNT] =
-      Array.isArray(vComponent[VNodeProps.HOOKS][VHook.ON_MOUNT])
-        ? [...vComponent[VNodeProps.HOOKS][VHook.ON_MOUNT], fn]
-        : [fn];
-  }
+  addHookVComponent(fn, VHook.ON_MOUNT);
 }
 
-export function onDestroy(fn: () => void) {
-  const vComponent = scope[scope.length - 1];
+export function onUnmount(fn: () => void) {
+  addHookVComponent(fn, VHook.ON_UNMOUNT);
+}
 
-  if (vComponent.mode === VMode.NotCreated) {
-    if (!vComponent[VNodeProps.HOOKS]) {
-      vComponent[VNodeProps.HOOKS] = {};
+function addHookVComponent(
+  fn: (() => () => void) | (() => void),
+  vHook: VHook,
+) {
+  const scope = getScope();
+  const vNode = scope[scope.length - 1];
+
+  if (isVComponent(vNode) && vNode[VNodeProps.MODE] === VMode.NotCreated) {
+    if (!vNode[VNodeProps.HOOKS]) {
+      vNode[VNodeProps.HOOKS] = {};
     }
 
-    vComponent[VNodeProps.HOOKS][VHook.ON_DESTROY] =
-      Array.isArray(vComponent[VNodeProps.HOOKS][VHook.ON_DESTROY])
-        ? [...vComponent[VNodeProps.HOOKS][VHook.ON_DESTROY], fn]
-        : [fn];
+    vNode[VNodeProps.HOOKS][vHook] = Array.isArray(
+      vNode[VNodeProps.HOOKS][vHook],
+    )
+      ? [
+          ...(<((() => () => void) | (() => void))[]>(
+            vNode[VNodeProps.HOOKS][vHook]
+          )),
+          fn,
+        ]
+      : [fn];
   }
 }

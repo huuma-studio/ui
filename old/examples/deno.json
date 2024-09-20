@@ -1,0 +1,12 @@
+{
+  "tasks": {
+    "dev": "deno run -A --watch dev.ts",
+    "debug": "deno run --inspect-brk --allow-all dev.ts"
+  },
+  "importMap": "./import_map.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "parcel",
+    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
+  }
+}

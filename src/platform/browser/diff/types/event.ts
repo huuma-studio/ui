@@ -1,6 +1,10 @@
-/// <reference lib="dom" />
-import { VNode, VNodeRef } from "../../../../ast.ts";
-import { Action, ChangeSet, Props, Type } from "../dispatch.ts";
+import {
+  type VNode,
+  type HasVNodeRef,
+  VNodeProps,
+} from "../../../../ant/mod.ts";
+import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
+import type { JSX } from "../../../../jsx-runtime/mod.ts";
 
 interface BaseEventChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Event;
@@ -29,25 +33,21 @@ export type EventChangeSet = CreateEventChangeSet | DeleteEventChangeSet;
 export function event(change: EventChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
-      return create(<CreateEventPayload> change[Props.Payload]);
+      return create(<CreateEventPayload>change[Props.Payload]);
     case Action.Delete:
-      return remove(<DeleteEventPayload> change[Props.Payload]);
+      return remove(<DeleteEventPayload>change[Props.Payload]);
   }
 }
 
-function create(
-  payload: CreateEventPayload,
-): void {
-  (<VNodeRef<Node>> payload.vNode).nodeRef?.addEventListener(
+function create(payload: CreateEventPayload): void {
+  (<HasVNodeRef<Node>>payload.vNode)[VNodeProps.NODE_REF]?.addEventListener(
     payload.name,
     payload.listener,
   );
 }
 
-function remove(
-  payload: DeleteEventPayload,
-): void {
-  (<VNodeRef<Node>> payload.vNode).nodeRef?.removeEventListener(
+function remove(payload: DeleteEventPayload): void {
+  (<HasVNodeRef<Node>>payload.vNode)[VNodeProps.NODE_REF]?.removeEventListener(
     payload.name,
     payload.listener,
   );

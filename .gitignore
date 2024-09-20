@@ -1,5 +1,5 @@
-.idea/*
-.nova/*
+.idea
+.nova
 .DS_Store
 examples/*
 deno.lock

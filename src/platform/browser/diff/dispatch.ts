@@ -19,7 +19,7 @@ export enum Action {
   Mount,
   Update,
   Replace,
-  Destroy,
+  Unmount,
   Delete,
 }
 
@@ -38,15 +38,15 @@ export interface ChangeSet<T> {
 function change(changeSet: ChangeSet<unknown>) {
   switch (changeSet[Props.Type]) {
     case Type.Attribute:
-      return attribute(<AttributeChangeSet> changeSet);
+      return attribute(<AttributeChangeSet>changeSet);
     case Type.Event:
-      return event(<EventChangeSet> changeSet);
+      return event(<EventChangeSet>changeSet);
     case Type.Component:
-      return component(<ComponentChangeSet> changeSet);
+      return component(<ComponentChangeSet>changeSet);
     case Type.Element:
-      return element(<ElementChangeSet> changeSet);
+      return element(<ElementChangeSet>changeSet);
     case Type.Text:
-      return text(<TextChangeSet> changeSet);
+      return text(<TextChangeSet>changeSet);
   }
 }
 

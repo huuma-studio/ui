@@ -1,6 +1,12 @@
 // TODO: replace with dedicated VState type
-import { VNode, VNodeRef, VState, VText } from "../../../../ast.ts";
-import { Action, ChangeSet, Props, Type } from "../dispatch.ts";
+import {
+  type VNode,
+  type HasVNodeRef,
+  type VState,
+  type VText,
+  VNodeProps,
+} from "../../../../ant/mod.ts";
+import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import { isState } from "../update.ts";
 
 interface BaseTextChangeSet<T> extends ChangeSet<T> {
@@ -63,23 +69,26 @@ export type TextChangeSet =
 export function text(change: TextChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
-      return create(<CreateTextPayload> change[Props.Payload]);
+      return create(<CreateTextPayload>change[Props.Payload]);
     case Action.Attach:
-      return attach(<AttachTextPayload> change[Props.Payload]);
+      return attach(<AttachTextPayload>change[Props.Payload]);
     case Action.Replace:
-      return replace(<ReplaceTextPayload> change[Props.Payload]);
+      return replace(<ReplaceTextPayload>change[Props.Payload]);
     case Action.Update:
-      return update(<UpdateTextPayload> change[Props.Payload]);
+      return update(<UpdateTextPayload>change[Props.Payload]);
     case Action.Delete:
-      return remove(<DeleteTextPayload> change[Props.Payload]);
+      return remove(<DeleteTextPayload>change[Props.Payload]);
   }
 }
 
 function create(payload: CreateTextPayload): void {
   let text: Text;
 
-  if (typeof payload.vNode.text === "object" && "get" in payload.vNode.text) {
-    const state = <VState> payload.vNode.text;
+  if (
+    typeof payload.vNode[VNodeProps.TEXT] === "object" &&
+    "get" in payload.vNode[VNodeProps.TEXT]
+  ) {
+    const state = <VState>payload.vNode[VNodeProps.TEXT];
     text = new Text(`${state.get}`);
     state.subscribe({
       update: (value: string | number) => {
@@ -87,24 +96,27 @@ function create(payload: CreateTextPayload): void {
       },
     });
   } else {
-    text = new Text(`${payload.vNode.text}`);
+    text = new Text(`${payload.vNode[VNodeProps.TEXT]}`);
   }
 
   const vNode = payload.vNode;
-  vNode.nodeRef = text;
+  vNode[VNodeProps.NODE_REF] = text;
 }
 
 function attach(payload: AttachTextPayload): void {
-  (<Node> (<VNodeRef<Node>> payload.parentVNode).nodeRef).appendChild(
-    <Node> payload.vNode.nodeRef,
-  );
+  (<Node>(
+    (<HasVNodeRef<Node>>payload.parentVNode)[VNodeProps.NODE_REF]
+  )).appendChild(<Node>payload.vNode[VNodeProps.NODE_REF]);
 }
 
 function replace(payload: ReplaceTextPayload): void {
   let text: Text;
 
-  if (typeof payload.vNode.text === "object" && "get" in payload.vNode.text) {
-    const state = <VState> payload.vNode.text;
+  if (
+    typeof payload.vNode[VNodeProps.TEXT] === "object" &&
+    "get" in payload.vNode[VNodeProps.TEXT]
+  ) {
+    const state = <VState>payload.vNode[VNodeProps.TEXT];
     text = new Text(`${state.get}`);
     state.subscribe({
       update: (value: string | number) => {
@@ -112,19 +124,24 @@ function replace(payload: ReplaceTextPayload): void {
       },
     });
   } else {
-    text = new Text(`${payload.vNode.text}`);
+    text = new Text(`${payload.vNode[VNodeProps.TEXT]}`);
   }
 
-  payload.vNode.nodeRef?.parentNode?.replaceChild(text, payload.vNode.nodeRef);
-  payload.vNode.nodeRef = text;
+  payload.vNode[VNodeProps.NODE_REF]?.parentNode?.replaceChild(
+    text,
+    payload.vNode[VNodeProps.NODE_REF],
+  );
+  payload.vNode[VNodeProps.NODE_REF] = text;
 }
 
 function update(payload: UpdateTextPayload): void {
-  (<Text> payload.vNode.nodeRef).textContent = isState(payload.vNode)
-    ? `${(<VState> payload.vNode.text).get}`
-    : `${payload.vNode.text}`;
+  (<Text>payload.vNode[VNodeProps.NODE_REF]).textContent = isState(
+    payload.vNode,
+  )
+    ? `${(<VState>payload.vNode[VNodeProps.TEXT]).get}`
+    : `${payload.vNode[VNodeProps.TEXT]}`;
 }
 
 function remove(payload: DeleteTextPayload): void {
-  (<Text> payload.vNode.nodeRef).remove();
+  (<Text>payload.vNode[VNodeProps.NODE_REF]).remove();
 }

@@ -1,5 +1,9 @@
-import { VElement, VNodeRef } from "../../../../ast.ts";
-import { Action, ChangeSet, Props, Type } from "../dispatch.ts";
+import {
+  type VElement,
+  type HasVNodeRef,
+  VNodeProps,
+} from "../../../../ant/mod.ts";
+import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Attribute;
@@ -45,43 +49,38 @@ export type AttributeChangeSet =
 export function attribute(change: AttributeChangeSet) {
   switch (change[Props.Action]) {
     case Action.Create:
-      return createOrUpdate(<CreateAttributePayload> change[Props.Payload]);
+      return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
     case Action.Update:
-      return createOrUpdate(<CreateAttributePayload> change[Props.Payload]);
+      return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
     case Action.Delete:
-      return remove(<DeleteAttributePayload> change[Props.Payload]);
+      return remove(<DeleteAttributePayload>change[Props.Payload]);
   }
 }
 
 function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
-  if (
-    name === "checked" && typeof value === "boolean"
-  ) {
-    (<HTMLFormElement> vNode.nodeRef)[name] = value;
+  if (name === "checked" && typeof value === "boolean") {
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = value;
   }
   if (name === "value") {
-    (<HTMLFormElement> vNode.nodeRef)[name] = `${value}`;
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = `${value}`;
   }
   if (name === "unsafeInnerHTML") {
-    (<HTMLFormElement> vNode.nodeRef).innerHTML = `${value}`;
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value}`;
     return;
   }
-  (<HTMLElement> vNode.nodeRef).setAttribute(
-    name,
-    `${value}`,
-  );
+  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, `${value}`);
 }
 
 function remove({ name, vNode }: DeleteAttributePayload): void {
   if (name === "checked") {
-    (<HTMLFormElement> vNode.nodeRef)[name] = false;
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = false;
   }
   if (name === "value") {
-    (<HTMLFormElement> vNode.nodeRef).value = "";
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = "";
   }
-  (<HTMLElement> (<VNodeRef<Node>> vNode).nodeRef).removeAttribute(
-    name,
-  );
+  (<HTMLElement>(
+    (<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]
+  )).removeAttribute(name);
 }
 
 export function compareAttributes(
@@ -89,32 +88,30 @@ export function compareAttributes(
   previousVNode: VElement<Node>,
 ): ChangeSet<unknown>[] {
   const changes: AttributeChangeSet[] = [];
-  const { ...previousProps } = previousVNode.props;
+  const { ...previousProps } = previousVNode[VNodeProps.PROPS];
 
-  for (const prop in vNode.props) {
+  for (const prop in vNode[VNodeProps.PROPS]) {
     if (
-      typeof vNode.props[prop] !== "string" &&
-      typeof vNode.props[prop] !== "boolean"
+      typeof vNode[VNodeProps.PROPS][prop] !== "string" &&
+      typeof vNode[VNodeProps.PROPS][prop] !== "boolean"
     ) {
       continue;
     }
 
     // Attribute does not exist on previous vnode
     if (!previousProps[prop]) {
-      changes.push(
-        ...setAttribute(prop, vNode.props[prop], vNode),
-      );
+      changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
     }
 
     // Update attribute if value has changed
-    if (vNode.props[prop] !== previousProps[prop]) {
-      changes.push(...setAttribute(prop, vNode.props[prop], vNode));
+    if (vNode[VNodeProps.PROPS][prop] !== previousProps[prop]) {
+      changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
       delete previousProps[prop];
     }
 
     // Remove left attributes from node
     for (const prop in previousProps) {
-      if (!vNode.props[prop]) {
+      if (!vNode[VNodeProps.PROPS][prop]) {
         changes.push({
           [Props.Action]: Action.Delete,
           [Props.Type]: Type.Attribute,
@@ -135,29 +132,30 @@ export function setAttribute(
   value: unknown,
   vNode: VElement<Node>,
 ): AttributeChangeSet[] {
-  if (
-    typeof value === "string" ||
-    value === true
-  ) {
-    return [{
-      [Props.Action]: Action.Create,
-      [Props.Type]: Type.Attribute,
-      [Props.Payload]: {
-        vNode,
-        name: key,
-        value,
+  if (typeof value === "string" || value === true) {
+    return [
+      {
+        [Props.Action]: Action.Create,
+        [Props.Type]: Type.Attribute,
+        [Props.Payload]: {
+          vNode,
+          name: key,
+          value,
+        },
       },
-    }];
+    ];
   }
   if (value === false) {
-    return [{
-      [Props.Type]: Type.Attribute,
-      [Props.Action]: Action.Delete,
-      [Props.Payload]: {
-        vNode,
-        name: key,
+    return [
+      {
+        [Props.Type]: Type.Attribute,
+        [Props.Action]: Action.Delete,
+        [Props.Payload]: {
+          vNode,
+          name: key,
+        },
       },
-    }];
+    ];
   }
   return [];
 }

@@ -1,54 +1,69 @@
 import { State } from "../state/state.ts";
+import {
+  getScope,
+  type VBase,
+  VMode,
+  type HasVMode,
+  VNodeProps,
+  type HasVOptions,
+} from "../ant.ts";
 
-import { scope, VComponent, VMode } from "../ast.ts";
-
-interface VComponentWithState<T> extends VComponent<unknown> {
-  state?: State<T>[];
-}
+type VNodeWithState<T> = VBase &
+  HasVMode &
+  HasVOptions & {
+    [VNodeProps.OPTIONS]: {
+      $?: State<T>[];
+    };
+  };
 
 interface StateScope<T> {
-  component: VComponentWithState<unknown>;
+  vNode: VNodeWithState<T>;
   state: State<T>;
 }
 
 const statesCache: StateScope<unknown>[] = [];
 
 export function $<T>(value: T) {
+  const scope = getScope();
+
   if (!scope.length) {
     return new State(value);
   }
 
-  const vComponent: VComponentWithState<T> = scope[scope.length - 1];
+  const vNode = <VNodeWithState<T>>scope[scope.length - 1];
 
-  // If state is left in the current VComponent return it.
+  // If state is left in the current VNode return it.
   if (statesCache.length) {
-    if (statesCache[statesCache.length - 1].component === vComponent) {
-      const current = <StateScope<T>> statesCache.shift();
-      vComponent.state?.push(current.state);
+    if (statesCache[statesCache.length - 1].vNode === vNode) {
+      const current = <StateScope<T>>statesCache.shift();
+      vNode[VNodeProps.OPTIONS]?.$?.push(current.state);
       return current.state;
     }
-    // If VComponent has different id reset the state cache
+    // If VNode is different reset the states cache and simply continue.
     statesCache.length = 0;
   }
 
-  // If VComponent is created and has state return VComponent state
-  if (vComponent.mode === VMode.Created && vComponent.state?.length) {
+  // If VNode is created and has state return its state
+  if (
+    vNode[VNodeProps.MODE] === VMode.Created &&
+    vNode[VNodeProps.OPTIONS]?.$?.length
+  ) {
     statesCache.push(
-      ...<StateScope<unknown>[]> vComponent.state.map((state) => ({
-        component: vComponent,
+      ...(<StateScope<unknown>[]>vNode[VNodeProps.OPTIONS].$.map((state) => ({
+        vNode: vNode,
         state,
-      })),
+      }))),
     );
-    vComponent.state = [];
-    const current: StateScope<T> = <StateScope<T>> statesCache.shift();
-    vComponent.state.push(current.state);
-    return current.state;
+
+    vNode[VNodeProps.OPTIONS].$ = [];
+    const scope: StateScope<T> = <StateScope<T>>statesCache.shift();
+    vNode[VNodeProps.OPTIONS].$.push(scope.state);
+    return scope.state;
   }
 
   const state = new State(value);
-  Array.isArray(vComponent.state)
-    ? vComponent.state.push(state)
-    : vComponent.state = [state];
-
+  vNode[VNodeProps.OPTIONS].$?.length
+    ? vNode[VNodeProps.OPTIONS].$.push(state)
+    : (vNode[VNodeProps.OPTIONS].$ = [state]);
   return state;
 }
