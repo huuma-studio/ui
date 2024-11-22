@@ -1,1 +1,1 @@
-export { Parcel } from "./parcel.ts";
+export { Parcel, type PageLike, type ParcelApp } from "./parcel.ts";

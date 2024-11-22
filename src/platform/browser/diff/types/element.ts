@@ -1,4 +1,4 @@
-import { type VElement, VNodeProps, VType } from "../../../../ant/mod.ts";
+import { type VElement, VNodeProps, VType } from "../../../../v-node/mod.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 
 interface BaseElementChangeSet<T> extends ChangeSet<T> {

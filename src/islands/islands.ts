@@ -1,5 +1,12 @@
 import { parse } from "@std/path/parse";
-import { VNodeProps, type VComponent, type VNode, VType } from "../../ant.ts";
+import {
+  VNodeProps,
+  type VComponent,
+  type VNode,
+  VType,
+} from "../v-node/mod.ts";
+import type { JSX } from "../jsx-runtime/mod.ts";
+import { generateRandomString } from "../utils/generate-random-string.ts";
 
 export interface Island {
   marker: string;
@@ -14,16 +21,16 @@ export interface Island {
  */
 export function findIslands(
   vNode: VNode<unknown>,
-  islands: Record<string, JSX.Component>,
+  islands: { path: string; island: JSX.Component }[],
 ): Island[] {
-  const cache: Island[] = [];
+  const _islands: Island[] = [];
   if (vNode?.type === VType.TEXT) return [];
 
   if (vNode?.type === VType.ELEMENT || vNode?.type === VType.FRAGMENT) {
     vNode[VNodeProps.CHILDREN]?.forEach((child) => {
-      cache.push(...findIslands(child, islands));
+      _islands.push(...findIslands(child, islands));
     });
-    return cache;
+    return _islands;
   }
 
   if (vNode?.type === VType.COMPONENT) {
@@ -49,24 +56,23 @@ export function findIslands(
           _GLOBAL: vNode[VNodeProps.OPTIONS]._GLOBAL,
         },
       };
-      // Don't seach for nestes islands.
-      return [island];
+      return [island, ...findIslands(vNode[VNodeProps.AST], islands)];
     }
     return [...findIslands(vNode[VNodeProps.AST], islands)];
   }
 
-  return cache;
+  return _islands;
 }
 
 function isIsland(
   vComponent: VComponent<unknown>,
-  islands: Record<string, JSX.Component>,
+  islands: { path: string; island: JSX.Component }[],
 ): Island | undefined {
-  for (const key in islands) {
-    if (islands[key] === vComponent[VNodeProps.FN]) {
+  for (const island of islands) {
+    if (island.island === vComponent[VNodeProps.FN]) {
       return {
-        marker: `parcel-island_${crypto.randomUUID().slice(-6)}`,
-        path: parse(key).name.replaceAll("$", ""),
+        marker: `parcel-island_${generateRandomString(6)}`,
+        path: parse(island.path).name,
         props: vComponent[VNodeProps.PROPS],
       };
     }

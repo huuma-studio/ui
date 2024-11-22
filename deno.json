@@ -1,9 +1,9 @@
 {
   "name": "@cargo/parcel",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "exports": {
     ".": "./src/mod.ts",
-    "./ant": "./src/ant/mod.ts",
+    "./vNode": "./src/v-node/mod.ts",
     "./deno": "./src/deno/mod.ts",
     "./pack": "./src/pack/mod.ts",
     "./platform/browser": "./src/platform/browser/mod.ts",
@@ -14,18 +14,21 @@
   "publish": {
     "exclude": ["src/**/*.test.tsx", "old/*", "root.tsx"]
   },
-
   "imports": {
     "@cargo/cargo": "jsr:@cargo/cargo@^0.0.8",
     "@std/assert": "jsr:@std/assert@^1.0.5",
     "@std/fs": "jsr:@std/fs@^1.0.3",
     "@std/path": "jsr:@std/path@^1.0.6",
-    "inspect/": "https://deno.land/x/cargo_inspect@0.2.0/"
+    "inspect/": "https://deno.land/x/cargo_inspect@0.2.0/",
+    "@luca/esbuild-deno-loader": "jsr:@luca/esbuild-deno-loader@^0.11.0",
+    "@esbuild": "npm:esbuild@0.20.2"
   },
   "tasks": {
     "check": "deno check src/**/*.tsx src/**/*.ts"
   },
   "compilerOptions": {
+    "jsx": "precompile",
+    "jsxImportSource": "@cargo/parcel",
     "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
   }
 }

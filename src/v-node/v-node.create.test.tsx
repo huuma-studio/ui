@@ -1,7 +1,8 @@
-import { assertEquals } from "std/assert/mod.ts";
-import { create, VMode, VNodeProps } from "./ant.ts";
-import { $ } from "./hooks/state.ts";
-import { State } from "./state/state.ts";
+import { assertEquals } from "@std/assert/equals";
+import { create, VMode, VNodeProps } from "./mod.ts";
+import { $ } from "../hooks/state.ts";
+import { State } from "../state/mod.ts";
+import type { JSX } from "../jsx-runtime/jsx.ts";
 
 Deno.test(create.name, async (t) => {
   await t.step("should create VText Node", () => {

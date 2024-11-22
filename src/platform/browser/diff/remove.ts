@@ -1,4 +1,4 @@
-import { type VNode, VNodeProps, VType } from "../../../ant/mod.ts";
+import { type VNode, VNodeProps, VType } from "../../../v-node/mod.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import type { UnmountComponentChangeSet } from "./types/component.ts";
 

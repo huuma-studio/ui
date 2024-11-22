@@ -1,6 +1,7 @@
-import { assertEquals } from "std/assert/mod.ts";
+import { assertEquals } from "@std/assert/equals";
+import type { JSX } from "../../jsx-runtime/mod.ts";
 
-import { renderToString } from "./render.ts";
+import { renderToString } from "./mod.ts";
 
 function Title() {
   return <h1>Hello World!</h1>;

@@ -70,7 +70,7 @@ async function writeManifest(manifest: Script[], path: string) {
 
 async function bundle(entryPoints: EntryPoints) {
   const bundler = new Bundler(entryPoints, parse);
-  // TODO: make is prod flag configurable
+  // TODO: make isProd flag configurable
   const files = await bundler.bundle();
   bundler.stop();
   return files;

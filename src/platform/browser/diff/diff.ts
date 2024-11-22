@@ -1,4 +1,4 @@
-import type { VNode } from "../../../ant/mod.ts";
+import type { VNode } from "../../../v-node/mod.ts";
 import type { ChangeSet } from "./dispatch.ts";
 import { hydrate, toBeHydrated } from "./hydrate.ts";
 import { remove, toBeRemoved } from "./remove.ts";

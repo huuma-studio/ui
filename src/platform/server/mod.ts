@@ -5,10 +5,10 @@ import {
   VNodeProps,
   type VText,
   VType,
-} from "../../ant/mod.ts";
+} from "../../v-node/mod.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
 
-import { escapeHtml } from "./utils.ts";
+import { escapeHtml } from "../../utils/escape-html.ts";
 
 const selfClosingTags = [
   "area",
@@ -40,8 +40,8 @@ function stringify<T>(vNode: VNode<T>): string {
   switch (vNode.type) {
     case VType.TEXT:
       return vNode[VNodeProps.SKIP_ESCAPING]
-        ? getTextFromVText(vNode)
-        : escapeHtml(getTextFromVText(vNode));
+        ? textFromVText(vNode)
+        : escapeHtml(textFromVText(vNode));
     case VType.ELEMENT:
       return elementToString(vNode);
     case VType.COMPONENT:
@@ -89,7 +89,7 @@ function stringFrom(attributes: JSX.IntrinsicElements): string {
   return attributesString;
 }
 
-function getTextFromVText<T>(vText: VText<T>): string {
+function textFromVText<T>(vText: VText<T>): string {
   return typeof vText[VNodeProps.TEXT] === "object" &&
     "get" in vText[VNodeProps.TEXT]
     ? `${vText[VNodeProps.TEXT].get}`

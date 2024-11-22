@@ -2,7 +2,7 @@ import {
   type VNode,
   type HasVNodeRef,
   VNodeProps,
-} from "../../../../ant/mod.ts";
+} from "../../../../v-node/mod.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import type { JSX } from "../../../../jsx-runtime/mod.ts";
 

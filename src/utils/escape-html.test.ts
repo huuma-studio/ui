@@ -1,6 +1,5 @@
-import { assertEquals } from "std/assert/assert_equals.ts";
-
-import { escapeHtml } from "./utils.ts";
+import { assertEquals } from "@std/assert/equals";
+import { escapeHtml } from "./escape-html.ts";
 
 Deno.test("Utils: Escape html entities", async (t) => {
   await t.step(`<div class="bg-red">Hello</div>`, () => {

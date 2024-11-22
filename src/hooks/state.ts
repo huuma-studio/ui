@@ -1,4 +1,4 @@
-import { State } from "../state/state.ts";
+import { State } from "../state/mod.ts";
 import {
   getScope,
   type VBase,
@@ -6,7 +6,7 @@ import {
   type HasVMode,
   VNodeProps,
   type HasVOptions,
-} from "../ant.ts";
+} from "../v-node/mod.ts";
 
 type VNodeWithState<T> = VBase &
   HasVMode &

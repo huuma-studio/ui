@@ -1,11 +1,12 @@
 // TODO: replace with dedicated VState type
+import type { State } from "../../../../state/mod.ts";
 import {
   type VNode,
   type HasVNodeRef,
-  type VState,
   type VText,
   VNodeProps,
-} from "../../../../ant/mod.ts";
+  type VState,
+} from "../../../../v-node/mod.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import { isState } from "../update.ts";
 
@@ -88,7 +89,7 @@ function create(payload: CreateTextPayload): void {
     typeof payload.vNode[VNodeProps.TEXT] === "object" &&
     "get" in payload.vNode[VNodeProps.TEXT]
   ) {
-    const state = <VState>payload.vNode[VNodeProps.TEXT];
+    const state = <State<string | number>>payload.vNode[VNodeProps.TEXT];
     text = new Text(`${state.get}`);
     state.subscribe({
       update: (value: string | number) => {

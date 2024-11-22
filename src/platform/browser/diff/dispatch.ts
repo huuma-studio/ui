@@ -1,8 +1,8 @@
-import { attribute, AttributeChangeSet } from "./types/attribute.ts";
-import { component, ComponentChangeSet } from "./types/component.ts";
-import { element, ElementChangeSet } from "./types/element.ts";
-import { event, EventChangeSet } from "./types/event.ts";
-import { text, TextChangeSet } from "./types/text.ts";
+import { attribute, type AttributeChangeSet } from "./types/attribute.ts";
+import { component, type ComponentChangeSet } from "./types/component.ts";
+import { element, type ElementChangeSet } from "./types/element.ts";
+import { event, type EventChangeSet } from "./types/event.ts";
+import { text, type TextChangeSet } from "./types/text.ts";
 
 export enum Type {
   Component,

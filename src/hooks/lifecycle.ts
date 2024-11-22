@@ -4,7 +4,7 @@ import {
   VHook,
   VMode,
   VNodeProps,
-} from "../ant/mod.ts";
+} from "../v-node/mod.ts";
 
 export function onMount(fn: (() => () => void) | (() => void)) {
   addHookVComponent(fn, VHook.ON_MOUNT);

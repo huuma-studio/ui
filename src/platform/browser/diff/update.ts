@@ -6,7 +6,7 @@ import {
   type VState,
   type VText,
   VType,
-} from "../../../ant/mod.ts";
+} from "../../../v-node/mod.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { remove } from "./remove.ts";

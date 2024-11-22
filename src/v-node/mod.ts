@@ -1,10 +1,10 @@
+import type { JSX } from "../jsx-runtime/mod.ts";
 import {
   type Cleanup,
   clearSubscriber,
   setSubscriber,
   type Subscriber,
 } from "../state/mod.ts";
-import type { JSX } from "../jsx-runtime/mod.ts";
 
 export enum VMode {
   NotCreated,
@@ -147,7 +147,7 @@ export function getScope(): (VBase & HasVOptions)[] {
 }
 
 type VNodeStateUpdater<T, V> = (
-  node: JSX.Element<string | JSX.Component | 0> | JSX.Node[],
+  node: JSX.Element<string | JSX.Component | 0> | JSX.Node[] | JSX.Template,
   vNode: VComponent<T> | VElement<T> | VFragment<T>,
   globalOptions: VGlobalOptions,
 ) => Subscriber<V>;
@@ -177,7 +177,7 @@ export function create<T>(
     return vElement(node, globalOptions);
   }
 
-  if (isFragmentNode(node)) {
+  if (isFragmentNode(node) || isTemplateNode(node)) {
     return vFragment(node, globalOptions);
   }
 
@@ -186,10 +186,16 @@ export function create<T>(
   }
 }
 
-export function vText<T>(node: string | number | JSX.StateLike): VText<T> {
+export function vText<T>(
+  node: string | number | JSX.StateLike,
+  options?: {
+    skipEscaping?: boolean;
+  },
+): VText<T> {
   return {
     type: VType.TEXT,
     [VNodeProps.TEXT]: isVState(node) ? node : `${node}`,
+    [VNodeProps.SKIP_ESCAPING]: options?.skipEscaping,
   };
 }
 
@@ -312,11 +318,10 @@ function updateVComponent<T>(
 }
 
 function vFragment<T>(
-  fragment: JSX.Element<0> | JSX.Node[],
+  fragment: JSX.Element<0> | JSX.Node[] | JSX.Template,
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
   const key = keyFrom(fragment);
-  const props = propsFrom(fragment);
   const vFragment: VFragment<T> = {
     type: VType.FRAGMENT,
     [VNodeProps.KEY]: key,
@@ -333,9 +338,24 @@ function vFragment<T>(
       ? vNodeStateUpdater(fragment, vFragment, globalOptions)
       : undefined,
   );
-  vFragment[VNodeProps.CHILDREN] = props.children?.length
-    ? props.children.map((child) => create(child))
-    : [];
+
+  const children: VNode<T>[] = [];
+
+  if (isTemplateNode(fragment)) {
+    for (const template of fragment.templates) {
+      children.push(
+        vText(template, { skipEscaping: true }),
+        create(fragment.nodes?.shift(), globalOptions),
+      );
+    }
+  } else {
+    for (const node of childrenFrom(fragment)) {
+      children.push(create(node));
+    }
+  }
+
+  vFragment[VNodeProps.CHILDREN] = children;
+
   clearSubscriber();
   _scope.shift();
 
@@ -347,18 +367,14 @@ function updateVFragment<T>(
   vFragment: VFragment<T>,
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
-  const props = propsFrom(fragment);
+  const children = childrenFrom(fragment);
   _scope.push(vFragment);
   setSubscriber(
     vNodeStateUpdater
       ? vNodeStateUpdater(fragment, vFragment, globalOptions)
       : undefined,
   );
-  vFragment[VNodeProps.CHILDREN] = track(
-    vFragment,
-    props.children,
-    globalOptions,
-  );
+  vFragment[VNodeProps.CHILDREN] = track(vFragment, children, globalOptions);
   clearSubscriber();
   _scope.shift();
   return vFragment;
@@ -491,6 +507,10 @@ export function isComponentNode(
   );
 }
 
+export function isTemplateNode(node: JSX.Node): node is JSX.Template {
+  return (node && typeof node === "object" && "templates" in node) || false;
+}
+
 export function isVComponent<T>(
   vNode: undefined | null | VBase,
 ): vNode is VComponent<T> {
@@ -563,14 +583,17 @@ export function copy<T>(vNode: VNode<T>): VNode<T> {
   return vNode;
 }
 
-function propsFrom(node: JSX.Element<0> | JSX.Node[]): JSX.ElementProps {
-  if (Array.isArray(node)) return { children: node };
-  return node.props;
+function childrenFrom(fragment: JSX.Element<0> | JSX.Node[]): JSX.Node[] {
+  // Array based fragment
+  if (Array.isArray(fragment)) return fragment;
+
+  // Function based fragment
+  return fragment.props.children || [];
 }
 
 function keyFrom(
-  node: JSX.Element<0> | JSX.Node[],
+  node: JSX.Element<0> | JSX.Node[] | JSX.Template,
 ): string | number | undefined {
-  if (Array.isArray(node)) return undefined;
+  if (Array.isArray(node) || isTemplateNode(node)) return undefined;
   return node.key;
 }

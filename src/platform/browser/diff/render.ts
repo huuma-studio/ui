@@ -5,7 +5,7 @@ import {
   VType,
   VNodeProps,
   type VFragment,
-} from "../../../ant/mod.ts";
+} from "../../../v-node/mod.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import type { TextChangeSet } from "./types/text.ts";

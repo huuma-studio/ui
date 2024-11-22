@@ -1,5 +1,6 @@
-import { assertEquals, assert } from "@std/assert/mod.ts";
-import { vText, update, VNodeProps, vElement } from "./ant.ts";
+import { assertEquals, assert } from "@std/assert";
+import { vText, update, VNodeProps, vElement } from "./mod.ts";
+import type { JSX } from "../jsx-runtime/jsx.ts";
 
 Deno.test(update.name, async (t) => {
   await t.step("update VText", () => {

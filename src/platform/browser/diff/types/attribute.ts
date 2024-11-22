@@ -2,7 +2,7 @@ import {
   type VElement,
   type HasVNodeRef,
   VNodeProps,
-} from "../../../../ant/mod.ts";
+} from "../../../../v-node/mod.ts";
 import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseAttributeChangeSet<T> extends ChangeSet<T> {

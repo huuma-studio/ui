@@ -1,3 +1,5 @@
-import { JSX, Fragment, jsx } from "./jsx.ts";
+import { Fragment, jsx, jsxAttr, jsxTemplate, jsxEscape } from "./jsx.ts";
 
-export { Fragment, jsx, jsx as jsxs, type JSX };
+export { type JSX } from "./jsx.ts";
+
+export { Fragment, jsx, jsx as jsxs, jsxAttr, jsxTemplate, jsxEscape };

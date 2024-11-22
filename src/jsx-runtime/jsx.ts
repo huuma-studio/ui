@@ -1,4 +1,5 @@
 import { eventName, isEventName } from "./event.ts";
+import { escapeHtml } from "../utils/escape-html.ts";
 
 // deno-lint-ignore no-namespace
 export namespace JSX {
@@ -9,13 +10,19 @@ export namespace JSX {
     | TextNode
     | EmptyNode
     | Element<string | Component | 0>
-    | Node[]; // Element<0> and Node[] are handled as framgent
+    | Node[] // Element<0> and Node[] are handled as framgent
+    | Template;
 
   export type Element<T extends string | Component | 0> = {
     type: T; // Fragment = 0;
     eventRefs: EventRef[];
     props: ElementProps;
     key?: string | number;
+  };
+
+  export type Template = {
+    templates: string[];
+    nodes: JSX.Node[];
   };
 
   export type Component = (props: ElementProps) => Node;
@@ -43,10 +50,11 @@ export namespace JSX {
 
 export function jsx(
   type: string | JSX.Component,
-  props: JSX.ElementProps,
+  props?: JSX.ElementProps,
   key?: string | number,
 ): JSX.Element<string | JSX.Component | 0> {
   const eventRefs: JSX.EventRef[] = [];
+  props ??= {};
 
   for (const prop in props) {
     if (isEventName(prop)) {
@@ -68,6 +76,27 @@ export function jsx(
     eventRefs,
     key,
   };
+}
+
+export function jsxAttr(name: string, value: unknown): JSX.Node {
+  if (typeof value === "string") {
+    return {
+      templates: [`${escapeHtml(name)}="${escapeHtml(value)}"`],
+      nodes: [""],
+    };
+  }
+  return "";
+}
+
+export function jsxEscape(node: JSX.Node): JSX.Node {
+  return node;
+}
+
+export function jsxTemplate(
+  templates: string[],
+  ...nodes: JSX.Node[]
+): JSX.Template {
+  return { templates, nodes };
 }
 
 export function Fragment(props: JSX.ElementProps): JSX.Node[] | undefined {
