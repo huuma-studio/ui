@@ -37,6 +37,7 @@ export async function createList(options: CreateListOptions): Promise<List> {
   return (
     await import(
       join(
+        "file://",
         Deno.cwd(),
         await writeListFrom(
           {
