@@ -61,11 +61,9 @@ async function listPages(path: string): Promise<Omit<Pack, "islands">> {
   let pageIndex = 0;
   let middlewareIndex = 0;
 
-  for await (
-    const file of walk(path, {
-      match: [/(page\.tsx)$/, /(layout\.tsx)$/, /(middleware\.ts)$/],
-    })
-  ) {
+  for await (const file of walk(path, {
+    match: [/(page\.tsx)$/, /(layout\.tsx)$/, /(middleware\.ts)$/],
+  })) {
     if (/\/(layout\.tsx)$/.exec(file.path)?.length) {
       layouts.push({
         name: `L${layoutIndex}`,
@@ -132,12 +130,10 @@ async function listIslands(path: string): Promise<FileImport[]> {
   const islands: FileImport[] = [];
   let i = 0;
 
-  for await (
-    const file of walk(path, {
-      includeDirs: false,
-      match: [/(.+\$\.tsx)$/],
-    })
-  ) {
+  for await (const file of walk(path, {
+    includeDirs: false,
+    match: [/(.+\$\.tsx)$/],
+  })) {
     islands.push({
       filePath: dirname(file.path),
       fileName: file.name,
@@ -153,12 +149,12 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
     "// Cargo Parcel generated code - Do not modify!",
     ...(pack.pages.length
       ? [
-        'import type { List } from "@cargo/parcel/pack";',
-        imports(
-          pack.pages.map((page) => page.page),
-          "Page",
-        ),
-      ]
+          'import type { List } from "@cargo/parcel/pack";',
+          imports(
+            pack.pages.map((page) => page.page),
+            "Page",
+          ),
+        ]
       : []),
     ...(pack.layouts.length ? [imports(pack.layouts, "Layout")] : []),
     ...(pack.middlewares.length
@@ -167,16 +163,16 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
     ...(pack.islands.length ? [imports(pack.islands, "Islands")] : []),
     ...(pack.pages.length
       ? [
-        "",
-        "export default {",
-        ...(pack.pages.length
-          ? ["  pages: {", pagesExports(pack.pages), "  },"]
-          : []),
-        ...(pack.islands.length
-          ? ["  islands: {", islandsExports(pack.islands), "  },"]
-          : []),
-        "} as List;",
-      ]
+          "",
+          "export default {",
+          ...(pack.pages.length
+            ? ["  pages: {", pagesExports(pack.pages), "  },"]
+            : []),
+          ...(pack.islands.length
+            ? ["  islands: {", islandsExports(pack.islands), "  },"]
+            : []),
+          "} as List;",
+        ]
       : []),
   ].join(EOL);
 
@@ -199,11 +195,11 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
 function imports(entries: FileImport[], type: string): string {
   return entries.length
     ? [
-      `// ${type} imports`,
-      ...entries.map((entry) => {
-        return `import * as ${entry.name} from "../${entry.filePath}/${entry.fileName}";`;
-      }),
-    ].join(EOL)
+        `// ${type} imports`,
+        ...entries.map((entry) => {
+          return `import * as ${entry.name} from "../${entry.filePath}/${entry.fileName}";`;
+        }),
+      ].join(EOL)
     : "";
 }
 
