@@ -65,7 +65,10 @@ export function pack<T extends CargoContext>(
 }
 
 export async function prepare<T extends CargoContext>(
-  parcel: ParcelApp<T>,
+  Parcel: ParcelApp<T>,
+  options?: {
+    enableLiveReload?: boolean;
+  },
 ): Promise<ParcelApp<T>> {
   const pagesPath = "pages";
   const packPath = ".pack";
@@ -73,9 +76,15 @@ export async function prepare<T extends CargoContext>(
     await createPackDirectory(packPath);
     const list = await createList({ pagesPath, packPath });
 
-    parcel = pack(parcel, list);
+    Parcel = pack(
+      options?.enableLiveReload !== false ? enableLiveReload(Parcel) : Parcel,
+      list,
+    );
 
-    const bundler = new Bundler(parcel.entryPoints);
+    const bundler = new Bundler(
+      Parcel.entryPoints,
+    );
+
     const _files = await bundler.bundle();
     bundler.stop();
 
@@ -83,7 +92,7 @@ export async function prepare<T extends CargoContext>(
       await Deno.writeFile(join(packPath, name), content);
     }
 
-    return parcel;
+    return Parcel;
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) {
       info(
@@ -105,4 +114,25 @@ export async function createPackDirectory(path: string) {
     }
     throw e;
   }
+}
+
+export function enableLiveReload<T extends CargoContext>(
+  Parcel: ParcelApp<T>,
+): ParcelApp<T> {
+  Parcel.get("/_websocket", (ctx) => {
+    if (ctx.request.headers.get("upgrade") === "websocket") {
+      return Deno.upgradeWebSocket(ctx.request).response;
+    }
+    return new Response(
+      `Websocket connection failed to upgrade. Have you set the header 'upgrade=websocket' properly?`,
+      { status: 400 },
+    );
+  });
+
+  Parcel.registerEntryPoint({
+    "_live-reload":
+      new URL("../platform/browser/live-reload.ts", import.meta.url).href,
+  });
+
+  return Parcel;
 }

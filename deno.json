@@ -1,6 +1,6 @@
 {
   "name": "@cargo/parcel",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "exports": {
     ".": "./src/mod.ts",
     "./vNode": "./src/v-node/mod.ts",
