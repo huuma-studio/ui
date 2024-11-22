@@ -4,7 +4,6 @@
   "exports": {
     ".": "./src/mod.ts",
     "./vNode": "./src/v-node/mod.ts",
-    "./deno": "./src/deno/mod.ts",
     "./pack": "./src/pack/mod.ts",
     "./platform/browser": "./src/platform/browser/mod.ts",
     "./platform/server": "./src/platform/server/mod.ts",

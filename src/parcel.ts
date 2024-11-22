@@ -6,11 +6,14 @@ import { jsx, type JSX } from "./jsx-runtime/mod.ts";
 import { create } from "./v-node/mod.ts";
 import { findIslands, type Island } from "./islands/islands.ts";
 import { parse } from "@std/path/parse";
+import { Route } from "@cargo/cargo/http/route";
 
 export interface PageLikeProps<T = undefined> extends JSX.ElementProps {
   params: Record<string, string>;
   data: T;
 }
+
+type EntryPoints = Record<string, string>;
 
 export type PageLike = (props: PageLikeProps) => JSX.Node;
 
@@ -38,9 +41,9 @@ export function Parcel<T extends CargoContext>(root: PageLike): ParcelApp<T> {
 export class ParcelApp<T extends CargoContext> extends Cargo {
   #root: PageLike;
   #islands: { name: string; path: string; island: JSX.Component }[] = [];
-  #entryPoints: Record<string, string> = {};
+  #entryPoints: EntryPoints = {};
 
-  get entryPoints() {
+  get entryPoints(): EntryPoints {
     return { ...this.#entryPoints };
   }
 
@@ -49,11 +52,11 @@ export class ParcelApp<T extends CargoContext> extends Cargo {
     this.#root = root;
   }
 
-  addPage(path: string, props: Omit<PageProps, "root">) {
+  addPage(path: string, props: Omit<PageProps, "root">): Route<T> {
     return this.get(path, this.pageHandler({ root: this.#root, ...props }));
   }
 
-  addIsland(path: string, island: JSX.Component) {
+  addIsland(path: string, island: JSX.Component): void {
     const name = parse(path).name;
     this.#islands.push({
       name: name.substring(0, name.length - 1),
@@ -63,7 +66,7 @@ export class ParcelApp<T extends CargoContext> extends Cargo {
     this.registerEntryPoint({ name: `./${path}` });
   }
 
-  registerEntryPoint(entryPoint: Record<string, string>) {
+  registerEntryPoint(entryPoint: Record<string, string>): void {
     this.#entryPoints = {
       ...this.#entryPoints,
       ...entryPoint,
