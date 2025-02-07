@@ -1,79 +1,70 @@
-import { parse } from "@std/path/parse";
 import {
-  VNodeProps,
+  isComponentNode,
   type VComponent,
-  type VNode,
-  VType,
+  type VNodeBeforeCreateVisitor,
 } from "../v-node/mod.ts";
-import type { JSX } from "../jsx-runtime/mod.ts";
+import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
 import { generateRandomString } from "../utils/generate-random-string.ts";
 
 export interface Island {
-  marker: string;
+  id: string;
   path: string;
-  props: Record<string, unknown>;
+  node: JSX.Node;
 }
 
-/**
- * Find islands in vNode and wrap it with markers
- * @param {VNode} vNode - The vNode to find the islands in
- * @param {Island[]} islands - The islands to search in the vNode
- */
-export function findIslands(
-  vNode: VNode<unknown>,
-  islands: { path: string; island: JSX.Component }[],
-): Island[] {
-  const _islands: Island[] = [];
-  if (vNode?.type === VType.TEXT) return [];
+export function markIslands(
+  islandsRef: { path: string; island: JSX.Component }[],
+  islands: Island[],
+): VNodeBeforeCreateVisitor {
+  return (node: JSX.Node) => {
+    if (
+      isComponentNode(node) &&
+      !islands.filter((island) => island.node === node).length
+    ) {
+      const island = isIsland(node, islandsRef);
+      if (island) {
+        islands.push(island);
 
-  if (vNode?.type === VType.ELEMENT || vNode?.type === VType.FRAGMENT) {
-    vNode[VNodeProps.CHILDREN]?.forEach((child) => {
-      _islands.push(...findIslands(child, islands));
-    });
-    return _islands;
-  }
+        if (node.props.children?.length) {
+          node.props.children.unshift({
+            templates: [`<!-- start_children_${island.id} -->`],
+            nodes: [""],
+          });
+          node.props.children.push({
+            templates: [`<!-- end_children_${island.id} -->`],
+            nodes: [""],
+          });
+        }
 
-  if (vNode?.type === VType.COMPONENT) {
-    const island = isIsland(vNode, islands);
-    if (island) {
-      vNode[VNodeProps.AST] = {
-        type: VType.FRAGMENT,
-        [VNodeProps.CHILDREN]: [
-          {
-            type: VType.TEXT,
-            [VNodeProps.TEXT]: `<!-- start_${island.marker} -->`,
-            [VNodeProps.SKIP_ESCAPING]: true,
-          },
-          vNode[VNodeProps.AST],
-          {
-            type: VType.TEXT,
-            [VNodeProps.TEXT]: `<!-- end_${island.marker} -->`,
-            [VNodeProps.SKIP_ESCAPING]: true,
-          },
-        ],
-        [VNodeProps.CLEANUP]: [],
-        [VNodeProps.OPTIONS]: {
-          _GLOBAL: vNode[VNodeProps.OPTIONS]._GLOBAL,
-        },
-      };
-      return [island, ...findIslands(vNode[VNodeProps.AST], islands)];
+        node = jsx(Fragment, {
+          children: [
+            {
+              templates: [`<!-- start_island_${island.id} -->`],
+              nodes: [""],
+            },
+            node,
+            {
+              templates: [` <!--end_island_${island.id} -->`],
+              nodes: [""],
+            },
+          ],
+        });
+      }
     }
-    return [...findIslands(vNode[VNodeProps.AST], islands)];
-  }
-
-  return _islands;
+    return node;
+  };
 }
 
 function isIsland(
-  vComponent: VComponent<unknown>,
+  node: VComponent<unknown> | JSX.Element<JSX.Component>,
   islands: { path: string; island: JSX.Component }[],
 ): Island | undefined {
   for (const island of islands) {
-    if (island.island === vComponent[VNodeProps.FN]) {
+    if (island.island === node.type) {
       return {
-        marker: `parcel-island_${generateRandomString(6)}`,
-        path: parse(island.path).name,
-        props: vComponent[VNodeProps.PROPS],
+        id: `${generateRandomString(6)}`,
+        path: island.path,
+        node,
       };
     }
   }

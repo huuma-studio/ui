@@ -47,8 +47,16 @@ export interface VBase {
   type: VType;
 }
 
-// deno-lint-ignore no-explicit-any
-type VGlobalOptions = Record<string | number | symbol, any>;
+export type VNodeBeforeCreateVisitor = (jsx: JSX.Node) => JSX.Node;
+
+export interface VNodeVisitor {
+  beforeCreate?: VNodeBeforeCreateVisitor;
+}
+
+export type VGlobalOptions =
+  & VNodeVisitor
+  // deno-lint-ignore no-explicit-any
+  & Record<string | number | symbol, any>;
 
 type VOptions = {
   _GLOBAL: VGlobalOptions;
@@ -99,7 +107,8 @@ export interface VText<T> extends VBase, HasVNodeRef<T> {
 }
 
 export interface VElement<T>
-  extends VBase,
+  extends
+    VBase,
     HasVNodeRef<T>,
     HasVChildren<T>,
     HasVCleanup,
@@ -112,12 +121,14 @@ export interface VElement<T>
 }
 
 export interface VComponent<T>
-  extends VBase,
+  extends
+    VBase,
     HasVOptions,
     HasVHooks,
     HasVMode,
     HasVCleanup,
-    HasVKey {
+    HasVKey,
+    HasVNodeRef<T> {
   type: VType.COMPONENT;
   [VNodeProps.FN]: JSX.Component;
   [VNodeProps.PROPS]: JSX.ElementProps;
@@ -125,11 +136,7 @@ export interface VComponent<T>
 }
 
 export interface VFragment<T>
-  extends VBase,
-    HasVChildren<T>,
-    HasVOptions,
-    HasVCleanup,
-    HasVKey {
+  extends VBase, HasVChildren<T>, HasVOptions, HasVCleanup, HasVKey {
   type: VType.FRAGMENT;
 }
 
@@ -147,23 +154,25 @@ export function getScope(): (VBase & HasVOptions)[] {
 }
 
 type VNodeStateUpdater<T, V> = (
-  node: JSX.Element<string | JSX.Component | 0> | JSX.Node[] | JSX.Template,
-  vNode: VComponent<T> | VElement<T> | VFragment<T>,
+  node: JSX.Element<JSX.Component>,
+  vNode: VComponent<T>,
   globalOptions: VGlobalOptions,
 ) => Subscriber<V>;
 let vNodeStateUpdater: VNodeStateUpdater<unknown, unknown> | undefined;
 
-export function setVNodeUpdater(
-  updater: VNodeStateUpdater<unknown, unknown>,
+export function setVNodeUpdater<T>(
+  updater: VNodeStateUpdater<T, unknown>,
 ): void {
-  vNodeStateUpdater = updater;
+  vNodeStateUpdater = <VNodeStateUpdater<unknown, unknown>> updater;
 }
 
 export function create<T>(
   node: JSX.Node,
   globalOptions: VGlobalOptions = {},
 ): VNode<T> {
-  if (typeof node === "undefined") return;
+  if (typeof globalOptions.beforeCreate === "function") {
+    node = globalOptions.beforeCreate(node);
+  }
 
   if (isEmptyNode(node)) {
     return null;
@@ -186,6 +195,61 @@ export function create<T>(
   }
 }
 
+export function update<T>(
+  node: JSX.Node,
+  vNode: VNode<T> | undefined,
+  globalOptions: VGlobalOptions,
+  cleanupVNode = true,
+): VNode<T> {
+  /*
+   * Root update call should cleanup the vNode.
+   * Subsequent nested update calls do not need to cleanup.
+   */
+  if (cleanupVNode) {
+    cleanup(vNode);
+  }
+
+  if (isEmptyNode(node) || typeof node === "undefined") {
+    return null;
+  }
+
+  if (isTextNode(node)) {
+    if (vNode?.type === VType.TEXT) {
+      return updateVText(node, vNode);
+    }
+    return vText(node);
+  }
+
+  if (isElementNode(node)) {
+    if (
+      vNode?.type === VType.ELEMENT && node.type === vNode[VNodeProps.TAG] &&
+      vNode[VNodeProps.KEY] === node.key
+    ) {
+      return updateVElement(<JSX.Element<string>> node, vNode, globalOptions);
+    }
+    return vElement(node, globalOptions);
+  }
+
+  if (isComponentNode(node)) {
+    if (
+      isVComponent(vNode) && vNode[VNodeProps.FN] === node.type &&
+      vNode[VNodeProps.KEY] === node.key
+    ) {
+      return updateVComponent(node, vNode, globalOptions);
+    }
+    return vComponent(node, globalOptions);
+  }
+
+  if (isFragmentNode(node)) {
+    if (
+      vNode?.type === VType.FRAGMENT
+    ) {
+      return updateVFragment(node, vNode, globalOptions);
+    }
+    return vFragment(node, globalOptions);
+  }
+}
+
 export function vText<T>(
   node: string | number | JSX.StateLike,
   options?: {
@@ -195,7 +259,7 @@ export function vText<T>(
   return {
     type: VType.TEXT,
     [VNodeProps.TEXT]: isVState(node) ? node : `${node}`,
-    [VNodeProps.SKIP_ESCAPING]: options?.skipEscaping,
+    [VNodeProps.SKIP_ESCAPING]: options?.skipEscaping ?? false,
   };
 }
 
@@ -216,21 +280,13 @@ export function vElement<T>(
     type: VType.ELEMENT,
     [VNodeProps.TAG]: type,
     [VNodeProps.KEY]: key,
-    [VNodeProps.PROPS]: <JSX.ElementProps>props,
+    [VNodeProps.PROPS]: <JSX.ElementProps> props,
     [VNodeProps.EVENT_REFS]: eventRefs,
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
     [VNodeProps.CLEANUP]: [],
   };
 
-  _scope.push(vElement);
-  setSubscriber(
-    vNodeStateUpdater
-      ? vNodeStateUpdater(element, vElement, globalOptions)
-      : undefined,
-  );
   vElement[VNodeProps.CHILDREN] = props.children?.map((child) => create(child));
-  clearSubscriber();
-  _scope.shift();
 
   return vElement;
 }
@@ -242,22 +298,14 @@ function updateVElement<T>(
 ) {
   const { eventRefs, props } = element;
 
-  vElement[VNodeProps.PROPS] = <JSX.ElementProps>props;
+  vElement[VNodeProps.PROPS] = <JSX.ElementProps> props;
   vElement[VNodeProps.EVENT_REFS] = eventRefs;
 
-  _scope.push(vElement);
-  setSubscriber(
-    vNodeStateUpdater
-      ? vNodeStateUpdater(element, vElement, globalOptions)
-      : undefined,
-  );
   vElement[VNodeProps.CHILDREN] = track(
     vElement,
     props.children,
     globalOptions,
   );
-  clearSubscriber();
-  _scope.shift();
 
   return vElement;
 }
@@ -285,7 +333,10 @@ function vComponent<T>(
       ? vNodeStateUpdater(component, vComponent, globalOptions)
       : undefined,
   );
-  vComponent[VNodeProps.AST] = create(vComponent[VNodeProps.FN](props));
+  vComponent[VNodeProps.AST] = create(
+    vComponent[VNodeProps.FN](props),
+    globalOptions,
+  );
   vComponent[VNodeProps.MODE] = VMode.Created;
   clearSubscriber();
   _scope.shift();
@@ -313,6 +364,7 @@ function updateVComponent<T>(
     updatedNode,
     vComponent[VNodeProps.AST],
     globalOptions,
+    false,
   );
   return vComponent;
 }
@@ -321,10 +373,9 @@ function vFragment<T>(
   fragment: JSX.Element<0> | JSX.Node[] | JSX.Template,
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
-  const key = keyFrom(fragment);
   const vFragment: VFragment<T> = {
     type: VType.FRAGMENT,
-    [VNodeProps.KEY]: key,
+    [VNodeProps.KEY]: keyFrom(fragment),
     [VNodeProps.CHILDREN]: [],
     [VNodeProps.CLEANUP]: [],
     [VNodeProps.OPTIONS]: {
@@ -332,15 +383,7 @@ function vFragment<T>(
     },
   };
 
-  _scope.push(vFragment);
-  setSubscriber(
-    vNodeStateUpdater
-      ? vNodeStateUpdater(fragment, vFragment, globalOptions)
-      : undefined,
-  );
-
   const children: VNode<T>[] = [];
-
   if (isTemplateNode(fragment)) {
     for (const template of fragment.templates) {
       children.push(
@@ -350,15 +393,10 @@ function vFragment<T>(
     }
   } else {
     for (const node of childrenFrom(fragment)) {
-      children.push(create(node));
+      children.push(create(node, globalOptions));
     }
   }
-
   vFragment[VNodeProps.CHILDREN] = children;
-
-  clearSubscriber();
-  _scope.shift();
-
   return vFragment;
 }
 
@@ -368,71 +406,8 @@ function updateVFragment<T>(
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
   const children = childrenFrom(fragment);
-  _scope.push(vFragment);
-  setSubscriber(
-    vNodeStateUpdater
-      ? vNodeStateUpdater(fragment, vFragment, globalOptions)
-      : undefined,
-  );
   vFragment[VNodeProps.CHILDREN] = track(vFragment, children, globalOptions);
-  clearSubscriber();
-  _scope.shift();
   return vFragment;
-}
-
-export function update<T>(
-  node: JSX.Node,
-  vNode: VNode<T> | undefined,
-  globalOptions: VGlobalOptions,
-  cleanupVNode = false,
-): VNode<T> {
-  /*
-   * Root update call should cleanup the vNode.
-   * Subsequent nested update calls do not need to cleanup.
-   */
-  if (cleanupVNode) {
-    cleanup(vNode);
-  }
-
-  if (isEmptyNode(node) || typeof node === "undefined") {
-    return null;
-  }
-
-  // VText
-  if (isTextNode(node)) {
-    // If not vText cleanup old vNode
-    if (vNode?.type === VType.TEXT) {
-      return updateVText(node, vNode);
-    }
-    return vText(node);
-  }
-
-  // VElement
-  if (isElementNode(node)) {
-    if (vNode?.type === VType.ELEMENT && node.type === vNode[VNodeProps.TAG]) {
-      // Update vElement
-      return updateVElement(<JSX.Element<string>>node, vNode, globalOptions);
-    }
-    // Create vElement
-    return vElement(node, globalOptions);
-  }
-
-  // VComponent
-  if (isComponentNode(node)) {
-    if (vNode?.type === VType.COMPONENT && vNode[VNodeProps.FN] === node.type) {
-      return updateVComponent(node, vNode, globalOptions);
-    }
-    // Create vComponent
-    return vComponent(node, globalOptions);
-  }
-
-  // VFragment
-  if (isFragmentNode(node)) {
-    if (vNode?.type === VType.FRAGMENT) {
-      updateVFragment(node, vNode, globalOptions);
-    }
-    return vFragment(node, globalOptions);
-  }
 }
 
 function track<T>(
@@ -442,29 +417,31 @@ function track<T>(
 ): VNode<T>[] {
   const vNodes = vNode[VNodeProps.CHILDREN] || [];
 
-  // No previous vNodes. Create the new children
-  if (!vNodes?.length) {
-    vNode[VNodeProps.CHILDREN] = nodes?.map((node) => create(node));
-  }
-
-  // No new children
+  // No new nodes
   if (!nodes?.length) {
-    vNode[VNodeProps.CHILDREN] = undefined;
     return [];
   }
 
+  // No previous nodes.
+  if (!vNodes?.length) {
+    return nodes.map((node) => create(node, globalOptions));
+  }
+
   // Update
+  // TODO: use key for comparision and sorting
   let i = 0;
   const children = [];
   for (const node of nodes) {
-    children.push(update(node, vNodes[i], globalOptions));
+    children.push(update(node, vNodes[i], globalOptions, false));
     i++;
   }
   return vNodes;
 }
 
-export function isEmptyNode(node: JSX.Node): node is boolean | null {
-  return typeof node === "boolean" || node === null;
+export function isEmptyNode(
+  node: JSX.Node,
+): node is boolean | null | undefined {
+  return typeof node === "boolean" || node == null;
 }
 
 export function isTextNode(
@@ -539,23 +516,30 @@ export function isVState(node: JSX.Node): node is VState {
 
 export function cleanup(vNode: VNode<unknown>) {
   if (vNode && VNodeProps.CLEANUP in vNode) {
-    vNode[VNodeProps.CLEANUP].forEach((c) => c());
+    for (const c of vNode[VNodeProps.CLEANUP]) {
+      c();
+    }
+    vNode[VNodeProps.CLEANUP] = [];
   }
 
   if (isVComponent(vNode)) {
     cleanup(vNode[VNodeProps.AST]);
   }
 
+  if (isVFragment(vNode)) {
+    for (const vChild of vNode[VNodeProps.CHILDREN] ?? []) {
+      cleanup(vChild);
+    }
+  }
+
   if (isVElement(vNode) || isVFragment(vNode)) {
-    if (vNode[VNodeProps.CHILDREN]?.length) {
-      for (const child of vNode[VNodeProps.CHILDREN]) {
-        cleanup(child);
-      }
+    for (const child of vNode[VNodeProps.CHILDREN] ?? []) {
+      cleanup(child);
     }
   }
 }
 
-export function copy<T>(vNode: VNode<T>): VNode<T> {
+export function snapshot<T>(vNode: VNode<T>): VNode<T> {
   if (isVText(vNode)) {
     return {
       ...vNode,
@@ -563,17 +547,17 @@ export function copy<T>(vNode: VNode<T>): VNode<T> {
   }
   if (isVElement(vNode)) {
     const copyChildren = vNode[VNodeProps.CHILDREN]?.map((child) =>
-      copy(child),
+      snapshot(child)
     );
     return { ...vNode, [VNodeProps.CHILDREN]: copyChildren };
   }
   if (isVComponent(vNode)) {
-    const copyAst = copy(vNode[VNodeProps.AST]);
+    const copyAst = snapshot(vNode[VNodeProps.AST]);
     return { ...vNode, [VNodeProps.AST]: copyAst };
   }
   if (isVFragment(vNode)) {
     const copyChildren = vNode[VNodeProps.CHILDREN]?.map((child) =>
-      copy(child),
+      snapshot(child)
     );
     return {
       ...vNode,
@@ -588,7 +572,7 @@ function childrenFrom(fragment: JSX.Element<0> | JSX.Node[]): JSX.Node[] {
   if (Array.isArray(fragment)) return fragment;
 
   // Function based fragment
-  return fragment.props.children || [];
+  return fragment.props.children ?? [];
 }
 
 function keyFrom(

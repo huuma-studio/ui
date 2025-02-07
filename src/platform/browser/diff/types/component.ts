@@ -1,12 +1,23 @@
 import { type VComponent, VHook, VNodeProps } from "../../../../v-node/mod.ts";
+import { type AttachmentRef, copyAttachmentRefTo } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 
 interface BaseComponentChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Component;
 }
 
+export interface LinkComponentPayload {
+  vComponent: VComponent<Node>;
+  attachmentRef: AttachmentRef;
+}
+
+export interface LinkComponentChangeSet
+  extends BaseComponentChangeSet<LinkComponentPayload> {
+  [Props.Action]: Action.Link;
+}
+
 export interface MountComponentPayload {
-  vNode: VComponent<Node>;
+  vComponent: VComponent<Node>;
 }
 
 export interface MountComponentChangeSet
@@ -15,7 +26,7 @@ export interface MountComponentChangeSet
 }
 
 export interface UnmountComponentPayload {
-  vNode: VComponent<Node>;
+  vComponent: VComponent<Node>;
 }
 
 export interface UnmountComponentChangeSet
@@ -24,11 +35,15 @@ export interface UnmountComponentChangeSet
 }
 
 export type ComponentChangeSet =
+  | LinkComponentChangeSet
   | MountComponentChangeSet
   | UnmountComponentChangeSet;
 
 export function component(change: ComponentChangeSet): void {
   switch (change[Props.Action]) {
+    case Action.Link: {
+      return link(<LinkComponentPayload> change[Props.Payload]);
+    }
     case Action.Mount: {
       return mount(change[Props.Payload]);
     }
@@ -37,22 +52,26 @@ export function component(change: ComponentChangeSet): void {
   }
 }
 
-function mount(payload: MountComponentPayload): void {
+function link({ vComponent, attachmentRef }: LinkComponentPayload): void {
+  copyAttachmentRefTo(vComponent, attachmentRef);
+}
+
+function mount({ vComponent }: MountComponentPayload): void {
   // Run lifecycle "onMount" hooks associated with this element.
-  payload.vNode[VNodeProps.HOOKS]?.[VHook.ON_MOUNT]?.forEach((hook) => {
+  vComponent[VNodeProps.HOOKS]?.[VHook.ON_MOUNT]?.forEach((hook) => {
     const onUnmount = hook();
-    if (typeof onUnmount === "function" && payload.vNode[VNodeProps.HOOKS]) {
-      if (Array.isArray(payload.vNode[VNodeProps.HOOKS][VHook.ON_UNMOUNT])) {
-        payload.vNode[VNodeProps.HOOKS][VHook.ON_UNMOUNT].push(onUnmount);
+    if (typeof onUnmount === "function" && vComponent[VNodeProps.HOOKS]) {
+      if (Array.isArray(vComponent[VNodeProps.HOOKS][VHook.ON_UNMOUNT])) {
+        vComponent[VNodeProps.HOOKS][VHook.ON_UNMOUNT].push(onUnmount);
         return;
       }
-      payload.vNode[VNodeProps.HOOKS][VHook.ON_UNMOUNT] = [onUnmount];
+      vComponent[VNodeProps.HOOKS][VHook.ON_UNMOUNT] = [onUnmount];
     }
   });
 }
 
-function unmount(payload: UnmountComponentPayload): void {
-  payload.vNode[VNodeProps.HOOKS]?.[VHook.ON_UNMOUNT]?.forEach((hook) => {
+function unmount({ vComponent }: UnmountComponentPayload): void {
+  vComponent[VNodeProps.HOOKS]?.[VHook.ON_UNMOUNT]?.forEach((hook) => {
     hook();
   });
 }

@@ -44,6 +44,7 @@ export namespace JSX {
   };
 
   export type IntrinsicElements = {
+    unsafeInnerHTML?: string;
     [key: string]: unknown;
   };
 }
@@ -60,14 +61,17 @@ export function jsx(
     if (isEventName(prop)) {
       eventRefs.push({
         name: eventName(prop),
-        listener: <() => void>props[prop],
+        listener: <() => void> props[prop],
       });
       delete props[prop];
     }
   }
 
   if (!Array.isArray(props.children)) {
-    props.children = props.children ? [props.children] : undefined;
+    props.children =
+      (typeof props.children !== "boolean" && props.children != null)
+        ? [props.children]
+        : undefined;
   }
 
   return {
@@ -99,6 +103,6 @@ export function jsxTemplate(
   return { templates, nodes };
 }
 
-export function Fragment(props: JSX.ElementProps): JSX.Node[] | undefined {
-  return props.children;
+export function Fragment(props: JSX.ElementProps): JSX.Node[] | null {
+  return props.children || null;
 }

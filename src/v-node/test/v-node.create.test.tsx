@@ -1,21 +1,31 @@
 import { assertEquals } from "@std/assert/equals";
-import { create, VMode, VNodeProps } from "./mod.ts";
-import { $ } from "../hooks/state.ts";
-import { State } from "../state/mod.ts";
-import type { JSX } from "../jsx-runtime/jsx.ts";
+import { create, VMode, VNodeProps, VType } from "./../mod.ts";
+import { $ } from "../../hooks/state.ts";
+import { State } from "../../state/mod.ts";
+import type { JSX } from "../../jsx-runtime/jsx.ts";
 
 Deno.test(create.name, async (t) => {
   await t.step("should create VText Node", () => {
     const vText = create("Hello");
     assertEquals(vText, {
-      type: 0,
+      type: VType.TEXT,
       [VNodeProps.TEXT]: "Hello",
+      [VNodeProps.SKIP_ESCAPING]: false,
     });
 
     const vNumber = create(0);
     assertEquals(vNumber, {
-      type: 0,
+      type: VType.TEXT,
       [VNodeProps.TEXT]: "0",
+      [VNodeProps.SKIP_ESCAPING]: false,
+    });
+
+    const state = new State("State");
+    const vState = create(state);
+    assertEquals(vState, {
+      type: 0,
+      [VNodeProps.TEXT]: state,
+      [VNodeProps.SKIP_ESCAPING]: false,
     });
   });
 
@@ -23,16 +33,14 @@ Deno.test(create.name, async (t) => {
     const nullVNode = create(null);
     assertEquals(nullVNode, null);
 
-    const trueVNode = create(null);
+    const trueVNode = create(true);
     assertEquals(trueVNode, null);
 
-    const falseVNode = create(null);
+    const falseVNode = create(false);
     assertEquals(falseVNode, null);
-  });
 
-  await t.step("should return undefined", () => {
     const undefinedVNode = create(undefined);
-    assertEquals(undefinedVNode, undefined);
+    assertEquals(undefinedVNode, null);
   });
 
   await t.step("should create vElement", () => {
@@ -40,7 +48,7 @@ Deno.test(create.name, async (t) => {
 
     const vElement = create(<div class="nice">{text1}</div>);
     assertEquals(vElement, {
-      type: 1,
+      type: VType.ELEMENT,
       [VNodeProps.TAG]: "div",
       [VNodeProps.KEY]: undefined,
       [VNodeProps.PROPS]: {
@@ -50,50 +58,12 @@ Deno.test(create.name, async (t) => {
       [VNodeProps.EVENT_REFS]: [],
       [VNodeProps.CHILDREN]: [
         {
-          type: 0,
+          type: VType.TEXT,
           [VNodeProps.TEXT]: text1,
+          [VNodeProps.SKIP_ESCAPING]: false,
         },
       ],
       [VNodeProps.CLEANUP]: [],
-      [VNodeProps.OPTIONS]: {
-        _GLOBAL: {},
-      },
-    });
-  });
-
-  await t.step("should create vFragment", () => {
-    const text1 = "Hello World";
-
-    const vFragement = create(<>{text1}</>);
-    assertEquals(vFragement, {
-      type: 3,
-      [VNodeProps.KEY]: undefined,
-      [VNodeProps.CLEANUP]: [],
-      [VNodeProps.CHILDREN]: [
-        {
-          type: 0,
-          [VNodeProps.TEXT]: text1,
-        },
-      ],
-      [VNodeProps.OPTIONS]: {
-        _GLOBAL: {},
-      },
-    });
-
-    const vFragementArrayLike = create(["Hello", "World"]);
-    assertEquals(vFragementArrayLike, {
-      type: 3,
-      [VNodeProps.CLEANUP]: [],
-      "4": [
-        {
-          type: 0,
-          [VNodeProps.TEXT]: "Hello",
-        },
-        {
-          type: 0,
-          [VNodeProps.TEXT]: "World",
-        },
-      ],
       [VNodeProps.OPTIONS]: {
         _GLOBAL: {},
       },
@@ -101,28 +71,37 @@ Deno.test(create.name, async (t) => {
   });
 
   await t.step("should create VComponent", () => {
-    const vComponent = create(<ComponentA>Hello World!</ComponentA>);
+    const vComponent = create(
+      <ComponentA>Hello World!</ComponentA>,
+    );
     assertEquals(vComponent, {
-      type: 2,
+      type: VType.COMPONENT,
       [VNodeProps.FN]: ComponentA,
+      [VNodeProps.KEY]: undefined,
       [VNodeProps.PROPS]: {
         children: ["Hello World!"],
       },
       [VNodeProps.MODE]: VMode.Created,
       [VNodeProps.AST]: {
+        type: VType.ELEMENT,
+        [VNodeProps.TAG]: "div",
+        [VNodeProps.KEY]: undefined,
         [VNodeProps.EVENT_REFS]: [],
         [VNodeProps.CHILDREN]: [
           {
-            type: 0,
+            type: VType.TEXT,
             [VNodeProps.TEXT]: new State(""),
+            [VNodeProps.SKIP_ESCAPING]: false,
           },
           {
-            type: 3,
+            type: VType.FRAGMENT,
+            [VNodeProps.KEY]: undefined,
             [VNodeProps.CLEANUP]: [],
             [VNodeProps.CHILDREN]: [
               {
-                type: 0,
+                type: VType.TEXT,
                 [VNodeProps.TEXT]: "Hello World!",
+                [VNodeProps.SKIP_ESCAPING]: false,
               },
             ],
             [VNodeProps.OPTIONS]: {
@@ -130,8 +109,7 @@ Deno.test(create.name, async (t) => {
             },
           },
         ],
-        [VNodeProps.TAG]: "div",
-        type: 1,
+
         [VNodeProps.PROPS]: {
           class: "text-blue",
           children: [new State(""), ["Hello World!"]],

@@ -30,7 +30,7 @@ export class State<T> {
 
   get get(): T {
     if (subscriber) {
-      this.subscribe(<Subscriber<T>>subscriber);
+      this.subscribe(<Subscriber<T>> subscriber);
     }
     return this.#value;
   }

@@ -1,12 +1,11 @@
 // TODO: replace with dedicated VState type
 import type { State } from "../../../../state/mod.ts";
+import { VNodeProps, type VState, type VText } from "../../../../v-node/mod.ts";
 import {
-  type VNode,
-  type HasVNodeRef,
-  type VText,
-  VNodeProps,
-  type VState,
-} from "../../../../v-node/mod.ts";
+  type AttachmentRef,
+  AttachmentType,
+  moveAttachmentRef,
+} from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import { isState } from "../update.ts";
 
@@ -15,24 +14,31 @@ interface BaseTextChangeSet<T> extends ChangeSet<T> {
 }
 
 export interface CreateTextPayload {
-  vNode: VText<Node>;
+  vText: VText<Node>;
 }
 
 export interface AttachTextPayload {
-  parentVNode: VNode<Node>;
-  vNode: VText<Node>;
+  vText: VText<Node>;
+  attachmentRef: AttachmentRef;
+}
+
+export interface LinkTextPayload {
+  vText: VText<Node>;
+  node: Node;
+  attachmentRef: AttachmentRef;
 }
 
 export interface ReplaceTextPayload {
-  vNode: VText<Node>;
+  vText: VText<Node>;
+  attachmentRef: AttachmentRef;
 }
 
 export interface UpdateTextPayload {
-  vNode: VText<Node>;
+  vText: VText<Node>;
 }
 
 export interface DeleteTextPayload {
-  vNode: VText<Node>;
+  vText: VText<Node>;
 }
 
 export interface CreateTextChangeSet
@@ -43,6 +49,10 @@ export interface CreateTextChangeSet
 export interface AttachTextChangeSet
   extends BaseTextChangeSet<AttachTextPayload> {
   [Props.Action]: Action.Attach;
+}
+
+export interface LinkTextChangeSet extends BaseTextChangeSet<LinkTextPayload> {
+  [Props.Action]: Action.Link;
 }
 
 export interface ReplaceTextChangeSet
@@ -63,6 +73,7 @@ export interface DeleteTextChangeSet
 export type TextChangeSet =
   | CreateTextChangeSet
   | AttachTextChangeSet
+  | LinkTextChangeSet
   | ReplaceTextChangeSet
   | UpdateTextChangeSet
   | DeleteTextChangeSet;
@@ -70,79 +81,102 @@ export type TextChangeSet =
 export function text(change: TextChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
-      return create(<CreateTextPayload>change[Props.Payload]);
+      return create(<CreateTextPayload> change[Props.Payload]);
     case Action.Attach:
-      return attach(<AttachTextPayload>change[Props.Payload]);
+      return attach(<AttachTextPayload> change[Props.Payload]);
+    case Action.Link:
+      return link(<LinkTextPayload> change[Props.Payload]);
     case Action.Replace:
-      return replace(<ReplaceTextPayload>change[Props.Payload]);
+      return replace(<ReplaceTextPayload> change[Props.Payload]);
     case Action.Update:
-      return update(<UpdateTextPayload>change[Props.Payload]);
+      return update(<UpdateTextPayload> change[Props.Payload]);
     case Action.Delete:
-      return remove(<DeleteTextPayload>change[Props.Payload]);
+      return remove(<DeleteTextPayload> change[Props.Payload]);
   }
 }
 
-function create(payload: CreateTextPayload): void {
-  let text: Text;
+function create({ vText }: CreateTextPayload): void {
+  let node: Text;
 
   if (
-    typeof payload.vNode[VNodeProps.TEXT] === "object" &&
-    "get" in payload.vNode[VNodeProps.TEXT]
+    typeof vText[VNodeProps.TEXT] === "object" &&
+    "get" in vText[VNodeProps.TEXT]
   ) {
-    const state = <State<string | number>>payload.vNode[VNodeProps.TEXT];
-    text = new Text(`${state.get}`);
+    const state = <State<string | number>> vText[VNodeProps.TEXT];
+    node = new Text(`${state.get}`);
     state.subscribe({
       update: (value: string | number) => {
-        text.textContent = `${value}`;
+        node.textContent = `${value}`;
       },
     });
   } else {
-    text = new Text(`${payload.vNode[VNodeProps.TEXT]}`);
+    node = new Text(`${vText[VNodeProps.TEXT]}`);
   }
 
-  const vNode = payload.vNode;
-  vNode[VNodeProps.NODE_REF] = text;
+  vText[VNodeProps.NODE_REF] = node;
 }
 
-function attach(payload: AttachTextPayload): void {
-  (<Node>(
-    (<HasVNodeRef<Node>>payload.parentVNode)[VNodeProps.NODE_REF]
-  )).appendChild(<Node>payload.vNode[VNodeProps.NODE_REF]);
+function attach({ vText, attachmentRef }: AttachTextPayload): void {
+  const node = vText[VNodeProps.NODE_REF];
+  if (!node) return;
+  if (attachmentRef.type === AttachmentType.Parent) {
+    attachmentRef.vNode[VNodeProps.NODE_REF]?.appendChild(
+      node,
+    );
+  } else {
+    attachmentRef.node.parentNode?.insertBefore(
+      node,
+      attachmentRef.node.nextSibling,
+    );
+  }
+  moveAttachmentRef(attachmentRef, node);
 }
 
-function replace(payload: ReplaceTextPayload): void {
-  let text: Text;
+function link({ vText, node, attachmentRef }: LinkTextPayload): void {
+  vText[VNodeProps.NODE_REF] = node;
+  moveAttachmentRef(attachmentRef, node);
+}
+
+function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
+  let node: Text;
 
   if (
-    typeof payload.vNode[VNodeProps.TEXT] === "object" &&
-    "get" in payload.vNode[VNodeProps.TEXT]
+    typeof vText[VNodeProps.TEXT] === "object" &&
+    "get" in vText[VNodeProps.TEXT]
   ) {
-    const state = <VState>payload.vNode[VNodeProps.TEXT];
-    text = new Text(`${state.get}`);
+    const state = <VState> vText[VNodeProps.TEXT];
+    node = new Text(`${state.get}`);
+    // TODO: Clean up subscription, probaly attach it the vText instance
     state.subscribe({
       update: (value: string | number) => {
-        text.textContent = `${value}`;
+        node.textContent = `${value}`;
       },
     });
   } else {
-    text = new Text(`${payload.vNode[VNodeProps.TEXT]}`);
+    node = new Text(`${vText[VNodeProps.TEXT]}`);
   }
 
-  payload.vNode[VNodeProps.NODE_REF]?.parentNode?.replaceChild(
-    text,
-    payload.vNode[VNodeProps.NODE_REF],
+  vText[VNodeProps.NODE_REF]?.parentNode?.replaceChild(
+    node,
+    vText[VNodeProps.NODE_REF],
   );
-  payload.vNode[VNodeProps.NODE_REF] = text;
+  vText[VNodeProps.NODE_REF] = node;
+  moveAttachmentRef(attachmentRef, node);
 }
 
-function update(payload: UpdateTextPayload): void {
-  (<Text>payload.vNode[VNodeProps.NODE_REF]).textContent = isState(
-    payload.vNode,
-  )
-    ? `${(<VState>payload.vNode[VNodeProps.TEXT]).get}`
-    : `${payload.vNode[VNodeProps.TEXT]}`;
+function update({ vText }: UpdateTextPayload): void {
+  const node = vText[VNodeProps.NODE_REF];
+  if (!node) return;
+  node.textContent = isState(
+      vText,
+    )
+    ? `${(<VState> vText[VNodeProps.TEXT]).get}`
+    : `${vText[VNodeProps.TEXT]}`;
 }
 
-function remove(payload: DeleteTextPayload): void {
-  (<Text>payload.vNode[VNodeProps.NODE_REF]).remove();
+function remove({ vText }: DeleteTextPayload): void {
+  const node = vText[VNodeProps.NODE_REF];
+  if (node) {
+    node.parentNode?.removeChild(node);
+  }
 }

@@ -1,42 +1,38 @@
 import type { VNode } from "../../../v-node/mod.ts";
 import type { ChangeSet } from "./dispatch.ts";
-import { hydrate, toBeHydrated } from "./hydrate.ts";
-import { remove, toBeRemoved } from "./remove.ts";
-import { render, toBeRendered } from "./render.ts";
-import { toBeUpdated, update } from "./update.ts";
+
+import { hydrate } from "./hydrate.ts";
+import { render } from "./render.ts";
+import { update } from "./update.ts";
+import { remove } from "./remove.ts";
+
+import type { AttachmentRef } from "./attachment-ref.ts";
 
 interface DiffProps<T> {
-  parentVNode?: VNode<T>;
+  attachmentRef?: AttachmentRef;
   vNode?: VNode<T>;
   previousVNode?: VNode<T>;
-  node?: T;
+  nodes?: T[];
 }
 
 export function diff(props: DiffProps<Node>): ChangeSet<unknown>[] {
-  const { vNode, previousVNode, parentVNode, node } = props;
+  const { vNode, previousVNode, nodes, attachmentRef } = props;
 
-  if (toBeHydrated(vNode, previousVNode, node)) {
-    return hydrate(vNode, <Node>node);
+  if (vNode && !previousVNode && nodes?.length && attachmentRef) {
+    return hydrate(vNode, nodes, attachmentRef);
   }
 
-  if (toBeUpdated(vNode, previousVNode)) {
-    return update(vNode, previousVNode);
+  if (vNode && !previousVNode && attachmentRef) {
+    return render(vNode, attachmentRef);
   }
 
-  if (
-    toBeRendered({
-      parentVNode,
-      vNode,
-    })
-  ) {
-    return render({
-      parentVNode,
-      vNode,
-    });
+  if (vNode && previousVNode && attachmentRef) {
+    return update(vNode, previousVNode, attachmentRef);
   }
 
-  if (toBeRemoved(vNode, previousVNode, parentVNode)) {
+  if (vNode == null && previousVNode) {
     return remove(previousVNode);
   }
+
   return [];
 }

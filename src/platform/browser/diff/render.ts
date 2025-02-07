@@ -1,146 +1,168 @@
 import {
+  type VComponent,
   type VElement,
+  type VFragment,
   type VNode,
+  VNodeProps,
   type VText,
   VType,
-  VNodeProps,
-  type VFragment,
 } from "../../../v-node/mod.ts";
-import { diff } from "./diff.ts";
+import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
+import type { CreateAttributeChangeSet } from "./types/attribute.ts";
+import type {
+  LinkComponentChangeSet,
+  MountComponentChangeSet,
+} from "./types/component.ts";
+import type {
+  AttachElementChangeSet,
+  CreateElementChangeSet,
+} from "./types/element.ts";
+import type { CreateEventChangeSet } from "./types/event.ts";
 import type { TextChangeSet } from "./types/text.ts";
 
-interface RenderProps {
-  parentVNode: VNode<Node>;
-  vNode: VNode<Node>;
-}
-
-export function render(props: RenderProps): ChangeSet<unknown>[] {
-  if (!props.vNode) {
+export function render(
+  vNode: VNode<Node>,
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
+  if (!vNode) {
     return [];
   }
 
-  if (props.vNode.type === VType.COMPONENT) {
-    return render({
-      parentVNode: props.parentVNode,
-      vNode: props.vNode[VNodeProps.AST],
-    });
+  if (vNode.type === VType.COMPONENT) {
+    return component(vNode, attachmentRef);
   }
 
-  if (props.vNode.type === VType.ELEMENT) {
-    return element(props.parentVNode, props.vNode);
+  if (vNode.type === VType.ELEMENT) {
+    return element(vNode, attachmentRef);
   }
 
-  if (props.vNode.type === VType.TEXT) {
-    return text(props.parentVNode, props.vNode);
+  if (vNode.type === VType.TEXT) {
+    return text(vNode, attachmentRef);
   }
 
-  if (props.vNode.type === VType.FRAGMENT) {
-    return fragment(props.parentVNode, props.vNode);
+  if (vNode.type === VType.FRAGMENT) {
+    return fragment(vNode, attachmentRef);
   }
 
   return [];
 }
 
+function component(
+  vComponent: VComponent<Node>,
+  attachmentRef: AttachmentRef,
+) {
+  return [
+    <LinkComponentChangeSet> {
+      [Props.Type]: Type.Component,
+      [Props.Action]: Action.Link,
+      [Props.Payload]: {
+        vComponent,
+        attachmentRef,
+      },
+    },
+    <MountComponentChangeSet> {
+      [Props.Type]: Type.Component,
+      [Props.Action]: Action.Mount,
+      [Props.Payload]: {
+        vComponent,
+      },
+    },
+    ...render(vComponent[VNodeProps.AST], attachmentRef),
+  ];
+}
+
 function element(
-  parentVNode: VNode<Node>,
-  vNode: VElement<Node>,
+  vElement: VElement<Node>,
+  attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
-  const changes: ChangeSet<unknown>[] = [];
+  const changeSets: ChangeSet<unknown>[] = [];
 
-  // Create DOM node and link it to the vNode
-  changes.push({
-    [Props.Type]: Type.Element,
-    [Props.Action]: Action.Create,
-    [Props.Payload]: {
-      parentVNode,
-      vNode,
-    },
-  });
-
-  // Attach the nodeRef to the DOM
-  changes.push({
-    [Props.Type]: Type.Element,
-    [Props.Action]: Action.Attach,
-    [Props.Payload]: {
-      parentVNode,
-      vNode,
-    },
-  });
-
-  changes.push({
-    [Props.Type]: Type.Element,
-    [Props.Action]: Action.Mount,
-    [Props.Payload]: {
-      vNode,
-    },
-  });
-
-  // Attach events
-  vNode[VNodeProps.EVENT_REFS].forEach((event) => {
-    changes.push({
-      [Props.Type]: Type.Event,
+  changeSets.push(
+    <CreateElementChangeSet> {
+      [Props.Type]: Type.Element,
       [Props.Action]: Action.Create,
       [Props.Payload]: {
-        vNode,
-        name: event.name,
-        listener: event.listener,
+        vElement,
+        attachmentRef,
       },
-    });
+    },
+    <AttachElementChangeSet> {
+      [Props.Type]: Type.Element,
+      [Props.Action]: Action.Attach,
+      [Props.Payload]: {
+        vElement,
+        attachmentRef,
+      },
+    },
+  );
+
+  // Attach events
+  vElement[VNodeProps.EVENT_REFS].forEach((event) => {
+    changeSets.push(
+      <CreateEventChangeSet> {
+        [Props.Type]: Type.Event,
+        [Props.Action]: Action.Create,
+        [Props.Payload]: {
+          vNode: vElement,
+          name: event.name,
+          listener: event.listener,
+        },
+      },
+    );
   });
 
   // Add attributes
-  for (const prop in vNode[VNodeProps.EVENT_REFS]) {
-    changes.push({
-      [Props.Type]: Type.Attribute,
-      [Props.Action]: Action.Create,
-      [Props.Payload]: {
-        vNode,
-        name: prop,
-        value: <string>vNode[VNodeProps.PROPS][prop],
+  for (const prop in vElement[VNodeProps.PROPS]) {
+    changeSets.push(
+      <CreateAttributeChangeSet> {
+        [Props.Type]: Type.Attribute,
+        [Props.Action]: Action.Create,
+        [Props.Payload]: {
+          vNode: vElement,
+          name: prop,
+          value: <string> vElement[VNodeProps.PROPS][prop],
+        },
       },
-    });
+    );
   }
 
-  vNode[VNodeProps.CHILDREN]
-    ?.filter((c) => c != null)
-    .forEach((child) => {
-      changes.push(...diff({ parentVNode: vNode, vNode: child }));
-    });
+  vElement[VNodeProps.CHILDREN]?.forEach((child) => {
+    changeSets.push(
+      ...render(child, { type: AttachmentType.Parent, vNode: vElement }),
+    );
+  });
 
-  return changes;
+  return changeSets;
 }
 
-function text(parentVNode: VNode<Node>, vNode: VText<Node>): TextChangeSet[] {
+function text(
+  vText: VText<Node>,
+  attachmentRef: AttachmentRef,
+): TextChangeSet[] {
   return [
     {
       [Props.Type]: Type.Text,
       [Props.Action]: Action.Create,
       [Props.Payload]: {
-        vNode: vNode,
+        vText: vText,
       },
     },
     {
       [Props.Type]: Type.Text,
       [Props.Action]: Action.Attach,
       [Props.Payload]: {
-        parentVNode,
-        vNode,
+        vText,
+        attachmentRef,
       },
     },
   ];
 }
 
-function fragment(parentVNode: VNode<Node>, vNode: VFragment<Node>) {
+function fragment(vFragement: VFragment<Node>, attachmentRef: AttachmentRef) {
   const changes: ChangeSet<unknown>[] = [];
-  vNode[VNodeProps.CHILDREN]
-    ?.filter((c) => c != null)
-    .forEach((child) => {
-      changes.push(...diff({ parentVNode, vNode: child }));
-    });
+  vFragement[VNodeProps.CHILDREN]?.forEach((vNode) => {
+    changes.push(...render(vNode, attachmentRef));
+  });
   return changes;
-}
-
-export function toBeRendered(props: RenderProps) {
-  return props.parentVNode && props.vNode;
 }

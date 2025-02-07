@@ -1,16 +1,18 @@
 import { State } from "../state/mod.ts";
 import {
   getScope,
+  type HasVMode,
+  type HasVOptions,
   type VBase,
   VMode,
-  type HasVMode,
   VNodeProps,
-  type HasVOptions,
 } from "../v-node/mod.ts";
 
-type VNodeWithState<T> = VBase &
-  HasVMode &
-  HasVOptions & {
+type VNodeWithState<T> =
+  & VBase
+  & HasVMode
+  & HasVOptions
+  & {
     [VNodeProps.OPTIONS]: {
       $?: State<T>[];
     };
@@ -30,12 +32,12 @@ export function $<T>(value: T) {
     return new State(value);
   }
 
-  const vNode = <VNodeWithState<T>>scope[scope.length - 1];
+  const vNode = <VNodeWithState<T>> scope[scope.length - 1];
 
   // If state is left in the current VNode return it.
   if (statesCache.length) {
     if (statesCache[statesCache.length - 1].vNode === vNode) {
-      const current = <StateScope<T>>statesCache.shift();
+      const current = <StateScope<T>> statesCache.shift();
       vNode[VNodeProps.OPTIONS]?.$?.push(current.state);
       return current.state;
     }
@@ -49,14 +51,14 @@ export function $<T>(value: T) {
     vNode[VNodeProps.OPTIONS]?.$?.length
   ) {
     statesCache.push(
-      ...(<StateScope<unknown>[]>vNode[VNodeProps.OPTIONS].$.map((state) => ({
+      ...(<StateScope<unknown>[]> vNode[VNodeProps.OPTIONS].$.map((state) => ({
         vNode: vNode,
         state,
       }))),
     );
 
     vNode[VNodeProps.OPTIONS].$ = [];
-    const scope: StateScope<T> = <StateScope<T>>statesCache.shift();
+    const scope: StateScope<T> = <StateScope<T>> statesCache.shift();
     vNode[VNodeProps.OPTIONS].$.push(scope.state);
     return scope.state;
   }

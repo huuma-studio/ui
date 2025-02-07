@@ -1,212 +1,200 @@
 import {
   type VComponent,
   type VElement,
+  type VFragment,
   type VNode,
   VNodeProps,
   type VState,
   type VText,
   VType,
 } from "../../../v-node/mod.ts";
+import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { remove } from "./remove.ts";
 import { compareAttributes } from "./types/attribute.ts";
-import type { ElementChangeSet } from "./types/element.ts";
+import type { LinkComponentChangeSet } from "./types/component.ts";
+import type { LinkElementChangeSet } from "./types/element.ts";
 import type { EventChangeSet } from "./types/event.ts";
-import type { UpdateTextPayload } from "./types/text.ts";
+import type { LinkTextChangeSet, UpdateTextChangeSet } from "./types/text.ts";
 
 export function update(
   vNode: VNode<Node>,
   previousVNode: VNode<Node>,
+  attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   if (vNode == null || previousVNode == null) {
-    console.log("VNode could not be updated", vNode, previousVNode);
     return [];
+  }
+
+  if (vNode && !previousVNode == null) {
+    diff({ vNode, attachmentRef });
+  }
+
+  if (vNode.type === VType.TEXT && previousVNode.type === VType.TEXT) {
+    return updateText(vNode, previousVNode, attachmentRef);
+  }
+
+  if (vNode.type === VType.ELEMENT && previousVNode.type === VType.ELEMENT) {
+    if (vNode[VNodeProps.TAG] !== previousVNode[VNodeProps.TAG]) {
+      // TODO: Replace
+    }
+    return updateElement(vNode, previousVNode, attachmentRef);
   }
 
   if (
     vNode.type === VType.COMPONENT &&
     previousVNode.type === VType.COMPONENT
   ) {
-    return updateComponent(vNode, previousVNode);
+    if (vNode[VNodeProps.FN] !== previousVNode[VNodeProps.FN]) {
+      // TODO: Replace
+    }
+    return updateComponent(vNode, previousVNode, attachmentRef);
   }
 
-  if (vNode.type === VType.ELEMENT && previousVNode.type === VType.ELEMENT) {
-    return updateElement(vNode, previousVNode);
+  if (vNode.type === VType.FRAGMENT && previousVNode.type === VType.FRAGMENT) {
+    return updateFragment(vNode, previousVNode, attachmentRef);
   }
 
-  if (vNode.type === VType.ELEMENT && previousVNode.type === VType.TEXT) {
-    return replaceTextWithElement(vNode, previousVNode);
-  }
-
-  if (vNode.type === VType.TEXT && previousVNode.type === VType.TEXT) {
-    return updateText(vNode, previousVNode);
-  }
-
-  if (vNode.type === VType.TEXT && previousVNode.type === VType.ELEMENT) {
-    return replaceElementWithText(vNode, previousVNode);
-  }
-
+  // TODO: Replace
   return [];
 }
 
 function updateComponent(
-  vNode: VComponent<Node>,
-  previousVNode: VComponent<Node>,
+  vComponent: VComponent<Node>,
+  previousVComponent: VComponent<Node>,
+  attachmentRef: AttachmentRef,
 ) {
-  // Same kind of component
-  if (vNode[VNodeProps.FN] === previousVNode[VNodeProps.FN]) {
-    return update(vNode[VNodeProps.AST], previousVNode[VNodeProps.AST]);
-  }
-
-  // Other component destroy old and render new
-  return [...remove(previousVNode)];
-}
-
-function updateElement(
-  vNode: VElement<Node>,
-  previousVNode: VElement<Node>,
-): ChangeSet<unknown>[] {
-  const changes: ChangeSet<unknown>[] = [];
-  let skipPrevious = false;
-
-  // Tag did change
-  if (
-    vNode[VNodeProps.TAG] !== (<VElement<Node>>previousVNode)[VNodeProps.TAG]
-  ) {
-    changes.push(<ElementChangeSet>{
-      [Props.Type]: Type.Element,
-      [Props.Action]: Action.Replace,
-      [Props.Payload]: {
-        node: previousVNode[VNodeProps.NODE_REF],
-        vNode,
-      },
-    });
-    skipPrevious = true;
-  } else {
-    vNode[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
-  }
-
-  // Update event listener
-  changes.push(...updateEvents(vNode, previousVNode));
-
-  // Update attributes
-  changes.push(...compareAttributes(vNode, previousVNode));
-
-  // Update children
-  changes.push(
-    ...updateChildren({
-      vNode,
-      previousVNode: skipPrevious ? undefined : previousVNode,
-    }),
-  );
-
-  return changes;
-}
-
-function replaceTextWithElement(
-  vNode: VElement<Node>,
-  previousVNode: VText<Node>,
-) {
-  const changes: ChangeSet<unknown>[] = [];
-
-  vNode[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
-
-  changes.push({
-    [Props.Type]: Type.Element,
-    [Props.Action]: Action.Replace,
-    [Props.Payload]: {
-      node: previousVNode[VNodeProps.NODE_REF],
-      vNode,
-    },
-  });
-
-  // Add events
-  changes.push(...updateEvents(vNode));
-
-  // Add attributes
-  for (const prop in vNode[VNodeProps.PROPS]) {
-    changes.push({
-      [Props.Type]: Type.Attribute,
-      [Props.Action]: Action.Create,
-      [Props.Payload]: {
-        vNode,
-        name: prop,
-        value: <string>vNode[VNodeProps.PROPS][prop],
-      },
-    });
-  }
-
-  vNode[VNodeProps.CHILDREN]
-    ?.filter((c) => c != null)
-    ?.forEach((child) => {
-      changes.push(...diff({ parentVNode: vNode, vNode: child }));
-    });
-
-  return changes;
-}
-
-function updateText(
-  vNode: VText<Node>,
-  previousVNode: VText<Node>,
-): ChangeSet<unknown>[] {
-  vNode[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
-  const text = isState(vNode)
-    ? (<VState>vNode[VNodeProps.TEXT]).get
-    : vNode[VNodeProps.TEXT];
-  const previousText = isState(previousVNode)
-    ? (<VState>previousVNode[VNodeProps.TEXT]).get
-    : previousVNode[VNodeProps.TEXT];
-
-  if (text !== previousText) {
-    if (vNode[VNodeProps.NODE_REF] instanceof Text) {
-      return [updateTextContent(vNode)];
-    }
-  }
-  return [];
-}
-
-function replaceElementWithText(
-  vNode: VText<Node>,
-  previousVNode: VElement<Node>,
-): ChangeSet<unknown>[] {
-  vNode[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
   return [
-    {
-      [Props.Type]: Type.Text,
-      [Props.Action]: Action.Replace,
+    <LinkComponentChangeSet> {
+      [Props.Type]: Type.Component,
+      [Props.Action]: Action.Link,
       [Props.Payload]: {
-        vNode,
+        vComponent,
+        attachmentRef,
       },
     },
+    ...update(
+      vComponent[VNodeProps.AST],
+      previousVComponent[VNodeProps.AST],
+      attachmentRef,
+    ),
   ];
 }
 
+function updateFragment(
+  vFragement: VFragment<Node>,
+  previousVFragment: VFragment<Node>,
+  attachmentRef: AttachmentRef,
+) {
+  const previousVNodes = [
+    ...(previousVFragment[VNodeProps.CHILDREN] ?? []),
+  ];
+  const changeSet: ChangeSet<unknown>[] = [];
+
+  for (const vNode of vFragement[VNodeProps.CHILDREN] ?? []) {
+    changeSet.push(...update(vNode, previousVNodes.shift(), attachmentRef));
+  }
+
+  for (const previousVNode of previousVNodes) {
+    changeSet.push(...remove(previousVNode));
+  }
+
+  return changeSet;
+}
+
+function updateElement(
+  vElement: VElement<Node>,
+  previousVElement: VElement<Node>,
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
+  const changeSet: ChangeSet<unknown>[] = [];
+
+  changeSet.push(
+    <LinkElementChangeSet> {
+      [Props.Type]: Type.Element,
+      [Props.Action]: Action.Link,
+      [Props.Payload]: {
+        vElement,
+        node: previousVElement[VNodeProps.NODE_REF],
+        attachmentRef,
+      },
+    },
+    ...updateEvents(vElement, previousVElement),
+    ...compareAttributes(vElement, previousVElement),
+    ...updateChildren(
+      vElement,
+      previousVElement,
+      { type: AttachmentType.Parent, vNode: vElement },
+    ),
+  );
+
+  return changeSet;
+}
+
+function updateText(
+  vText: VText<Node>,
+  previousVNode: VText<Node>,
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
+  const changeSets: ChangeSet<unknown>[] = [];
+
+  changeSets.push(
+    <LinkTextChangeSet> {
+      [Props.Type]: Type.Text,
+      [Props.Action]: Action.Link,
+      [Props.Payload]: {
+        vText,
+        node: previousVNode[VNodeProps.NODE_REF],
+        attachmentRef,
+      },
+    },
+  );
+
+  const text = isState(vText)
+    ? (<VState> vText[VNodeProps.TEXT]).get
+    : vText[VNodeProps.TEXT];
+  const previousText = isState(previousVNode)
+    ? (<VState> previousVNode[VNodeProps.TEXT]).get
+    : previousVNode[VNodeProps.TEXT];
+
+  if (text !== previousText) {
+    changeSets.push(
+      <UpdateTextChangeSet> {
+        [Props.Type]: Type.Text,
+        [Props.Action]: Action.Update,
+        [Props.Payload]: {
+          vText,
+        },
+      },
+    );
+  }
+  return changeSets;
+}
+
 export function updateEvents(
-  vNode: VElement<Node>,
-  previousvNode?: VElement<Node>,
+  vElement: VElement<Node>,
+  previousVElement?: VElement<Node>,
 ): ChangeSet<unknown>[] {
   const changes: EventChangeSet[] = [];
 
-  // Remove previous events
-  previousvNode?.[VNodeProps.EVENT_REFS]?.forEach((eventRef) => {
+  previousVElement?.[VNodeProps.EVENT_REFS]?.forEach((eventRef) => {
     changes.push({
       [Props.Type]: Type.Event,
       [Props.Action]: Action.Delete,
       [Props.Payload]: {
-        vNode: previousvNode,
+        vNode: previousVElement,
         ...eventRef,
       },
     });
   });
 
-  // Attach new events
-  vNode?.[VNodeProps.EVENT_REFS]?.forEach((eventRef) => {
+  vElement?.[VNodeProps.EVENT_REFS]?.forEach((eventRef) => {
     changes.push({
       [Props.Type]: Type.Event,
       [Props.Action]: Action.Create,
       [Props.Payload]: {
-        vNode,
+        vNode: vElement,
         ...eventRef,
       },
     });
@@ -215,60 +203,34 @@ export function updateEvents(
   return changes;
 }
 
-// TODO: Inline function
-function updateTextContent(vNode: VText<Node>): ChangeSet<UpdateTextPayload> {
-  return {
-    [Props.Type]: Type.Text,
-    [Props.Action]: Action.Update,
-    [Props.Payload]: {
-      vNode,
-    },
-  };
-}
-
-interface UpdateChildrenProps {
-  vNode: VElement<Node> | VText<Node>;
-  previousVNode?: VElement<Node> | VText<Node>;
-}
-
 export function updateChildren(
-  props: UpdateChildrenProps,
+  vNode: VElement<Node> | VFragment<Node>,
+  previousVNode: VElement<Node> | VFragment<Node>,
+  attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
-  const changes: ChangeSet<unknown>[] = [];
-  const previousChildren: VNode<Node>[] =
-    props.previousVNode && VNodeProps.CHILDREN in props.previousVNode
-      ? props.previousVNode[VNodeProps.CHILDREN] || []
-      : [];
+  const changeSet: ChangeSet<unknown>[] = [];
 
-  if (props.vNode && VNodeProps.CHILDREN in props.vNode) {
-    props.vNode?.[VNodeProps.CHILDREN]?.forEach((child) => {
-      changes.push(
-        ...diff({
-          parentVNode: props.vNode,
-          vNode: child,
-          previousVNode: previousChildren?.shift(),
-        }),
-      );
-    });
-  }
+  const previousVChildren: VNode<Node>[] = [
+    ...(previousVNode[VNodeProps.CHILDREN] ?? []),
+  ];
 
-  previousChildren.forEach((previousChild) => {
-    changes.push(
-      ...diff({ parentVNode: props.vNode, previousVNode: previousChild }),
+  vNode[VNodeProps.CHILDREN]?.forEach((vChild) => {
+    const previousVChild = previousVChildren.shift();
+
+    changeSet.push(
+      ...diff({
+        vNode: vChild,
+        previousVNode: previousVChild,
+        attachmentRef,
+      }),
     );
   });
 
-  return changes;
-}
+  previousVChildren.forEach((previousVChild) => {
+    changeSet.push(...remove(previousVChild));
+  });
 
-export function toBeUpdated(
-  vNode?: VNode<Node>,
-  previousVNode?: VNode<Node>,
-): boolean {
-  if (vNode && previousVNode) {
-    return true;
-  }
-  return false;
+  return changeSet;
 }
 
 export function isState(vNode: VText<Node>) {

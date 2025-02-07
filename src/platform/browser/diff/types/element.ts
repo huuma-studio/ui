@@ -1,4 +1,11 @@
-import { type VElement, VNodeProps, VType } from "../../../../v-node/mod.ts";
+import { type VElement, VNodeProps } from "../../../../v-node/mod.ts";
+import {
+  type AttachmentRef,
+  AttachmentType,
+  moveAttachmentRef,
+  parentFromAttachmentRef,
+} from "../attachment-ref.ts";
+
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 
 interface BaseElementChangeSet<T> extends ChangeSet<T> {
@@ -6,37 +13,35 @@ interface BaseElementChangeSet<T> extends ChangeSet<T> {
 }
 
 export interface CreateElementPayload {
-  parentVNode: VElement<Node>;
-  vNode: VElement<Node>;
+  vElement: VElement<Node>;
+  attachmentRef: AttachmentRef;
 }
 
 export interface LinkElementPayload {
-  vNode: VElement<Node>;
+  vElement: VElement<Node>;
   node: Node;
-}
-
-export interface MountElementPayload {
-  vNode: VElement<Node>;
+  attachmentRef: AttachmentRef;
 }
 
 export interface AttachElementPayload {
-  parentVNode: VElement<Node>;
-  vNode: VElement<Node>;
+  vElement: VElement<Node>;
+  attachmentRef: AttachmentRef;
 }
 
 export interface ReplaceElementPayload {
-  vNode: VElement<Node>;
+  vElement: VElement<Node>;
   node: Node;
+  attachmentRef: AttachmentRef;
 }
 
 export interface UpdateElementPayload {
-  parentVNode: VElement<Node>;
+  vElement: VElement<Node>;
   node: Node;
-  vNode: VElement<Node>;
+  attachmentRef: AttachmentRef;
 }
 
-export interface RemoveElementPayload {
-  vNode: VElement<Node>;
+export interface DeleteElementPayload {
+  vElement: VElement<Node>;
 }
 
 export interface CreateElementChangeSet
@@ -64,8 +69,8 @@ export interface UpdateElementChangeSet
   [Props.Action]: Action.Update;
 }
 
-export interface RemoveElementChangeSet
-  extends BaseElementChangeSet<RemoveElementPayload> {
+export interface DeleteElementChangeSet
+  extends BaseElementChangeSet<DeleteElementPayload> {
   [Props.Action]: Action.Delete;
 }
 
@@ -75,85 +80,108 @@ export type ElementChangeSet =
   | AttachElementChangeSet
   | ReplaceElementChangeSet
   | UpdateElementChangeSet
-  | RemoveElementChangeSet;
+  | DeleteElementChangeSet;
 
 export function element(change: ElementChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
-      return create(<CreateElementPayload>change[Props.Payload]);
+      return create(<CreateElementPayload> change[Props.Payload]);
     case Action.Link:
-      return link(<LinkElementPayload>change[Props.Payload]);
+      return link(<LinkElementPayload> change[Props.Payload]);
     case Action.Attach:
-      return attach(<AttachElementPayload>change[Props.Payload]);
+      return attach(<AttachElementPayload> change[Props.Payload]);
     case Action.Replace:
-      return replace(<ReplaceElementPayload>change[Props.Payload]);
+      return replace(<ReplaceElementPayload> change[Props.Payload]);
     case Action.Update:
-      return update(<UpdateElementPayload>change[Props.Payload]);
+      return update(<UpdateElementPayload> change[Props.Payload]);
     case Action.Delete:
-      return remove(<RemoveElementPayload>change[Props.Payload]);
+      return remove(<DeleteElementPayload> change[Props.Payload]);
   }
 }
 
-function create(payload: CreateElementPayload): void {
-  if (!payload.vNode && !payload.parentVNode[VNodeProps.NODE_REF]) return;
-  payload.vNode[VNodeProps.NODE_REF] = createElement(
-    payload.vNode,
-    <Node>payload.parentVNode[VNodeProps.NODE_REF],
-  );
+function create({ vElement, attachmentRef }: CreateElementPayload): void {
+  const node = createElement(
+    vElement,
+    attachmentRef,
+  ).node;
+  vElement[VNodeProps.NODE_REF] = node;
 }
 
-function link(payload: LinkElementPayload): void {
-  payload.vNode[VNodeProps.NODE_REF] = payload.node;
+function link({ vElement, node, attachmentRef }: LinkElementPayload): void {
+  vElement[VNodeProps.NODE_REF] = node;
+  moveAttachmentRef(attachmentRef, node);
 }
 
-function attach(payload: AttachElementPayload): void {
-  if (
-    payload.vNode.type === VType.ELEMENT &&
-    payload.vNode[VNodeProps.NODE_REF]
-  ) {
-    (<Node>payload.parentVNode[VNodeProps.NODE_REF])?.appendChild(
-      payload.vNode[VNodeProps.NODE_REF],
+function attach({ vElement, attachmentRef }: AttachElementPayload): void {
+  const node = vElement[VNodeProps.NODE_REF];
+  if (!node) return;
+  if (attachmentRef.type === AttachmentType.Parent) {
+    attachmentRef.vNode[VNodeProps.NODE_REF]?.appendChild(
+      node,
     );
   }
+  if (attachmentRef.type === AttachmentType.Sibling) {
+    attachmentRef.node.parentNode?.insertBefore(
+      node,
+      attachmentRef.node.nextSibling,
+    );
+  }
+  moveAttachmentRef(attachmentRef, node);
 }
 
-function replace(payload: ReplaceElementPayload): void {
-  if (payload.vNode.type === VType.ELEMENT) {
-    const node = createElement(
-      payload.vNode,
-      <Node>(<Node>payload.node).parentNode,
+function replace(
+  { vElement, node, attachmentRef }: ReplaceElementPayload,
+): void {
+  const { node: newNode, parentNode } = createElement(
+    vElement,
+    attachmentRef,
+  );
+
+  parentNode.replaceChild(newNode, node);
+
+  vElement[VNodeProps.NODE_REF] = node;
+  moveAttachmentRef(attachmentRef, newNode);
+}
+
+function update({ vElement, node, attachmentRef }: UpdateElementPayload): void {
+  if (vElement[VNodeProps.NODE_REF]) {
+    parentFromAttachmentRef(attachmentRef).replaceChild(
+      vElement[VNodeProps.NODE_REF],
+      node,
     );
-
-    payload.node?.parentNode?.replaceChild(node, payload.node);
-
-    payload.vNode[VNodeProps.NODE_REF] = node;
+    moveAttachmentRef(attachmentRef, vElement[VNodeProps.NODE_REF]);
   }
 }
 
-function update(payload: UpdateElementPayload): void {
-  (<Node>payload.parentVNode[VNodeProps.NODE_REF]).replaceChild(
-    <Node>payload.vNode[VNodeProps.NODE_REF],
-    payload.node,
-  );
+function remove({ vElement }: DeleteElementPayload): void {
+  (<HTMLElement> vElement[VNodeProps.NODE_REF]).remove();
+  vElement[VNodeProps.NODE_REF] = undefined;
 }
 
-function remove(payload: RemoveElementPayload): void {
-  (<HTMLElement>payload.vNode[VNodeProps.NODE_REF]).remove();
-  payload.vNode[VNodeProps.NODE_REF] = undefined;
-}
-
-function createElement(vNode: VElement<Node>, parentNode: Node): Node {
-  return isSVG(vNode[VNodeProps.TAG], parentNode)
+function createElement(
+  vElement: VElement<Node>,
+  attachmentRef: AttachmentRef,
+): { node: Node; parentNode: Node } {
+  const parentNode = parentFromAttachmentRef(attachmentRef);
+  const node = isSVG(
+      vElement[VNodeProps.TAG],
+      parentNode,
+    )
     ? document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        vNode[VNodeProps.TAG],
-      )
-    : document.createElement(vNode[VNodeProps.TAG]);
+      "http://www.w3.org/2000/svg",
+      vElement[VNodeProps.TAG],
+    )
+    : document.createElement(vElement[VNodeProps.TAG]);
+
+  return {
+    node,
+    parentNode,
+  };
 }
 
 function isSVG(tag: string, parentNode: Node): boolean {
   return (
     tag === "svg" ||
-    typeof (<SVGElement>parentNode).ownerSVGElement !== "undefined"
+    typeof (<SVGElement> parentNode).ownerSVGElement !== "undefined"
   );
 }

@@ -1,83 +1,158 @@
 import {
+  isVComponent,
+  isVElement,
+  isVFragment,
+  isVText,
   type VComponent,
   type VElement,
   type VFragment,
   type VNode,
   VNodeProps,
   type VText,
-  VType,
 } from "../../../v-node/mod.ts";
+import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
+
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
+import { render } from "./render.ts";
 import { setAttribute } from "./types/attribute.ts";
-import type { MountComponentChangeSet } from "./types/component.ts";
-import type { EventChangeSet } from "./types/event.ts";
+import type {
+  LinkComponentChangeSet,
+  MountComponentChangeSet,
+} from "./types/component.ts";
+import type {
+  LinkElementChangeSet,
+  ReplaceElementChangeSet,
+} from "./types/element.ts";
+import type { CreateEventChangeSet } from "./types/event.ts";
+import type { ReplaceTextChangeSet } from "./types/text.ts";
 
-export function hydrate(vNode: VNode<Node>, node: Node): ChangeSet<unknown>[] {
-  if (vNode?.type === VType.COMPONENT) {
-    return component(vNode, node);
+export function hydrate(
+  vNode: VNode<Node>,
+  nodes: Node[],
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
+  if (vNode == null) {
+    return [];
   }
-  if (vNode?.type === VType.ELEMENT) {
-    return element(vNode, node);
+
+  if (nodes.length) {
+    if (isVComponent(vNode)) {
+      return component(vNode, nodes, attachmentRef);
+    }
+
+    if (isVFragment(vNode)) {
+      return fragment(vNode, nodes, attachmentRef);
+    }
+
+    const node = nodes.shift();
+
+    if (node) {
+      if (isVElement(vNode)) {
+        return element(vNode, node, attachmentRef);
+      }
+
+      if (isVText(vNode)) {
+        return text(vNode, node, attachmentRef);
+      }
+    }
   }
-  if (vNode?.type === VType.TEXT) {
-    return text(vNode, node);
-  }
-  if (vNode?.type === VType.FRAGMENT) {
-    return fragment(vNode, node);
-  }
-  return [];
+
+  return render(vNode, attachmentRef);
 }
 
-function component(vNode: VComponent<Node>, node: Node): ChangeSet<unknown>[] {
+function component(
+  vComponent: VComponent<Node>,
+  nodes: Node[],
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
   return [
-    <MountComponentChangeSet>{
+    <LinkComponentChangeSet> {
+      [Props.Type]: Type.Component,
+      [Props.Action]: Action.Link,
+      [Props.Payload]: {
+        vComponent,
+        attachmentRef,
+      },
+    },
+    <MountComponentChangeSet> {
       [Props.Type]: Type.Component,
       [Props.Action]: Action.Mount,
       [Props.Payload]: {
-        vNode,
+        vComponent,
       },
     },
-    ...hydrate(vNode[VNodeProps.AST], node),
+    ...hydrate(vComponent[VNodeProps.AST], nodes, attachmentRef),
   ];
 }
 
-function element(vNode: VElement<Node>, node: Node) {
+function fragment(
+  vFragement: VFragment<Node>,
+  nodes: Node[],
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
+  const changeSet: ChangeSet<unknown>[] = [];
+
+  for (const vNode of vFragement[VNodeProps.CHILDREN] ?? []) {
+    const c = hydrate(vNode, nodes, attachmentRef);
+    changeSet.push(...c);
+  }
+  return changeSet;
+}
+
+function element(
+  vElement: VElement<Node>,
+  node: Node,
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
   const changes: ChangeSet<unknown>[] = [];
+  let skipChildren = false;
 
   // Replace dom node with effective vnode type
-  if (node.nodeName.toLowerCase() !== vNode[VNodeProps.TAG]) {
-    changes.push({
-      [Props.Type]: Type.Element,
-      [Props.Action]: Action.Replace,
-      [Props.Payload]: { vNode, node: node },
-    });
+  if (node.nodeName.toLowerCase() !== vElement[VNodeProps.TAG]) {
+    changes.push(
+      <ReplaceElementChangeSet> {
+        [Props.Type]: Type.Element,
+        [Props.Action]: Action.Replace,
+        [Props.Payload]: { vElement, node, attachmentRef },
+      },
+    );
+    skipChildren = true;
   } else {
-    // Link current dom node with the vnode
-    vNode[VNodeProps.NODE_REF] = node;
+    changes.push(
+      <LinkElementChangeSet> {
+        [Props.Type]: Type.Element,
+        [Props.Action]: Action.Link,
+        [Props.Payload]: { vElement, node, attachmentRef },
+      },
+    );
   }
 
   // Attach events to the dom node
-  vNode[VNodeProps.EVENT_REFS]?.forEach((eventRef) => {
-    changes.push(<EventChangeSet>{
-      [Props.Type]: Type.Event,
-      [Props.Action]: Action.Create,
-      [Props.Payload]: { vNode: vNode, ...eventRef },
-    });
+  vElement[VNodeProps.EVENT_REFS]?.forEach((eventRef) => {
+    changes.push(
+      <CreateEventChangeSet> {
+        [Props.Type]: Type.Event,
+        [Props.Action]: Action.Create,
+        [Props.Payload]: { vNode: vElement, ...eventRef },
+      },
+    );
   });
 
-  for (const prop in vNode[VNodeProps.PROPS]) {
-    changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
+  for (const prop in vElement[VNodeProps.PROPS]) {
+    changes.push(
+      ...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement),
+    );
   }
 
-  //TODO: Check if we need to filter out empty nodes here?
-  const children = vNode[VNodeProps.CHILDREN]?.filter((c) => c != null);
-  children?.forEach((child, index) => {
+  const nodes = !skipChildren ? [...node.childNodes] : undefined;
+
+  vElement[VNodeProps.CHILDREN]?.forEach((vNode) => {
     changes.push(
       ...diff({
-        node: vNode[VNodeProps.NODE_REF]?.childNodes.item(index),
-        vNode: child,
-        parentVNode: vNode,
+        nodes,
+        vNode,
+        attachmentRef: { type: AttachmentType.Parent, vNode: vElement },
       }),
     );
   });
@@ -85,34 +160,26 @@ function element(vNode: VElement<Node>, node: Node) {
   return changes;
 }
 
-/*
- * Hydrate "VText"
- */
-function text(vText: VText<Node>, node: Node) {
-  const changes: ChangeSet<unknown>[] = [];
+function text(
+  vText: VText<Node>,
+  node: Node,
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
+  const changeSet: ChangeSet<unknown>[] = [];
   vText[VNodeProps.NODE_REF] = node;
 
   if (!(node instanceof Text) || node.textContent !== vText[VNodeProps.TEXT]) {
-    changes.push({
-      [Props.Type]: Type.Text,
-      [Props.Action]: Action.Replace,
-      [Props.Payload]: {
-        vNode: vText,
+    changeSet.push(
+      <ReplaceTextChangeSet> {
+        [Props.Type]: Type.Text,
+        [Props.Action]: Action.Replace,
+        [Props.Payload]: {
+          vText,
+          attachmentRef,
+        },
       },
-    });
+    );
   }
 
-  return changes;
-}
-
-function fragment(vFragement: VFragment<Node>, node: Node) {
-  return [];
-}
-
-export function toBeHydrated<T>(
-  vNode: VNode<T>,
-  previousVNode: VNode<T>,
-  node?: T | null,
-): boolean {
-  return !!(node && vNode && !previousVNode);
+  return changeSet;
 }
