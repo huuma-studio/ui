@@ -7,10 +7,20 @@
     "./server": "./src/platform/server/mod.ts",
     "./server/pack": "./src/platform/server/pack/mod.ts",
     "./state": "./src/state/mod.ts",
+    "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
+    "./hooks/state": "./src/hooks/state.ts",
     "./jsx-runtime": "./src/jsx-runtime/mod.ts"
   },
   "publish": {
-    "exclude": ["src/**/*.test.tsx", "src/**/*.test.ts", "old/*", "root.tsx"]
+    "exclude": [
+      "src/**/*.test.tsx",
+      "src/**/*.test.ts",
+      "old/*",
+      "root.tsx",
+      ".github/*",
+      ".idea/*",
+      ".nova/*"
+    ]
   },
   "imports": {
     "@cargo/cargo": "jsr:@cargo/cargo@^0.0.8",
