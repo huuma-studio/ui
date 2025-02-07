@@ -12,11 +12,13 @@ export type Cleanup = () => void;
 
 let subscriber: Subscriber<unknown> | undefined;
 
-export function setSubscriber(newSubscriber: Subscriber<unknown> | undefined) {
+export function setSubscriber(
+  newSubscriber: Subscriber<unknown> | undefined,
+): void {
   subscriber = newSubscriber;
 }
 
-export function clearSubscriber() {
+export function clearSubscriber(): void {
   subscriber = undefined;
 }
 
@@ -58,7 +60,7 @@ export class State<T> {
     };
   }
 
-  #notify() {
+  #notify(): void {
     this.#subscribers?.forEach((subscriber) => {
       subscriber.update(this.#value);
     });

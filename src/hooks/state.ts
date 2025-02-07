@@ -25,7 +25,7 @@ interface StateScope<T> {
 
 const statesCache: StateScope<unknown>[] = [];
 
-export function $<T>(value: T) {
+export function $<T>(value: T): State<T> {
   const scope = getScope();
 
   if (!scope.length) {
