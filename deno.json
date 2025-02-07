@@ -3,9 +3,9 @@
   "version": "0.0.5",
   "exports": {
     "./vNode": "./src/v-node/mod.ts",
-    "./pack": "./src/pack/mod.ts",
-    "./platform/browser": "./src/platform/browser/mod.ts",
-    "./platform/server": "./src/platform/server/mod.ts",
+    "./browser": "./src/platform/browser/mod.ts",
+    "./server": "./src/platform/server/mod.ts",
+    "./server/pack": "./src/platform/server/pack/mod.ts",
     "./state": "./src/state/mod.ts",
     "./jsx-runtime": "./src/jsx-runtime/mod.ts"
   },
