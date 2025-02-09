@@ -1,6 +1,6 @@
 import { State } from "../state/mod.ts";
 import {
-  getScope,
+  getVNodeScope,
   type HasVMode,
   type HasVOptions,
   type VBase,
@@ -26,13 +26,13 @@ interface StateScope<T> {
 const statesCache: StateScope<unknown>[] = [];
 
 export function $<T>(value: T): State<T> {
-  const scope = getScope();
+  const vNodeScope = getVNodeScope();
 
-  if (!scope.length) {
+  if (!vNodeScope.length) {
     return new State(value);
   }
 
-  const vNode = <VNodeWithState<T>> scope[scope.length - 1];
+  const vNode = <VNodeWithState<T>> vNodeScope[vNodeScope.length - 1];
 
   // If state is left in the current VNode return it.
   if (statesCache.length) {

@@ -29,6 +29,7 @@ export interface PageLikeProps<T> extends JSX.ElementProps {
   data: T;
   scripts?: PageScripts;
   islands?: Island[];
+  transferState?: TransferState;
 }
 
 export interface PageProps<T> {
@@ -239,6 +240,7 @@ export class ParcelApp<D, T extends CargoContext = { State: { data: D } }>
           data: props.data,
           scripts: this.#splitScripts(this.#scripts, islands, props.nonce),
           islands,
+          transferState: { ...this.#transferState },
         }),
         { transferState: { ...this.#transferState } },
       )

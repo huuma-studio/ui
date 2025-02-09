@@ -8,6 +8,7 @@ import {
   update,
   VNodeProps,
 } from "../../v-node/mod.ts";
+import type { TransferState } from "../server/parcel.ts";
 import {
   attachmentRefFrom,
   createRootAttachmentRef,
@@ -23,15 +24,12 @@ type Island = {
   islandId: string;
 };
 
-export function launch(islands?: Island[]) {
+export function launch(islands: Island[], transferState: TransferState) {
   setVNodeUpdater<Node>((component, vComponent, globalOptions) => {
     return {
       update: () => {
         const snapshotVNode = snapshot(vComponent);
         const updatedVNode = update(component, vComponent, globalOptions);
-
-        console.log(snapshotVNode);
-        console.log(updatedVNode);
 
         if (!updatedVNode) {
           return;
@@ -79,7 +77,7 @@ export function launch(islands?: Island[]) {
               ...island.props,
               children: findIslandChildren({ nodes, islandId, islands }),
             });
-            const vNode = create<Node>(element);
+            const vNode = create<Node>(element, { transferState });
             if (isVComponent(vNode)) {
               dispatch(hydrate(vNode, nodes, attachmentRef));
             }

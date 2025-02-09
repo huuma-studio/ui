@@ -148,9 +148,9 @@ export type VNode<T> =
   | undefined
   | null;
 
-const _scope: (VBase & HasVOptions)[] = [];
-export function getScope(): (VBase & HasVOptions)[] {
-  return [..._scope];
+const _vNodeScope: (VBase & HasVOptions)[] = [];
+export function getVNodeScope(): (VBase & HasVOptions)[] {
+  return [..._vNodeScope];
 }
 
 type VNodeStateUpdater<T, V> = (
@@ -327,7 +327,7 @@ function vComponent<T>(
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
   };
 
-  _scope.push(vComponent);
+  _vNodeScope.push(vComponent);
   setSubscriber(
     vNodeStateUpdater
       ? vNodeStateUpdater(component, vComponent, globalOptions)
@@ -339,7 +339,7 @@ function vComponent<T>(
   );
   vComponent[VNodeProps.MODE] = VMode.Created;
   clearSubscriber();
-  _scope.shift();
+  _vNodeScope.shift();
 
   return vComponent;
 }
@@ -349,7 +349,7 @@ function updateVComponent<T>(
   vComponent: VComponent<T>,
   globalOptions: VGlobalOptions,
 ) {
-  _scope.push(vComponent);
+  _vNodeScope.push(vComponent);
   vComponent[VNodeProps.PROPS] = component.props;
   setSubscriber(
     vNodeStateUpdater
@@ -358,7 +358,7 @@ function updateVComponent<T>(
   );
   const updatedNode = vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
   clearSubscriber();
-  _scope.shift();
+  _vNodeScope.shift();
 
   vComponent[VNodeProps.AST] = update(
     updatedNode,

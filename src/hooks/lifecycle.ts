@@ -1,5 +1,5 @@
 import {
-  getScope,
+  getVNodeScope,
   isVComponent,
   VHook,
   VMode,
@@ -18,8 +18,8 @@ function addHookVComponent(
   fn: (() => () => void) | (() => void),
   vHook: VHook,
 ) {
-  const scope = getScope();
-  const vNode = scope[scope.length - 1];
+  const vNodeScope = getVNodeScope();
+  const vNode = vNodeScope[vNodeScope.length - 1];
 
   if (isVComponent(vNode) && vNode[VNodeProps.MODE] === VMode.NotCreated) {
     if (!vNode[VNodeProps.HOOKS]) {
@@ -27,14 +27,14 @@ function addHookVComponent(
     }
 
     vNode[VNodeProps.HOOKS][vHook] = Array.isArray(
-      vNode[VNodeProps.HOOKS][vHook],
-    )
+        vNode[VNodeProps.HOOKS][vHook],
+      )
       ? [
-          ...(<((() => () => void) | (() => void))[]>(
-            vNode[VNodeProps.HOOKS][vHook]
-          )),
-          fn,
-        ]
+        ...(<((() => () => void) | (() => void))[]> (
+          vNode[VNodeProps.HOOKS][vHook]
+        )),
+        fn,
+      ]
       : [fn];
   }
 }

@@ -1,6 +1,6 @@
 import { join } from "@std/path/join";
 import { Fragment, type JSX, jsx } from "../../jsx-runtime/mod.ts";
-import type { PageScripts, Script } from "./parcel.ts";
+import type { PageScripts, Script, TransferState } from "./parcel.ts";
 import type { Island } from "../../islands/islands.ts";
 
 interface ScriptsProps extends JSX.ElementProps {
@@ -38,9 +38,10 @@ interface LaunchProps extends JSX.ElementProps {
   body?: PageScripts["body"];
   nonce?: string;
   islands?: Island[];
+  transferState?: TransferState;
 }
 export function Launch(
-  { body, nonce, islands }: LaunchProps,
+  { body, nonce, islands, transferState }: LaunchProps,
 ): // deno-lint-ignore no-explicit-any
 JSX.Element<any> | null {
   if (!body?.runtime || !islands?.length) return null;
@@ -49,14 +50,13 @@ JSX.Element<any> | null {
   const nodes: string[] = [];
   const _islands = [];
 
-  templates.push(`import { launch } from "/${body.runtime.path}";\n`);
-  nodes.push("");
+  templates.push(`import { launch } from "/${body.runtime.path}";`);
+  nodes.push("\n");
 
-  // TODO: Serialize props (including Signals with serializable inner values)
   let i = 1;
   for (const island of islands) {
     templates.push(`import $I${i} from "/${island.path}";\n`);
-    nodes.push("");
+    nodes.push("\n");
 
     // Remove children.
     const { children: _, ...props } =
@@ -68,16 +68,25 @@ JSX.Element<any> | null {
     i++;
   }
 
-  templates.push(`launch([${_islands.join()}]);`);
-  nodes.push("");
+  templates.push(
+    `const transferState = ${JSON.stringify(transferState ?? {})};`,
+  );
+  nodes.push("\n");
 
-  return jsx("script", {
-    children: [{
-      templates,
-      nodes,
-    }],
-    type: "module",
-    nonce,
+  templates.push(`launch([${_islands.join()}], transferState);`);
+  nodes.push("\n");
+
+  return jsx(Fragment, {
+    children: [
+      jsx("script", {
+        children: [{
+          templates,
+          nodes,
+        }],
+        type: "module",
+        nonce,
+      }),
+    ],
   });
 }
 
