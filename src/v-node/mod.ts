@@ -286,7 +286,9 @@ export function vElement<T>(
     [VNodeProps.CLEANUP]: [],
   };
 
-  vElement[VNodeProps.CHILDREN] = props.children?.map((child) => create(child));
+  vElement[VNodeProps.CHILDREN] = props.children?.map((child) =>
+    create(child, globalOptions)
+  );
 
   return vElement;
 }

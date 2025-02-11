@@ -8,6 +8,7 @@ import {
   update,
   VNodeProps,
 } from "../../v-node/mod.ts";
+// TODO: Move TransferState type to general location
 import type { TransferState } from "../server/parcel.ts";
 import {
   attachmentRefFrom,
@@ -77,7 +78,10 @@ export function launch(islands: Island[], transferState: TransferState) {
               ...island.props,
               children: findIslandChildren({ nodes, islandId, islands }),
             });
-            const vNode = create<Node>(element, { transferState });
+            const vNode = create<Node>(element, {
+              url: globalThis.window.location.href,
+              transferState,
+            });
             if (isVComponent(vNode)) {
               dispatch(hydrate(vNode, nodes, attachmentRef));
             }

@@ -23,6 +23,7 @@ interface StateScope<T> {
   state: State<T>;
 }
 
+// TODO: Move to the global_options of the vNode
 const statesCache: StateScope<unknown>[] = [];
 
 export function $<T>(value: T): State<T> {

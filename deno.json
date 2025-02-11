@@ -1,6 +1,6 @@
 {
   "name": "@cargo/parcel",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "exports": {
     "./v-node": "./src/v-node/mod.ts",
     "./browser": "./src/platform/browser/mod.ts",
@@ -9,7 +9,8 @@
     "./state": "./src/state/mod.ts",
     "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
     "./hooks/state": "./src/hooks/state.ts",
-    "./jsx-runtime": "./src/jsx-runtime/mod.ts"
+    "./jsx-runtime": "./src/jsx-runtime/mod.ts",
+    "./i18n": "./src/i18n/mod.ts"
   },
   "publish": {
     "exclude": [

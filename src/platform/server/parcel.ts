@@ -60,6 +60,7 @@ export interface RenderProps<T> {
   params: Record<string, string | undefined>;
   data: T;
   nonce: string;
+  url: string;
 }
 
 export interface Script {
@@ -192,6 +193,7 @@ export class ParcelApp<D, T extends CargoContext = { State: { data: D } }>
               params: ctx.params ?? {},
               data: ctx.get("data") ?? {} as D,
               nonce,
+              url: ctx.request.url,
             }),
             {
               status: props.statusCode,
@@ -207,20 +209,22 @@ export class ParcelApp<D, T extends CargoContext = { State: { data: D } }>
     };
   }
 
-  #render(props: RenderProps<D>): string {
+  #render({ page, layouts, params, data, nonce, url }: RenderProps<D>): string {
     const islands: Island[] = [];
 
     const node = this.#applyLayouts(
-      props.page,
-      props.layouts,
-      props.params,
-      props.data,
+      page,
+      layouts,
+      params,
+      data,
     );
 
+    const transferState = { ...this.#transferState };
     const vNode = create(
       node,
       {
-        transferState: { ...this.#transferState },
+        transferState,
+        url,
         ...this.#islands.length
           ? { beforeCreate: markIslands(this.#islands, islands) }
           : undefined,
@@ -236,13 +240,13 @@ export class ParcelApp<D, T extends CargoContext = { State: { data: D } }>
               nodes: [""],
             },
           ],
-          params: props.params,
-          data: props.data,
-          scripts: this.#splitScripts(this.#scripts, islands, props.nonce),
+          params: params,
+          data: data,
+          scripts: this.#splitScripts(this.#scripts, islands, nonce),
           islands,
-          transferState: { ...this.#transferState },
+          transferState,
         }),
-        { transferState: { ...this.#transferState } },
+        { transferState, url },
       )
     }`;
   }
