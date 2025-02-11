@@ -1,9 +1,11 @@
+import { NotFoundException } from "@cargo/cargo/http/exception/not-found-exception";
 import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
-import type { ParcelApp } from "../platform/server/parcel.ts";
 import { getVNodeScope, VNodeProps } from "../v-node/mod.ts";
+import type { Middleware } from "@cargo/cargo/middleware";
 
 export interface I18nConfig {
   defaultLanguage?: string;
+  pattern?: RegExp;
   languages: {
     [key: string]: Language | string;
   };
@@ -14,7 +16,8 @@ export interface Language {
 }
 
 type I18nTransferState = {
-  languages: Record<string, Language>;
+  activeLanguage: Language;
+  availableLanguages: string[];
   config: {
     defaultLanguage: string;
     pattern: { source: string; flags: string };
@@ -25,19 +28,40 @@ const defaultPattern = /^\/([a-z]{2})?(?:\/|$)/i;
 const defaultLanguage = "en";
 
 export function setupI18n(
-  parcel: ParcelApp<unknown>,
   config: I18nConfig,
-): void {
-  parcel.addTransferState(
-    "i18n",
-    <I18nTransferState> {
-      languages: config.languages,
+): Middleware {
+  const pattern = {
+    source: config.pattern?.source ?? defaultPattern.source,
+    flags: config.pattern?.flags ?? defaultPattern.flags,
+  };
+
+  return (ctx, next) => {
+    const lang = langFrom(new URL(ctx.request.url).pathname, pattern);
+
+    if (typeof lang === "undefined") {
+      throw new NoLanguageSpecifiedException();
+    }
+
+    const availableLanguages = Object.keys(config.languages);
+
+    if (!availableLanguages.includes(lang)) {
+      throw new LanguageNotSupportedException();
+    }
+    const transferState = ctx.get("transferState");
+    transferState.i18n = <I18nTransferState> {
+      activeLanguage: config.languages[lang],
+      availableLanguages,
       config: {
         defaultLanguage: config.defaultLanguage || defaultLanguage,
-        pattern: { source: defaultPattern.source, flags: defaultPattern.flags },
+        pattern: {
+          source: pattern.source,
+          flags: pattern.flags,
+        },
       },
-    },
-  );
+    };
+
+    return next();
+  };
 }
 
 function assertVNodeScope() {
@@ -67,7 +91,7 @@ function langFrom(
 }
 
 export function getLanguages(): string[] {
-  return Array.from(Object.keys(getI18nConfig().i18n.languages));
+  return getI18nConfig().i18n.availableLanguages;
 }
 
 function unnest(
@@ -80,7 +104,7 @@ function unnest(
   if (typeof key === "undefined") {
     console.info(
       "I18n",
-      `Translation key is for undefined. This most likely happens if the translation values is not of type "string"`,
+      `Translation key is undefined. This most likely happens if the translation values is not of type "string"`,
     );
     return undefined;
   }
@@ -102,7 +126,7 @@ function unnest(
     }
     return unnest(keys, translation, `${path}${key}.`);
   }
-  console.info("I18n", `Translation value to key "${path}${key}" not found`);
+  console.info("I18n", `Translation value for key "${path}${key}" not found`);
   return undefined;
 }
 
@@ -116,7 +140,7 @@ function replaceParams(label: string, params?: Record<string, string>): string {
 }
 
 export function t(key: string, params?: Record<string, string>): string {
-  const language = getI18nConfig().i18n.languages[getActiveLang()];
+  const language = getI18nConfig().i18n.activeLanguage;
   if (language) {
     const keys = key.split(".");
     if (params) {
@@ -141,3 +165,15 @@ JSX.Element<any> {
 
 export const Translation = T;
 export const I18n = T;
+
+export class LanguageNotSupportedException extends NotFoundException {
+  constructor() {
+    super("Language not supported");
+  }
+}
+
+export class NoLanguageSpecifiedException extends NotFoundException {
+  constructor() {
+    super("No language specified");
+  }
+}

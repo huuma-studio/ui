@@ -1,5 +1,5 @@
 import { Cargo, type CargoContext, type CargoOptions } from "@cargo/cargo";
-import type { Handler, RequestContext } from "@cargo/cargo/http/request";
+import type { Handler } from "@cargo/cargo/http/request";
 import { type Middleware, walkthroughAndHandle } from "@cargo/cargo/middleware";
 import { renderToString, vNodeToString } from "./render.ts";
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
@@ -59,6 +59,7 @@ export interface RenderProps<T> {
   layouts?: PageLike<T>[];
   params: Record<string, string | undefined>;
   data: T;
+  transferState: TransferState;
   nonce: string;
   url: string;
 }
@@ -82,8 +83,10 @@ export function Parcel<D>(
   return new ParcelApp<D>(root);
 }
 
-export class ParcelApp<D, T extends CargoContext = { State: { data: D } }>
-  extends Cargo<T> {
+export class ParcelApp<
+  D,
+  T extends CargoContext = { State: { data: D; transferState: TransferState } },
+> extends Cargo<T> {
   #root: PageLike<D>;
   #islands: { path: string; island: JSX.Component }[] = [];
   #scripts: Script[] = [];
@@ -178,20 +181,28 @@ export class ParcelApp<D, T extends CargoContext = { State: { data: D } }>
   #pageHandler(
     props: PageHandlerProps<D>,
   ): Handler<T> {
-    // nonce should be created here.
     return (ctx) => {
+      // TODO: Fix type
+      // deno-lint-ignore no-explicit-any
+      ctx.set<any>("transferState", {});
       const nonce = crypto.randomUUID();
       return walkthroughAndHandle(
         ctx,
         props.middleware,
-        (ctx: RequestContext<{ State: { data: D } }>) => {
+        (ctx) => {
+          const transferState = {
+            ...ctx.get("transferState"),
+            ...this.#transferState,
+          };
           return new Response(
             this.#render({
               root: this.#root,
               page: props.page,
               layouts: props.layouts,
               params: ctx.params ?? {},
-              data: ctx.get("data") ?? {} as D,
+              data: ctx.get("data") ??
+                {} as D,
+              transferState,
               nonce,
               url: ctx.request.url,
             }),
@@ -209,7 +220,9 @@ export class ParcelApp<D, T extends CargoContext = { State: { data: D } }>
     };
   }
 
-  #render({ page, layouts, params, data, nonce, url }: RenderProps<D>): string {
+  #render(
+    { page, layouts, params, transferState, data, nonce, url }: RenderProps<D>,
+  ): string {
     const islands: Island[] = [];
 
     const node = this.#applyLayouts(
@@ -219,7 +232,6 @@ export class ParcelApp<D, T extends CargoContext = { State: { data: D } }>
       data,
     );
 
-    const transferState = { ...this.#transferState };
     const vNode = create(
       node,
       {
