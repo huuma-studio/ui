@@ -1,7 +1,9 @@
 import { NotFoundException } from "@cargo/cargo/http/exception/not-found-exception";
+import type { CargoContext } from "@cargo/cargo";
+
 import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
 import { getVNodeScope, VNodeProps } from "../v-node/mod.ts";
-import type { Middleware } from "@cargo/cargo/middleware";
+import type { ParcelApp } from "../platform/server/mod.ts";
 
 export interface I18nConfig {
   defaultLanguage?: string;
@@ -15,7 +17,7 @@ export interface Language {
   [key: string]: string | Language;
 }
 
-type I18nTransferState = {
+export type I18nTransferState = {
   activeLanguage: Language;
   availableLanguages: string[];
   config: {
@@ -27,41 +29,85 @@ type I18nTransferState = {
 const defaultPattern = /^\/([a-z]{2})?(?:\/|$)/i;
 const defaultLanguage = "en";
 
-export function setupI18n(
+export function setupI18n<T extends CargoContext>(
+  parcel: ParcelApp<T>,
   config: I18nConfig,
-): Middleware {
-  const pattern = {
-    source: config.pattern?.source ?? defaultPattern.source,
-    flags: config.pattern?.flags ?? defaultPattern.flags,
+): Required<I18nConfig> {
+  if (!config.languages) {
+    throw new Error("Languages are required");
+  }
+
+  parcel.get("/", ({ request }) => {
+    // TODO: Handle additional query parameters
+    return Response.redirect(
+      new URL(
+        config.defaultLanguage ?? defaultLanguage,
+        new URL(request.url).origin,
+      ),
+    );
+  });
+
+  return {
+    pattern: config.pattern ?? defaultPattern,
+    defaultLanguage: config.defaultLanguage ?? defaultLanguage,
+    languages: config.languages,
   };
+}
 
-  return (ctx, next) => {
-    const lang = langFrom(new URL(ctx.request.url).pathname, pattern);
-
-    if (typeof lang === "undefined") {
-      throw new NoLanguageSpecifiedException();
+export function t(key: string, params?: Record<string, string>): string {
+  const language = getI18nConfig().i18n.activeLanguage;
+  if (language) {
+    const keys = key.split(".");
+    if (params) {
+      return replaceParams(unnest([...keys], language, "") ?? key, params);
     }
+    return unnest([...keys], language, "") ?? key;
+  }
+  return key;
+}
 
-    const availableLanguages = Object.keys(config.languages);
+export interface TProps extends JSX.ElementProps {
+  label: string;
+  params?: Record<string, string>;
+}
 
-    if (!availableLanguages.includes(lang)) {
-      throw new LanguageNotSupportedException();
-    }
-    const transferState = ctx.get("transferState");
-    transferState.i18n = <I18nTransferState> {
-      activeLanguage: config.languages[lang],
-      availableLanguages,
-      config: {
-        defaultLanguage: config.defaultLanguage || defaultLanguage,
-        pattern: {
-          source: pattern.source,
-          flags: pattern.flags,
-        },
-      },
-    };
+export function T(
+  { label, params }: TProps,
+): // deno-lint-ignore no-explicit-any
+JSX.Element<any> {
+  return jsx(Fragment, { children: [t(label, params)] });
+}
 
-    return next();
-  };
+export const Translation = T;
+export const I18n = T;
+
+export class LanguageNotSupportedException extends NotFoundException {
+  constructor() {
+    super("Language not supported");
+  }
+}
+
+export class NoLanguageSpecifiedException extends NotFoundException {
+  constructor() {
+    super("No language specified");
+  }
+}
+
+export function getActiveLang(): string {
+  const { url, i18n } = getI18nConfig();
+  return langFrom(new URL(url).pathname, i18n.config.pattern) ??
+    i18n.config.defaultLanguage;
+}
+
+export function getLanguages(): string[] {
+  return getI18nConfig().i18n.availableLanguages;
+}
+
+export function langFrom(
+  url: string,
+  pattern: I18nTransferState["config"]["pattern"],
+): string | undefined {
+  return new RegExp(pattern.source, pattern.flags).exec(url)?.[1];
 }
 
 function assertVNodeScope() {
@@ -75,23 +121,6 @@ function assertVNodeScope() {
 function getI18nConfig(): { url: string; i18n: I18nTransferState } {
   const globalOptions = assertVNodeScope()[VNodeProps.OPTIONS]._GLOBAL;
   return { url: globalOptions.url, i18n: globalOptions.transferState.i18n };
-}
-
-export function getActiveLang(): string {
-  const { url, i18n } = getI18nConfig();
-  return langFrom(new URL(url).pathname, i18n.config.pattern) ??
-    i18n.config.defaultLanguage;
-}
-
-function langFrom(
-  url: string,
-  pattern: I18nTransferState["config"]["pattern"],
-): string | undefined {
-  return new RegExp(pattern.source, pattern.flags).exec(url)?.[1];
-}
-
-export function getLanguages(): string[] {
-  return getI18nConfig().i18n.availableLanguages;
 }
 
 function unnest(
@@ -137,43 +166,4 @@ function replaceParams(label: string, params?: Record<string, string>): string {
   return Object.entries(params).reduce((label, [key, value]) => {
     return label.replace(new RegExp(`{{${key}}}`, "g"), value);
   }, label);
-}
-
-export function t(key: string, params?: Record<string, string>): string {
-  const language = getI18nConfig().i18n.activeLanguage;
-  if (language) {
-    const keys = key.split(".");
-    if (params) {
-      return replaceParams(unnest([...keys], language, "") ?? key, params);
-    }
-    return unnest([...keys], language, "") ?? key;
-  }
-  return key;
-}
-
-export interface TProps extends JSX.ElementProps {
-  label: string;
-  params?: Record<string, string>;
-}
-
-export function T(
-  { label, params }: TProps,
-): // deno-lint-ignore no-explicit-any
-JSX.Element<any> {
-  return jsx(Fragment, { children: [t(label, params)] });
-}
-
-export const Translation = T;
-export const I18n = T;
-
-export class LanguageNotSupportedException extends NotFoundException {
-  constructor() {
-    super("Language not supported");
-  }
-}
-
-export class NoLanguageSpecifiedException extends NotFoundException {
-  constructor() {
-    super("No language specified");
-  }
 }

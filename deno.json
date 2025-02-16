@@ -10,7 +10,9 @@
     "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
     "./hooks/state": "./src/hooks/state.ts",
     "./jsx-runtime": "./src/jsx-runtime/mod.ts",
-    "./i18n": "./src/i18n/mod.ts"
+    "./i18n": "./src/i18n/mod.ts",
+    "./i18n/middleware": "./src/i18n/middleware/mod.ts",
+    "./i18n/middleware/mod": "./src/i18n/middleware/mod.ts"
   },
   "publish": {
     "exclude": [

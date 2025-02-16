@@ -1,8 +1,12 @@
 import { assertEquals } from "@std/assert/equals";
 import { create, VMode, VNodeProps, VType } from "./../mod.ts";
-import { $ } from "../../hooks/state.ts";
+
 import { State } from "../../state/mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
+
+function ComponentA({ children }: JSX.ElementProps) {
+  return <div class="text-blue">{["", children]}</div>;
+}
 
 Deno.test(create.name, async (t) => {
   await t.step("should create VText Node", () => {
@@ -90,7 +94,7 @@ Deno.test(create.name, async (t) => {
         [VNodeProps.CHILDREN]: [
           {
             type: VType.TEXT,
-            [VNodeProps.TEXT]: new State(""),
+            [VNodeProps.TEXT]: "",
             [VNodeProps.SKIP_ESCAPING]: false,
           },
           {
@@ -112,7 +116,7 @@ Deno.test(create.name, async (t) => {
 
         [VNodeProps.PROPS]: {
           class: "text-blue",
-          children: [new State(""), ["Hello World!"]],
+          children: ["", ["Hello World!"]],
         },
         [VNodeProps.CLEANUP]: [],
         [VNodeProps.OPTIONS]: {
@@ -120,15 +124,9 @@ Deno.test(create.name, async (t) => {
         },
       },
       [VNodeProps.OPTIONS]: {
-        $: [new State(undefined)],
         _GLOBAL: {},
       },
       [VNodeProps.CLEANUP]: [],
     });
   });
 });
-
-function ComponentA({ children }: JSX.ElementProps) {
-  const a = $("component a");
-  return <div class="text-blue">{[a, children]}</div>;
-}
