@@ -1,5 +1,4 @@
 import type { Middleware } from "@cargo/cargo/middleware";
-import type { RequestContext } from "@cargo/cargo/http/request";
 
 import {
   type I18nConfig,
@@ -8,6 +7,7 @@ import {
   LanguageNotSupportedException,
   NoLanguageSpecifiedException,
 } from "../mod.ts";
+import { HttpStatus } from "@cargo/cargo/http/http-status";
 
 export function useI18n(
   config: Required<I18nConfig>,
@@ -42,8 +42,8 @@ export function useI18n(
   };
 }
 
-export function redirectNoLanguageSpecifiedTo(
-  redirectionPath: string,
+export function redirectNoLanguageSpecifiedExceptionTo(
+  config: { defaultLanguage: string; redirectTo?: string },
 ): Middleware {
   return async (ctx, next) => {
     try {
@@ -52,18 +52,13 @@ export function redirectNoLanguageSpecifiedTo(
       if (
         e instanceof NoLanguageSpecifiedException
       ) {
-        const defaultLanguage = ctx.get("transferState").i18n
-          ?.detfaultLanguage;
-        if (typeof defaultLanguage !== "string") {
-          // TODO: Add link to documentation as soon it exists
-          throw new Error(
-            "Default language not specified! Setup I18n properly",
-          );
-        }
         return Response.redirect(
           `${new URL(ctx.request.url).origin}/${
-            redirectionPath ?? defaultLanguage
+            config.redirectTo
+              ? [config.defaultLanguage, config.redirectTo].join("/")
+              : config.defaultLanguage
           }`,
+          HttpStatus.TEMORARY_REDIRECTED,
         );
       }
       throw e;
@@ -72,7 +67,7 @@ export function redirectNoLanguageSpecifiedTo(
 }
 
 export function redirectLanguageNotSupportedExceptionTo(
-  redirectionPath: string,
+  config: { defaultLanguage: string; redirectTo?: string },
 ): Middleware {
   return async (ctx, next) => {
     try {
@@ -81,29 +76,16 @@ export function redirectLanguageNotSupportedExceptionTo(
       if (
         e instanceof LanguageNotSupportedException
       ) {
-        return redirectLanguageExceptionTo(
-          redirectionPath,
-          // TODO: Add link to documentation as soon it exists
-          `Requested language is not supported! Add it to the I18n configuration`,
-          ctx,
+        return Response.redirect(
+          `${new URL(ctx.request.url).origin}/${
+            config.redirectTo
+              ? [config.defaultLanguage, config.redirectTo].join("/")
+              : config.defaultLanguage
+          }`,
+          HttpStatus.TEMORARY_REDIRECTED,
         );
       }
       throw e;
     }
   };
-}
-
-function redirectLanguageExceptionTo(
-  redirectionPath: string,
-  exceptionMessage: string,
-  ctx: RequestContext,
-) {
-  const defaultLanguage = ctx.get("transferState").i18n
-    ?.detfaultLanguage;
-  if (typeof defaultLanguage !== "string") {
-    throw new Error(exceptionMessage);
-  }
-  return Response.redirect(
-    `${new URL(ctx.request.url).origin}/${redirectionPath ?? defaultLanguage}`,
-  );
 }

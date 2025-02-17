@@ -1,4 +1,5 @@
 import { NotFoundException } from "@cargo/cargo/http/exception/not-found-exception";
+import { HttpStatus } from "@cargo/cargo/http/http-status";
 import type { CargoContext } from "@cargo/cargo";
 
 import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
@@ -44,6 +45,7 @@ export function setupI18n<T extends CargoContext>(
         config.defaultLanguage ?? defaultLanguage,
         new URL(request.url).origin,
       ),
+      HttpStatus.TEMORARY_REDIRECTED,
     );
   });
 

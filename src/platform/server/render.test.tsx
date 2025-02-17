@@ -71,7 +71,9 @@ Deno.test(renderToString.name, async (t) => {
   await t.step("should render unsafe inner html as string", () => {
     assertEquals(
       renderToString(
-        <div unsafeInnerHTML={`<a href="https://cargo.wtf">Link</a>`} />,
+        <div
+          unsafeInnerHTML={{ html: `<a href="https://cargo.wtf">Link</a>` }}
+        />,
       ),
       '<div><a href="https://cargo.wtf">Link</a></div>',
     );

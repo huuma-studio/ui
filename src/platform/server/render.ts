@@ -65,14 +65,15 @@ function elementToString<T>(vNode: VElement<T>): string {
   const props = vNode[VNodeProps.PROPS];
 
   if (selfClosingTags.includes(tag)) {
-    return `<${tag}${stringFrom(props)}/>`;
+    const { unsafeInnerHTML: _, ...p } = props;
+    return `<${tag}${stringFrom(p)}/>`;
   }
 
   const children = vNode[VNodeProps.CHILDREN];
 
   const { unsafeInnerHTML, ...attributes } = props;
   if (unsafeInnerHTML) {
-    return `<${tag}${stringFrom(attributes)}>${unsafeInnerHTML}</${tag}>`;
+    return `<${tag}${stringFrom(attributes)}>${unsafeInnerHTML.html}</${tag}>`;
   }
   return `<${tag}${stringFrom(attributes)}>${
     children?.map((child) => stringify(child)).join("") ?? ""

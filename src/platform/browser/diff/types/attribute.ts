@@ -1,6 +1,6 @@
 import {
-  type VElement,
   type HasVNodeRef,
+  type VElement,
   VNodeProps,
 } from "../../../../v-node/mod.ts";
 import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
@@ -12,7 +12,7 @@ interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
 export interface CreateAttributePayload {
   vNode: VElement<Node>;
   name: string;
-  value: string | boolean;
+  value: string | boolean | { html: string };
 }
 
 export interface UpdateAttributePayload {
@@ -49,37 +49,39 @@ export type AttributeChangeSet =
 export function attribute(change: AttributeChangeSet) {
   switch (change[Props.Action]) {
     case Action.Create:
-      return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
+      return createOrUpdate(<CreateAttributePayload> change[Props.Payload]);
     case Action.Update:
-      return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
+      return createOrUpdate(<CreateAttributePayload> change[Props.Payload]);
     case Action.Delete:
-      return remove(<DeleteAttributePayload>change[Props.Payload]);
+      return remove(<DeleteAttributePayload> change[Props.Payload]);
   }
 }
 
 function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
   if (name === "checked" && typeof value === "boolean") {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = value;
-  }
-  if (name === "value") {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = `${value}`;
-  }
-  if (name === "unsafeInnerHTML") {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value}`;
+    (<HTMLFormElement> vNode[VNodeProps.NODE_REF])[name] = value;
     return;
   }
-  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, `${value}`);
+  if (name === "value") {
+    (<HTMLFormElement> vNode[VNodeProps.NODE_REF])[name] = `${value}`;
+    return;
+  }
+  if (name === "unsafeInnerHTML" && typeof value === "object" && value.html) {
+    (<HTMLElement> vNode[VNodeProps.NODE_REF]).innerHTML = `${value.html}`;
+    return;
+  }
+  (<HTMLElement> vNode[VNodeProps.NODE_REF]).setAttribute(name, `${value}`);
 }
 
 function remove({ name, vNode }: DeleteAttributePayload): void {
   if (name === "checked") {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = false;
+    (<HTMLFormElement> vNode[VNodeProps.NODE_REF])[name] = false;
   }
   if (name === "value") {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = "";
+    (<HTMLFormElement> vNode[VNodeProps.NODE_REF]).value = "";
   }
-  (<HTMLElement>(
-    (<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]
+  (<HTMLElement> (
+    (<HasVNodeRef<Node>> vNode)[VNodeProps.NODE_REF]
   )).removeAttribute(name);
 }
 
