@@ -59,24 +59,25 @@ export function setupI18n<T extends CargoContext>(
 export interface TProps extends JSX.ElementProps {
   name: string;
   props?: Record<string, string>;
+  dangerousInnerHTML?: {
+    name: string;
+    props?: JSX.ElementProps & { key?: string };
+  };
 }
 
 export function T(
-  { children, props, name }: TProps,
+  props: TProps,
 ): // deno-lint-ignore no-explicit-any
 JSX.Element<any> {
-  const element = children?.length && children[0] != null &&
-      typeof children[0] === "object" && "type" in children[0] &&
-      typeof children[0].type === "string"
-    ? children[0]
-    : null;
+  const { name, props: _p, dangerousInnerHTML } = props;
 
-  if (element) {
-    element.props.dangerouslySetInnerHTML = { __html: t(name, props) };
-    element.props.children = [];
-    return element;
+  if (dangerousInnerHTML) {
+    const { key, ...elementProps } = dangerousInnerHTML.props ?? {};
+    elementProps.children = undefined;
+    elementProps.dangerouslySetInnerHTML = { __html: t(name, _p) };
+    return jsx(dangerousInnerHTML.name, elementProps, key);
   }
-  return jsx(Fragment, { children: [t(name, props)] });
+  return jsx(Fragment, { children: [t(name, _p)] });
 }
 
 export const Translation = T;
