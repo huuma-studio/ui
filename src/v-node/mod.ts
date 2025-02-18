@@ -280,7 +280,7 @@ export function vElement<T>(
     type: VType.ELEMENT,
     [VNodeProps.TAG]: type,
     [VNodeProps.KEY]: key,
-    [VNodeProps.PROPS]: <JSX.ElementProps> props,
+    [VNodeProps.PROPS]: props,
     [VNodeProps.EVENT_REFS]: eventRefs,
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
     [VNodeProps.CLEANUP]: [],

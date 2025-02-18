@@ -56,28 +56,27 @@ export function setupI18n<T extends CargoContext>(
   };
 }
 
-export function t(key: string, params?: Record<string, string>): string {
-  const language = getI18nConfig().i18n.activeLanguage;
-  if (language) {
-    const keys = key.split(".");
-    if (params) {
-      return replaceParams(unnest([...keys], language, "") ?? key, params);
-    }
-    return unnest([...keys], language, "") ?? key;
-  }
-  return key;
-}
-
 export interface TProps extends JSX.ElementProps {
-  label: string;
-  params?: Record<string, string>;
+  name: string;
+  props?: Record<string, string>;
 }
 
 export function T(
-  { label, params }: TProps,
+  { children, props, name }: TProps,
 ): // deno-lint-ignore no-explicit-any
 JSX.Element<any> {
-  return jsx(Fragment, { children: [t(label, params)] });
+  const element = children?.length && children[0] != null &&
+      typeof children[0] === "object" && "type" in children[0] &&
+      typeof children[0].type === "string"
+    ? children[0]
+    : null;
+
+  if (element) {
+    element.props.dangerouslySetInnerHTML = { __html: t(name, props) };
+    element.props.children = [];
+    return element;
+  }
+  return jsx(Fragment, { children: [t(name, props)] });
 }
 
 export const Translation = T;
@@ -110,6 +109,18 @@ export function langFrom(
   pattern: I18nTransferState["config"]["pattern"],
 ): string | undefined {
   return new RegExp(pattern.source, pattern.flags).exec(url)?.[1];
+}
+
+function t(key: string, params?: Record<string, string>): string {
+  const language = getI18nConfig().i18n.activeLanguage;
+  if (language) {
+    const keys = key.split(".");
+    if (params) {
+      return replaceParams(unnest([...keys], language, "") ?? key, params);
+    }
+    return unnest([...keys], language, "") ?? key;
+  }
+  return key;
 }
 
 function assertVNodeScope() {

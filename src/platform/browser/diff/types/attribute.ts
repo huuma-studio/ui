@@ -12,7 +12,7 @@ interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
 export interface CreateAttributePayload {
   vNode: VElement<Node>;
   name: string;
-  value: string | boolean | { html: string };
+  value: string | boolean | { __html: string };
 }
 
 export interface UpdateAttributePayload {
@@ -66,8 +66,11 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     (<HTMLFormElement> vNode[VNodeProps.NODE_REF])[name] = `${value}`;
     return;
   }
-  if (name === "unsafeInnerHTML" && typeof value === "object" && value.html) {
-    (<HTMLElement> vNode[VNodeProps.NODE_REF]).innerHTML = `${value.html}`;
+  if (
+    name === "dangerouslySetInnerHTML" && typeof value === "object" &&
+    value.__html
+  ) {
+    (<HTMLElement> vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
     return;
   }
   (<HTMLElement> vNode[VNodeProps.NODE_REF]).setAttribute(name, `${value}`);

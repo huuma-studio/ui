@@ -39,12 +39,10 @@ export namespace JSX {
 
   export type ElementProps = {
     children?: Node[];
-    unsafeInnerHTML?: { html: string };
-    [type: string]: unknown;
-  };
+  } & IntrinsicElements;
 
   export type IntrinsicElements = {
-    unsafeInnerHTML?: string;
+    dangerouslySetInnerHTML?: { __html: string };
     [key: string]: unknown;
   };
 }
