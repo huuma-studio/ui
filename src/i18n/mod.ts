@@ -39,11 +39,12 @@ export function setupI18n<T extends CargoContext>(
   }
 
   parcel.get("/", ({ request }) => {
-    // TODO: Handle additional query parameters
+    const root = new URL(request.url);
     return Response.redirect(
       new URL(
-        config.defaultLanguage ?? defaultLanguage,
-        new URL(request.url).origin,
+        [config.defaultLanguage ?? defaultLanguage, root.search, root.hash]
+          .join(""),
+        root.origin,
       ),
       HttpStatus.TEMORARY_REDIRECTED,
     );
