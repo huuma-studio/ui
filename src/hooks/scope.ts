@@ -1,6 +1,11 @@
-import { getVNodeScope, VNodeProps } from "../v-node/mod.ts";
+import {
+  getVNodeScope,
+  type HasVOptions,
+  type VBase,
+  VNodeProps,
+} from "../v-node/mod.ts";
 
-export function $scope() {
+export function $scope(): VBase & HasVOptions {
   return getVNodeScope()[0];
 }
 
