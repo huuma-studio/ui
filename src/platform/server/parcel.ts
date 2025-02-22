@@ -61,7 +61,7 @@ export interface RenderProps<T> {
   data: T;
   transferState: TransferState;
   nonce: string;
-  url: string;
+  url: URL;
 }
 
 export interface Script {
@@ -204,7 +204,7 @@ export class ParcelApp<
                 {} as D,
               transferState,
               nonce,
-              url: ctx.request.url,
+              url: new URL(ctx.request.url),
             }),
             {
               status: props.statusCode,

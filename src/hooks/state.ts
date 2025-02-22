@@ -26,7 +26,8 @@ interface StateScope<T> {
 // TODO: Move to the global_options of the vNode
 const statesCache: StateScope<unknown>[] = [];
 
-export function $<T>(value: T): State<T> {
+export const $ = $signal;
+export function $signal<T>(value: T): State<T> {
   const vNodeScope = getVNodeScope();
 
   if (!vNodeScope.length) {

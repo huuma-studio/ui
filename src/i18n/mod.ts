@@ -98,7 +98,7 @@ export class NoLanguageSpecifiedException extends NotFoundException {
 
 export function getActiveLang(): string {
   const { url, i18n } = getI18nConfig();
-  return langFrom(new URL(url).pathname, i18n.config.pattern) ??
+  return langFrom(url.pathname, i18n.config.pattern) ??
     i18n.config.defaultLanguage;
 }
 
@@ -133,9 +133,12 @@ function assertVNodeScope() {
   return vNode;
 }
 
-function getI18nConfig(): { url: string; i18n: I18nTransferState } {
+function getI18nConfig(): { url: URL; i18n: I18nTransferState } {
   const globalOptions = assertVNodeScope()[VNodeProps.OPTIONS]._GLOBAL;
-  return { url: globalOptions.url, i18n: globalOptions.transferState.i18n };
+  return {
+    url: globalOptions.url,
+    i18n: globalOptions.transferState.i18n,
+  };
 }
 
 function unnest(

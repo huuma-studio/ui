@@ -6,13 +6,18 @@ import {
   VNodeProps,
 } from "../v-node/mod.ts";
 
-export function onMount(fn: (() => () => void) | (() => void)) {
+export function $mount(fn: (() => () => void) | (() => void)) {
   addHookVComponent(fn, VHook.ON_MOUNT);
 }
+/** @deprecated use $mount */
+export const onMount = $mount;
 
-export function onUnmount(fn: () => void) {
+export function $unmount(fn: () => void) {
   addHookVComponent(fn, VHook.ON_UNMOUNT);
 }
+
+/** @deprecated use $destroy */
+export const onUnmount = $unmount;
 
 function addHookVComponent(
   fn: (() => () => void) | (() => void),

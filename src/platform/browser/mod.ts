@@ -79,7 +79,7 @@ export function launch(islands: Island[], transferState: TransferState) {
               children: findIslandChildren({ nodes, islandId, islands }),
             });
             const vNode = create<Node>(element, {
-              url: globalThis.window.location.href,
+              url: new URL(globalThis.window.location.href),
               transferState,
             });
             if (isVComponent(vNode)) {
