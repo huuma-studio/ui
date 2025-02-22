@@ -7,6 +7,7 @@ interface ScriptsProps extends JSX.ElementProps {
   scripts?: { entryPoints: Script[] };
   nonce?: string;
 }
+// TODO: change to proper jsx as soon jsr supports it
 // Preload, attach csp nonce and load head scripts
 export function Scripts(
   { scripts, nonce }: ScriptsProps,
