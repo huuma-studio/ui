@@ -304,7 +304,7 @@ function updateVElement<T>(
   vElement[VNodeProps.EVENT_REFS] = eventRefs;
 
   vElement[VNodeProps.CHILDREN] = track(
-    vElement,
+    vElement[VNodeProps.CHILDREN],
     props.children,
     globalOptions,
   );
@@ -408,36 +408,38 @@ function updateVFragment<T>(
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
   const children = childrenFrom(fragment);
-  vFragment[VNodeProps.CHILDREN] = track(vFragment, children, globalOptions);
+  vFragment[VNodeProps.CHILDREN] = track(
+    vFragment[VNodeProps.CHILDREN],
+    children,
+    globalOptions,
+  );
   return vFragment;
 }
 
 function track<T>(
-  vNode: VElement<T> | VFragment<T>,
+  vChildren: VNode<T>[] = [],
   nodes: JSX.Node[] | undefined,
   globalOptions: VGlobalOptions,
 ): VNode<T>[] {
-  const vNodes = vNode[VNodeProps.CHILDREN] || [];
-
   // No new nodes
   if (!nodes?.length) {
     return [];
   }
 
   // No previous nodes.
-  if (!vNodes?.length) {
+  if (!vChildren?.length) {
     return nodes.map((node) => create(node, globalOptions));
   }
 
   // Update
   // TODO: use key for comparision and sorting
   let i = 0;
-  const children = [];
+  const children: VNode<T>[] = [];
   for (const node of nodes) {
-    children.push(update(node, vNodes[i], globalOptions, false));
+    children.push(update(node, vChildren[i], globalOptions, false));
     i++;
   }
-  return vNodes;
+  return children;
 }
 
 export function isEmptyNode(
