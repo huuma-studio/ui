@@ -11,7 +11,6 @@ import {
 import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
-import { remove } from "./remove.ts";
 import { compareAttributes } from "./types/attribute.ts";
 import type { LinkComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet } from "./types/element.ts";
@@ -27,28 +26,26 @@ export function update(
     return [];
   }
 
-  if (vNode && !previousVNode == null) {
-    diff({ vNode, attachmentRef });
+  if (vNode && previousVNode == null) {
+    return diff({ vNode, attachmentRef });
   }
 
   if (vNode.type === VType.TEXT && previousVNode.type === VType.TEXT) {
     return updateText(vNode, previousVNode, attachmentRef);
   }
 
-  if (vNode.type === VType.ELEMENT && previousVNode.type === VType.ELEMENT) {
-    if (vNode[VNodeProps.TAG] !== previousVNode[VNodeProps.TAG]) {
-      // TODO: Replace
-    }
+  if (
+    vNode.type === VType.ELEMENT && previousVNode.type === VType.ELEMENT &&
+    vNode[VNodeProps.TAG] === previousVNode[VNodeProps.TAG]
+  ) {
     return updateElement(vNode, previousVNode, attachmentRef);
   }
 
   if (
     vNode.type === VType.COMPONENT &&
-    previousVNode.type === VType.COMPONENT
+    previousVNode.type === VType.COMPONENT &&
+    vNode[VNodeProps.FN] === previousVNode[VNodeProps.FN]
   ) {
-    if (vNode[VNodeProps.FN] !== previousVNode[VNodeProps.FN]) {
-      // TODO: Replace
-    }
     return updateComponent(vNode, previousVNode, attachmentRef);
   }
 
@@ -56,8 +53,7 @@ export function update(
     return updateFragment(vNode, previousVNode, attachmentRef);
   }
 
-  // TODO: Replace
-  return [];
+  return [...diff({ previousVNode }), ...diff({ vNode, attachmentRef })];
 }
 
 function updateComponent(
@@ -97,7 +93,7 @@ function updateFragment(
   }
 
   for (const previousVNode of previousVNodes) {
-    changeSet.push(...remove(previousVNode));
+    changeSet.push(...diff({ previousVNode }));
   }
 
   return changeSet;
@@ -227,7 +223,7 @@ export function updateChildren(
   });
 
   previousVChildren.forEach((previousVChild) => {
-    changeSet.push(...remove(previousVChild));
+    changeSet.push(...diff({ previousVNode: previousVChild }));
   });
 
   return changeSet;
