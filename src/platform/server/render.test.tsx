@@ -72,7 +72,9 @@ Deno.test(renderToString.name, async (t) => {
     assertEquals(
       renderToString(
         <div
-          unsafeInnerHTML={{ html: `<a href="https://huuma.studio">Link</a>` }}
+          dangerouslySetInnerHTML={{
+            __html: `<a href="https://huuma.studio">Link</a>`,
+          }}
         />,
       ),
       '<div><a href="https://huuma.studio">Link</a></div>',

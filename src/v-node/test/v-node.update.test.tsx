@@ -9,8 +9,8 @@ import {
   VType,
 } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
-import { $ } from "../../hooks/state.ts";
-import { State } from "../../state/mod.ts";
+import { $ } from "../../hooks/signal.ts";
+import { Signal } from "../../signal/mod.ts";
 
 Deno.test(update.name, async (t) => {
   await t.step("update VText", () => {
@@ -65,10 +65,10 @@ Deno.test(update.name, async (t) => {
   await t.step("update vComponent", () => {
     const vComponent = create(<A />);
 
-    const state = (vComponent as VComponent<unknown>)[VNodeProps.OPTIONS]
-      .$ as State<unknown>[];
+    const signal = (vComponent as VComponent<unknown>)[VNodeProps.OPTIONS]
+      .$ as Signal<unknown>[];
 
-    state[0].set(2);
+    signal[0].set(2);
 
     const updatedVComponent = update(<A />, vComponent, {}, true);
 
@@ -104,7 +104,7 @@ Deno.test(update.name, async (t) => {
       [VNodeProps.MODE]: 1,
       [VNodeProps.OPTIONS]: {
         "$": [
-          new State(1),
+          new Signal(1),
         ],
         _GLOBAL: {},
       },

@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert/equals";
 import { create, VMode, VNodeProps, VType } from "./../mod.ts";
 
-import { State } from "../../state/mod.ts";
+import { Signal } from "../../signal/mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
 
 function ComponentA({ children }: JSX.ElementProps) {
@@ -24,11 +24,11 @@ Deno.test(create.name, async (t) => {
       [VNodeProps.SKIP_ESCAPING]: false,
     });
 
-    const state = new State("State");
-    const vState = create(state);
-    assertEquals(vState, {
+    const signal = new Signal("Signal");
+    const vSignal = create(signal);
+    assertEquals(vSignal, {
       type: 0,
-      [VNodeProps.TEXT]: state,
+      [VNodeProps.TEXT]: signal,
       [VNodeProps.SKIP_ESCAPING]: false,
     });
   });

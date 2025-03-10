@@ -4,7 +4,7 @@ import {
   type VFragment,
   type VNode,
   VNodeProps,
-  type VState,
+  type VSignal,
   type VText,
   VType,
 } from "../../../v-node/mod.ts";
@@ -147,11 +147,11 @@ function updateText(
     },
   );
 
-  const text = isState(vText)
-    ? (<VState> vText[VNodeProps.TEXT]).get
+  const text = isSignal(vText)
+    ? (<VSignal> vText[VNodeProps.TEXT]).get
     : vText[VNodeProps.TEXT];
-  const previousText = isState(previousVNode)
-    ? (<VState> previousVNode[VNodeProps.TEXT]).get
+  const previousText = isSignal(previousVNode)
+    ? (<VSignal> previousVNode[VNodeProps.TEXT]).get
     : previousVNode[VNodeProps.TEXT];
 
   if (text !== previousText) {
@@ -229,7 +229,7 @@ export function updateChildren(
   return changeSet;
 }
 
-export function isState(vNode: VText<Node>) {
+export function isSignal(vNode: VText<Node>) {
   return (
     !!vNode &&
     typeof vNode[VNodeProps.TEXT] === "object" &&

@@ -1,5 +1,5 @@
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
-import type { Cleanup } from "../../state/mod.ts";
+import type { Cleanup } from "../../signal/mod.ts";
 import {
   create,
   isVComponent,

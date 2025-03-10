@@ -4,7 +4,7 @@ import {
   clearSubscriber,
   setSubscriber,
   type Subscriber,
-} from "../state/mod.ts";
+} from "../signal/mod.ts";
 
 export enum VMode {
   NotCreated,
@@ -41,7 +41,7 @@ export enum VNodeProps {
   SKIP_ESCAPING = 15,
   OPTIONS = "_",
 }
-export type VState = JSX.StateLike;
+export type VSignal = JSX.SignalLike;
 
 export interface VBase {
   type: VType;
@@ -102,7 +102,7 @@ export interface HasVNodeRef<T> {
 
 export interface VText<T> extends VBase, HasVNodeRef<T> {
   type: VType.TEXT;
-  [VNodeProps.TEXT]: string | VState;
+  [VNodeProps.TEXT]: string | VSignal;
   [VNodeProps.SKIP_ESCAPING]?: boolean;
 }
 
@@ -153,17 +153,17 @@ export function getVNodeScope(): (VBase & HasVOptions)[] {
   return [..._vNodeScope];
 }
 
-type VNodeStateUpdater<T, V> = (
+type VNodeSignalUpdater<T, V> = (
   node: JSX.Element<JSX.Component>,
   vNode: VComponent<T>,
   globalOptions: VGlobalOptions,
 ) => Subscriber<V>;
-let vNodeStateUpdater: VNodeStateUpdater<unknown, unknown> | undefined;
+let vNodeSignalUpdater: VNodeSignalUpdater<unknown, unknown> | undefined;
 
 export function setVNodeUpdater<T>(
-  updater: VNodeStateUpdater<T, unknown>,
+  updater: VNodeSignalUpdater<T, unknown>,
 ): void {
-  vNodeStateUpdater = <VNodeStateUpdater<unknown, unknown>> updater;
+  vNodeSignalUpdater = <VNodeSignalUpdater<unknown, unknown>> updater;
 }
 
 export function create<T>(
@@ -251,23 +251,23 @@ export function update<T>(
 }
 
 export function vText<T>(
-  node: string | number | JSX.StateLike,
+  node: string | number | JSX.SignalLike,
   options?: {
     skipEscaping?: boolean;
   },
 ): VText<T> {
   return {
     type: VType.TEXT,
-    [VNodeProps.TEXT]: isVState(node) ? node : `${node}`,
+    [VNodeProps.TEXT]: isVSignal(node) ? node : `${node}`,
     [VNodeProps.SKIP_ESCAPING]: options?.skipEscaping ?? false,
   };
 }
 
 export function updateVText<T>(
-  node: string | number | JSX.StateLike,
+  node: string | number | JSX.SignalLike,
   vText: VText<T>,
 ): VText<T> {
-  vText[VNodeProps.TEXT] = isVState(node) ? node : `${node}`;
+  vText[VNodeProps.TEXT] = isVSignal(node) ? node : `${node}`;
   return vText;
 }
 
@@ -330,11 +330,8 @@ function vComponent<T>(
   };
 
   _vNodeScope.push(vComponent);
-  setSubscriber(
-    vNodeStateUpdater
-      ? vNodeStateUpdater(component, vComponent, globalOptions)
-      : undefined,
-  );
+  typeof vNodeSignalUpdater === "function" &&
+    setSubscriber(vNodeSignalUpdater(component, vComponent, globalOptions));
   vComponent[VNodeProps.AST] = create(
     vComponent[VNodeProps.FN](props),
     globalOptions,
@@ -353,10 +350,8 @@ function updateVComponent<T>(
 ) {
   _vNodeScope.push(vComponent);
   vComponent[VNodeProps.PROPS] = component.props;
-  setSubscriber(
-    vNodeStateUpdater
-      ? vNodeStateUpdater(component, vComponent, globalOptions)
-      : undefined,
+  typeof vNodeSignalUpdater === "function" && setSubscriber(
+    vNodeSignalUpdater(component, vComponent, globalOptions),
   );
   const updatedNode = vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
   clearSubscriber();
@@ -450,10 +445,10 @@ export function isEmptyNode(
 
 export function isTextNode(
   value: JSX.Node,
-): value is string | number | JSX.StateLike {
+): value is string | number | JSX.SignalLike {
   return (
     value != null &&
-    (typeof value === "string" || Number.isFinite(value) || isVState(value))
+    (typeof value === "string" || Number.isFinite(value) || isVSignal(value))
   );
 }
 
@@ -514,7 +509,7 @@ export function isVText<T>(vNode: undefined | null | VBase): vNode is VText<T> {
   return vNode?.type === VType.TEXT;
 }
 
-export function isVState(node: JSX.Node): node is VState {
+export function isVSignal(node: JSX.Node): node is VSignal {
   return (node && typeof node === "object" && "get" in node) || false;
 }
 

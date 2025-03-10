@@ -1,13 +1,17 @@
-// TODO: replace with dedicated VState type
-import type { State } from "../../../../state/mod.ts";
-import { VNodeProps, type VState, type VText } from "../../../../v-node/mod.ts";
+// TODO: replace with dedicated VSignal type
+import type { Signal } from "../../../../signal/mod.ts";
+import {
+  VNodeProps,
+  type VSignal,
+  type VText,
+} from "../../../../v-node/mod.ts";
 import {
   type AttachmentRef,
   AttachmentType,
   moveAttachmentRef,
 } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
-import { isState } from "../update.ts";
+import { isSignal } from "../update.ts";
 
 interface BaseTextChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Text;
@@ -102,9 +106,9 @@ function create({ vText }: CreateTextPayload): void {
     typeof vText[VNodeProps.TEXT] === "object" &&
     "get" in vText[VNodeProps.TEXT]
   ) {
-    const state = <State<string | number>> vText[VNodeProps.TEXT];
-    node = new Text(`${state.get}`);
-    state.subscribe({
+    const signal = <Signal<string | number>> vText[VNodeProps.TEXT];
+    node = new Text(`${signal.get}`);
+    signal.subscribe({
       update: (value: string | number) => {
         node.textContent = `${value}`;
       },
@@ -144,10 +148,10 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
     typeof vText[VNodeProps.TEXT] === "object" &&
     "get" in vText[VNodeProps.TEXT]
   ) {
-    const state = <VState> vText[VNodeProps.TEXT];
-    node = new Text(`${state.get}`);
+    const signal = <VSignal> vText[VNodeProps.TEXT];
+    node = new Text(`${signal.get}`);
     // TODO: Clean up subscription, probaly attach it the vText instance
-    state.subscribe({
+    signal.subscribe({
       update: (value: string | number) => {
         node.textContent = `${value}`;
       },
@@ -167,10 +171,10 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
 function update({ vText }: UpdateTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
   if (!node) return;
-  node.textContent = isState(
+  node.textContent = isSignal(
       vText,
     )
-    ? `${(<VState> vText[VNodeProps.TEXT]).get}`
+    ? `${(<VSignal> vText[VNodeProps.TEXT]).get}`
     : `${vText[VNodeProps.TEXT]}`;
 }
 

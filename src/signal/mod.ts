@@ -10,66 +10,63 @@ export interface Subscriber<T> {
 
 export type Cleanup = () => void;
 
-let subscriber: Subscriber<unknown> | undefined;
+const subscribers: Subscriber<unknown>[] = [];
 
-export function setSubscriber(newSubscriber: Subscriber<unknown> | undefined) {
-  subscriber = newSubscriber;
+export function setSubscriber(
+  newSubscriber: Subscriber<unknown>,
+): void {
+  subscribers.push(newSubscriber);
 }
 
-export function clearSubscriber() {
-  subscriber = undefined;
+export function clearSubscriber(): void {
+  subscribers.pop();
 }
 
-interface Signal<T> {
-  (): T;
-  peek(): T;
-  set(newValue: T): T;
-}
+export class Signal<T> {
+  #value: T;
+  #subscribers: Subscriber<T>[] = [];
 
-export function signal<T>(value: T): Signal<T> {
-  let subscribers: Subscriber<T>[] = [];
+  constructor(value: T) {
+    this.#value = value;
+  }
 
-  const subscribe = (subscriber: Subscriber<T>): Cleanup => {
-    if (!subscribers.find((existing) => existing === subscriber)) {
-      subscribers.push(subscriber);
-      subscriber.cleanupCallback?.call(signal, () => {
-        subscribers = subscribers.filter(
+  get get(): T {
+    if (subscribers.length) {
+      this.subscribe(<Subscriber<T>> subscribers[subscribers.length - 1]);
+    }
+    return this.#value;
+  }
+
+  set(value: T): T {
+    this.#value = value;
+    this.#notify();
+    return value;
+  }
+
+  subscribe(subscriber: Subscriber<T>): Cleanup {
+    if (!this.#subscribers.find((existing) => existing === subscriber)) {
+      this.#subscribers.push(subscriber);
+      subscriber.cleanupCallback?.call(this, () => {
+        this.#subscribers = this.#subscribers.filter(
           (existing) => existing !== subscriber,
         );
       });
     }
 
     return () => {
-      subscribers = subscribers.filter(
+      this.#subscribers = this.#subscribers.filter(
         (existing) => existing === subscriber,
       );
     };
-  };
+  }
 
-  const set = (newValue: T): T => {
-    value = newValue;
-    notify();
-    return value;
-  };
-
-  const notify = (): void => {
-    subscribers?.forEach((subscriber) => {
-      subscriber.update(value);
+  #notify(): void {
+    this.#subscribers?.forEach((subscriber) => {
+      subscriber.update(this.#value);
     });
-  };
+  }
+}
 
-  const signalFn = (): T => {
-    if (subscriber) {
-      subscribe(<Subscriber<T>> subscriber);
-    }
-    return value;
-  };
-
-  const peek = (): T => {
-    return value;
-  };
-
-  const Signal = Object.assign(signalFn, { set, peek });
-
-  return <Signal<T>> Signal;
+export function signal<T>(value: T): Signal<T> {
+  return new Signal(value);
 }

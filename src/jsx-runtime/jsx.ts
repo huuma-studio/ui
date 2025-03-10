@@ -3,7 +3,7 @@ import { escapeHtml } from "../utils/escape-html.ts";
 
 // deno-lint-ignore no-namespace
 export namespace JSX {
-  export type TextNode = string | number | StateLike;
+  export type TextNode = string | number | SignalLike;
   export type EmptyNode = undefined | null | boolean;
 
   export type Node =
@@ -27,7 +27,7 @@ export namespace JSX {
 
   export type Component = (props: ElementProps) => Node;
 
-  export type StateLike = {
+  export type SignalLike = {
     get: string | number;
     subscribe: (subscriber: { update: (value: string) => void }) => () => void;
   };
