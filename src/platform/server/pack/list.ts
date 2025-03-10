@@ -154,10 +154,10 @@ export async function listIslands(path: string): Promise<FileImport[]> {
 
 async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
   const content = [
-    "// Cargo Parcel generated code - Do not modify!",
+    "// Huuma UI generated code - Do not modify!",
     ...(pack.pages.length
       ? [
-        'import type { List } from "@cargo/parcel/server/pack";',
+        'import type { List } from "@huuma/ui/server/pack";',
         imports(
           pack.pages.map((page) => page.page),
           "Page",

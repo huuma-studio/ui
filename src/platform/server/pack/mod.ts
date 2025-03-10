@@ -1,8 +1,8 @@
-import type { Middleware } from "@cargo/cargo/middleware";
-import { info } from "@cargo/cargo/utils/logger";
-import type { CargoContext } from "@cargo/cargo";
+import type { Middleware } from "@huuma/route/middleware";
+import { info } from "@huuma/route/utils/logger";
+import type { AppContext } from "@huuma/route";
 import { join } from "@std/path/join";
-import type { PageLike, ParcelApp } from "../parcel.ts";
+import type { PageLike, UIApp } from "../app.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
 import { Bundler, type EntryPoints } from "./bundler.ts";
 import { createList, listIslands, listPages } from "./list.ts";
@@ -38,23 +38,23 @@ const packDirectory = ".pack";
 const scriptsDirectory = join(packDirectory, ".scripts");
 
 /**
- * Packs the application by adding pages, layouts, middleware, islands and scripts to the Parcel application.
- * This function takes a ParcelApp instance and a List of pages and components, then configures the application
+ * Packs the application by adding pages, layouts, middleware, islands and scripts to the Huuma UI application.
+ * This function takes a Huuma UI App instance and a List of pages and components, then configures the application
  * with the provided routes, layouts, middleware, and client-side components.
  *
- * @param {ParcelApp<T>} Parcel - The Parcel application instance to pack
+ * @param {UIApp<T>} app - The UI application instance to pack
  * @param {List} List - Object containing pages, islands, and scripts to add to the application
- * @returns {Promise<ParcelApp<T>>} A promise that resolves with the configured ParcelApp instance
+ * @returns {Promise<UIApp<T>>} A promise that resolves with the configured Huuma UIApp instance
  */
-export async function pack<T extends CargoContext>(
-  Parcel: ParcelApp<T>,
-  List: List,
-): Promise<ParcelApp<T>> {
+export async function pack<T extends AppContext>(
+  app: UIApp<T>,
+  list: List,
+): Promise<UIApp<T>> {
   const islandsScripts: List["scripts"] = [];
   const scripts: List["scripts"] = [];
 
   // Split islands and general scripts
-  for (const script of List.scripts) {
+  for (const script of list.scripts) {
     if (script[2].isIsland) {
       islandsScripts.push(script);
       continue;
@@ -65,31 +65,31 @@ export async function pack<T extends CargoContext>(
   await packScripts(
     scripts,
     scriptsDirectory,
-    Parcel,
+    app,
   );
 
   await packIslands(
-    List.islands,
+    list.islands,
     islandsScripts,
     scriptsDirectory,
-    Parcel,
+    app,
   );
 
   packPages(
-    List.pages,
-    Parcel,
+    list.pages,
+    app,
   );
 
-  return Parcel;
+  return app;
 }
 
-export async function list<T extends CargoContext>(
-  Parcel: ParcelApp<T>,
+export async function list<T extends AppContext>(
+  app: UIApp<T>,
   options?: {
     enableLiveReload?: boolean;
     isProd?: boolean;
   },
-): Promise<ParcelApp<T>> {
+): Promise<UIApp<T>> {
   const pagesPath = "pages";
 
   const pages = await listPages(pagesPath);
@@ -97,14 +97,14 @@ export async function list<T extends CargoContext>(
   const scripts: List["scripts"] = [];
 
   const entryPoints: EntryPoints = {
-    "_parcel_launch": {
+    "huuma_ui_launch": {
       path: new URL("../../browser/mod.ts", import.meta.url).href,
       isRuntime: true,
     },
   };
 
   if (options?.enableLiveReload !== false) {
-    enableLiveReload(Parcel);
+    enableLiveReload(app);
   }
 
   for (const island of islands) {
@@ -143,17 +143,17 @@ export async function list<T extends CargoContext>(
     });
 
     await pack(
-      Parcel,
+      app,
       list,
     );
 
-    return Parcel;
+    return app;
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) {
       info(
         "PACK",
         `Could not find '${pagesPath}' directory while packaging the application. Please ensure it exists.`,
-        "Parcel",
+        "Huuma UI",
       );
     }
     throw e;
@@ -184,9 +184,9 @@ export async function deleteDirectory(path: string) {
   }
 }
 
-export async function enableLiveReload<T extends CargoContext>(
-  Parcel: ParcelApp<T>,
-): Promise<ParcelApp<T>> {
+export async function enableLiveReload<T extends AppContext>(
+  app: UIApp<T>,
+): Promise<UIApp<T>> {
   const bundler = new Bundler();
   const result = await bundler.bundle({
     "_live-reload": {
@@ -198,11 +198,11 @@ export async function enableLiveReload<T extends CargoContext>(
   const file = result.files.get("_live-reload.js");
 
   if (file) {
-    Parcel.addScript(join(result.hash, parse(file.path).base), file.contents, {
+    app.addScript(join(result.hash, parse(file.path).base), file.contents, {
       isEntryPoint: true,
       head: true,
     });
-    Parcel.get("/_websocket", (ctx) => {
+    app.get("/_websocket", (ctx) => {
       if (ctx.request.headers.get("upgrade") === "websocket") {
         return Deno.upgradeWebSocket(ctx.request).response;
       }
@@ -213,5 +213,5 @@ export async function enableLiveReload<T extends CargoContext>(
     });
   }
 
-  return Parcel;
+  return app;
 }

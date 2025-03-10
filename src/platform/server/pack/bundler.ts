@@ -71,7 +71,7 @@ export class Bundler {
       metafile: true,
       write: false,
       jsx: "automatic",
-      jsxImportSource: "@cargo/parcel",
+      jsxImportSource: "@huuma/ui",
       absWorkingDir: Deno.cwd(),
       target: ["chrome99", "firefox99", "safari15"],
     });

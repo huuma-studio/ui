@@ -1,13 +1,13 @@
-import { Cargo, type CargoContext, type CargoOptions } from "@cargo/cargo";
-import type { Handler } from "@cargo/cargo/http/request";
-import { type Middleware, walkthroughAndHandle } from "@cargo/cargo/middleware";
+import { App, type AppContext, type AppOptions } from "@huuma/route";
+import type { Handler } from "@huuma/route/http/request";
+import { handle, type Middleware } from "@huuma/route/middleware";
 import { renderToString, vNodeToString } from "./render.ts";
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
 import { create } from "../../v-node/mod.ts";
 import { type Island, markIslands } from "../../islands/islands.ts";
 import { parse } from "@std/path/parse";
-import type { Route } from "@cargo/cargo/http/route";
-import { isProd } from "@cargo/cargo/utils/environment";
+import type { Route } from "@huuma/route/http/route";
+import { isProd } from "@huuma/route/utils/environment";
 
 export type TransferStateItem =
   | TransferState
@@ -77,27 +77,27 @@ interface ScriptWithImports {
   imports?: string[];
 }
 
-export function Parcel<D>(
+export function createUIApp<D>(
   root: PageLike<D>,
-): ParcelApp<D> {
-  return new ParcelApp<D>(root);
+): UIApp<D> {
+  return new UIApp<D>(root);
 }
 
-export class ParcelApp<
+export class UIApp<
   D,
-  T extends CargoContext = { State: { data: D; transferState: TransferState } },
-> extends Cargo<T> {
+  T extends AppContext = { State: { data: D; transferState: TransferState } },
+> extends App<T> {
   #root: PageLike<D>;
   #islands: { path: string; island: JSX.Component }[] = [];
   #scripts: Script[] = [];
   #transferState: TransferState = {};
 
-  constructor(root: PageLike<D>, options?: CargoOptions<T>) {
+  constructor(root: PageLike<D>, options?: AppOptions<T>) {
     super(options);
     this.#root = root;
   }
 
-  deliver(): Cargo["handle"] {
+  deliver(): App["handle"] {
     return this.init();
   }
 
@@ -186,7 +186,7 @@ export class ParcelApp<
       // deno-lint-ignore no-explicit-any
       ctx.set<any>("transferState", {});
       const nonce = crypto.randomUUID();
-      return walkthroughAndHandle(
+      return handle(
         ctx,
         props.middleware,
         (ctx) => {

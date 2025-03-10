@@ -1,6 +1,6 @@
 import { join } from "@std/path/join";
 import { Fragment, type JSX, jsx } from "../../jsx-runtime/mod.ts";
-import type { PageScripts, Script, TransferState } from "./parcel.ts";
+import type { PageScripts, Script, TransferState } from "./app.ts";
 import type { Island } from "../../islands/islands.ts";
 
 interface ScriptsProps extends JSX.ElementProps {

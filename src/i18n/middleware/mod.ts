@@ -1,4 +1,4 @@
-import type { Middleware } from "@cargo/cargo/middleware";
+import type { Middleware } from "@huuma/route/middleware";
 
 import {
   type I18nConfig,
@@ -7,7 +7,7 @@ import {
   LanguageNotSupportedException,
   NoLanguageSpecifiedException,
 } from "../mod.ts";
-import { HttpStatus } from "@cargo/cargo/http/http-status";
+import { HttpStatus } from "@huuma/route/http/http-status";
 
 export function useI18n(
   config: Required<I18nConfig>,

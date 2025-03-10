@@ -41,11 +41,11 @@ Deno.test(renderToString.name, async (t) => {
     assertEquals(
       renderToString(
         <img
-          href="https://cargo.wtf"
+          href="https://huuma.studio"
           alt="A very interesting description :-)"
         />,
       ),
-      '<img href="https://cargo.wtf" alt="A very interesting description :-)"/>',
+      '<img href="https://huuma.studio" alt="A very interesting description :-)"/>',
     );
   });
   await t.step("should render svg as string", () => {
@@ -72,10 +72,10 @@ Deno.test(renderToString.name, async (t) => {
     assertEquals(
       renderToString(
         <div
-          unsafeInnerHTML={{ html: `<a href="https://cargo.wtf">Link</a>` }}
+          unsafeInnerHTML={{ html: `<a href="https://huuma.studio">Link</a>` }}
         />,
       ),
-      '<div><a href="https://cargo.wtf">Link</a></div>',
+      '<div><a href="https://huuma.studio">Link</a></div>',
     );
   });
 });

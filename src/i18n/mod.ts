@@ -1,10 +1,10 @@
-import { NotFoundException } from "@cargo/cargo/http/exception/not-found-exception";
-import { HttpStatus } from "@cargo/cargo/http/http-status";
-import type { CargoContext } from "@cargo/cargo";
+import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
+import { HttpStatus } from "@huuma/route/http/http-status";
+import type { AppContext } from "@huuma/route";
 
 import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
 import { getVNodeScope, VNodeProps } from "../v-node/mod.ts";
-import type { ParcelApp } from "../platform/server/mod.ts";
+import type { UIApp } from "../platform/server/mod.ts";
 
 export interface I18nConfig {
   defaultLanguage?: string;
@@ -30,15 +30,15 @@ export type I18nTransferState = {
 const defaultPattern = /^\/([a-z]{2})?(?:\/|$)/i;
 const defaultLanguage = "en";
 
-export function setupI18n<T extends CargoContext>(
-  parcel: ParcelApp<T>,
+export function setupI18n<T extends AppContext>(
+  app: UIApp<T>,
   config: I18nConfig,
 ): Required<I18nConfig> {
   if (!config.languages) {
     throw new Error("Languages are required");
   }
 
-  parcel.get("/", ({ request }) => {
+  app.get("/", ({ request }) => {
     const root = new URL(request.url);
     return Response.redirect(
       new URL(

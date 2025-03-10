@@ -9,7 +9,7 @@ import {
   VNodeProps,
 } from "../../v-node/mod.ts";
 // TODO: Move TransferState type to general location
-import type { TransferState } from "../server/parcel.ts";
+import type { TransferState } from "../server/app.ts";
 import {
   attachmentRefFrom,
   createRootAttachmentRef,

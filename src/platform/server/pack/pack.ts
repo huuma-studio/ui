@@ -1,15 +1,15 @@
-import type { CargoContext } from "@cargo/cargo";
+import type { AppContext } from "@huuma/route";
 import { join } from "@std/path/join";
 import { parse } from "@std/path/parse";
 
-import type { PageLike, ParcelApp } from "../parcel.ts";
+import type { PageLike, UIApp } from "../app.ts";
 import type { List } from "./mod.ts";
 import { mapPath } from "./path-mapping.ts";
-import { info } from "@cargo/cargo/utils/logger";
+import { info } from "@huuma/route/utils/logger";
 
 export function packPages<T>(
   pages: List["pages"],
-  Parcel: ParcelApp<T>,
+  app: UIApp<T>,
 ) {
   for (const route in pages) {
     const page: PageLike<unknown> = pages[route].page.default;
@@ -26,21 +26,21 @@ export function packPages<T>(
       .flat();
 
     const path = mapPath(route);
-    Parcel.addPage(path.path, {
+    app.addPage(path.path, {
       page,
       layouts,
       middleware,
       statusCode: path.statusCode,
     });
   }
-  return Parcel;
+  return app;
 }
 
 export async function packIslands<T>(
   islands: List["islands"],
   scripts: List["scripts"],
   scriptsDirectory: string,
-  Parcel: ParcelApp<T>,
+  app: UIApp<T>,
 ) {
   if (islands) {
     for (const [islandPath, island] of Object.entries(islands)) {
@@ -48,7 +48,7 @@ export async function packIslands<T>(
         parse(s[1]).name === parse(islandPath).name
       );
       if (script) {
-        Parcel.addIsland(island.default, {
+        app.addIsland(island.default, {
           path: join(script[0], script[1]),
           contents: await readScript(
             join(scriptsDirectory, script[1]),
@@ -58,22 +58,22 @@ export async function packIslands<T>(
       } else {
         info(
           "PACK",
-          `Frontend script for island "${islandPath}" not found. Island was not added to Cargo Parcel`,
+          `Frontend script for island "${islandPath}" not found. Island was not added to Huuma UI`,
         );
       }
     }
   }
-  return Parcel;
+  return app;
 }
 
-export async function packScripts<T extends CargoContext>(
+export async function packScripts<T extends AppContext>(
   scripts: List["scripts"],
   scriptsDirectory: string,
-  Parcel: ParcelApp<T>,
-): Promise<ParcelApp<T>> {
+  app: UIApp<T>,
+): Promise<UIApp<T>> {
   if (scripts?.length) {
     for (const script of scripts) {
-      Parcel.addScript(
+      app.addScript(
         join(script[0], script[1]),
         await readScript(join(
           scriptsDirectory,
@@ -83,7 +83,7 @@ export async function packScripts<T extends CargoContext>(
       );
     }
   }
-  return Parcel;
+  return app;
 }
 function readScript(path: string): Promise<Uint8Array> {
   return Deno.readFile(join(
