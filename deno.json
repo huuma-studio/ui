@@ -1,14 +1,14 @@
 {
   "name": "@huuma/ui",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "exports": {
     "./v-node": "./src/v-node/mod.ts",
     "./browser": "./src/platform/browser/mod.ts",
     "./server": "./src/platform/server/mod.ts",
     "./server/pack": "./src/platform/server/pack/mod.ts",
-    "./state": "./src/state/mod.ts",
+    "./signal": "./src/signal/mod.ts",
     "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
-    "./hooks/state": "./src/hooks/state.ts",
+    "./hooks/signal": "./src/hooks/signal.ts",
     "./hooks/scope": "./src/hooks/scope.ts",
     "./jsx-runtime": "./src/jsx-runtime/mod.ts",
     "./i18n": "./src/i18n/mod.ts",
