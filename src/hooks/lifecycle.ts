@@ -7,19 +7,14 @@ import {
 } from "../v-node/mod.ts";
 
 export function $mount(fn: (() => () => void) | (() => void)): void {
-  addHookVComponent(fn, VHook.ON_MOUNT);
+  addHookVComponent(fn, VHook.MOUNT);
 }
-/** @deprecated use $mount */
-export const onMount = $mount;
 
 export function $unmount(fn: () => void): void {
-  addHookVComponent(fn, VHook.ON_UNMOUNT);
+  addHookVComponent(fn, VHook.UNMOUNT);
 }
 
-/** @deprecated use $destroy */
-export const onUnmount = $unmount;
-
-function addHookVComponent(
+export function addHookVComponent(
   fn: (() => () => void) | (() => void),
   vHook: VHook,
 ) {

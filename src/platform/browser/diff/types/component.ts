@@ -58,20 +58,20 @@ function link({ vComponent, attachmentRef }: LinkComponentPayload): void {
 
 function mount({ vComponent }: MountComponentPayload): void {
   // Run lifecycle "onMount" hooks associated with this element.
-  vComponent[VNodeProps.HOOKS]?.[VHook.ON_MOUNT]?.forEach((hook) => {
+  vComponent[VNodeProps.HOOKS]?.[VHook.MOUNT]?.forEach((hook) => {
     const onUnmount = hook();
     if (typeof onUnmount === "function" && vComponent[VNodeProps.HOOKS]) {
-      if (Array.isArray(vComponent[VNodeProps.HOOKS][VHook.ON_UNMOUNT])) {
-        vComponent[VNodeProps.HOOKS][VHook.ON_UNMOUNT].push(onUnmount);
+      if (Array.isArray(vComponent[VNodeProps.HOOKS][VHook.UNMOUNT])) {
+        vComponent[VNodeProps.HOOKS][VHook.UNMOUNT].push(onUnmount);
         return;
       }
-      vComponent[VNodeProps.HOOKS][VHook.ON_UNMOUNT] = [onUnmount];
+      vComponent[VNodeProps.HOOKS][VHook.UNMOUNT] = [onUnmount];
     }
   });
 }
 
 function unmount({ vComponent }: UnmountComponentPayload): void {
-  vComponent[VNodeProps.HOOKS]?.[VHook.ON_UNMOUNT]?.forEach((hook) => {
+  vComponent[VNodeProps.HOOKS]?.[VHook.UNMOUNT]?.forEach((hook) => {
     hook();
   });
 }

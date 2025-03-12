@@ -87,13 +87,13 @@ export interface HasVKey {
 }
 
 export interface VHooks {
-  [VHook.ON_MOUNT]?: ((() => () => void) | (() => void))[];
-  [VHook.ON_UNMOUNT]?: (() => void)[];
+  [VHook.MOUNT]?: ((() => () => void) | (() => void))[];
+  [VHook.UNMOUNT]?: (() => void)[];
 }
 
 export enum VHook {
-  ON_MOUNT,
-  ON_UNMOUNT,
+  MOUNT,
+  UNMOUNT,
 }
 
 export interface HasVNodeRef<T> {

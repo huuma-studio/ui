@@ -70,3 +70,35 @@ export class Signal<T> {
 export function signal<T>(value: T): Signal<T> {
   return new Signal(value);
 }
+
+export function effect(
+  callback: () => void,
+): () => void {
+  const cleanups: Cleanup[] = [];
+  setSubscriber({
+    update: callback,
+    cleanupCallback: (cleanup) => {
+      cleanups.push(cleanup);
+    },
+  });
+  callback();
+  clearSubscriber();
+  return () => {
+    cleanups.forEach((cleanup) => cleanup());
+  };
+}
+
+export function computed<T>(callback: () => T): Signal<T> {
+  const computedSignal = new Signal<T | undefined>(undefined);
+  setSubscriber({
+    update: () => {
+      computedSignal.set(callback());
+    },
+    cleanupCallback: () => {
+      // cleanup references on destroy
+    },
+  });
+  callback();
+  clearSubscriber();
+  return <Signal<T>> computedSignal;
+}

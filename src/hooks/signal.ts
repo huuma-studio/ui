@@ -1,12 +1,14 @@
-import { Signal } from "../signal/mod.ts";
+import { effect, Signal } from "../signal/mod.ts";
 import {
   getVNodeScope,
   type HasVMode,
   type HasVOptions,
   type VBase,
+  VHook,
   VMode,
   VNodeProps,
 } from "../v-node/mod.ts";
+import { addHookVComponent } from "./lifecycle.ts";
 
 type VNodeWithSignal<T> =
   & VBase
@@ -23,7 +25,6 @@ interface SignalScope<T> {
   signal: Signal<T>;
 }
 
-// TODO: Move to the global_options of the vNode
 const signalCache: SignalScope<unknown>[] = [];
 
 export function $signal<T>(value: T): Signal<T> {
@@ -71,4 +72,8 @@ export function $signal<T>(value: T): Signal<T> {
     ? vNode[VNodeProps.OPTIONS].$.push(signal)
     : (vNode[VNodeProps.OPTIONS].$ = [signal]);
   return signal;
+}
+
+export function $effect(fn: () => void): void {
+  addHookVComponent(() => effect(fn), VHook.MOUNT);
 }
