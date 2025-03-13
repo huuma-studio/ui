@@ -1,4 +1,11 @@
-import { effect, Signal } from "../signal/mod.ts";
+import {
+  computed,
+  type ComputedSignal,
+  effect,
+  type Signal,
+  signal,
+  type WritableSignal,
+} from "../signal/mod.ts";
 import {
   getVNodeScope,
   type HasVMode,
@@ -27,11 +34,30 @@ interface SignalScope<T> {
 
 const signalCache: SignalScope<unknown>[] = [];
 
-export function $signal<T>(value: T): Signal<T> {
+export function $signal<T>(value: T): WritableSignal<T> {
+  return <WritableSignal<T>> signalFromScope<T>(value, signal);
+}
+
+export function $computed<T>(value: () => T): Signal<T> {
+  return signalFromScope<T>(value, computed);
+}
+
+function signalFromScope<T>(
+  value: T,
+  signalCreator: (value: T) => WritableSignal<T>,
+): WritableSignal<T>;
+function signalFromScope<T>(
+  value: () => T,
+  signalCreator: (value: () => T) => ComputedSignal<T>,
+): ComputedSignal<T>;
+function signalFromScope<T>(
+  value: T | (() => T),
+  signalCreator: ((value: T) => Signal<T>) | ((value: () => T) => Signal<T>),
+): Signal<T> {
   const vNodeScope = getVNodeScope();
 
   if (!vNodeScope.length) {
-    return new Signal(value);
+    return createSignal(value, signalCreator);
   }
 
   const vNode = <VNodeWithSignal<T>> vNodeScope[vNodeScope.length - 1];
@@ -67,11 +93,24 @@ export function $signal<T>(value: T): Signal<T> {
     return scope.signal;
   }
 
-  const signal = new Signal(value);
+  const signal = createSignal(value, signalCreator);
   vNode[VNodeProps.OPTIONS].$?.length
     ? vNode[VNodeProps.OPTIONS].$.push(signal)
     : (vNode[VNodeProps.OPTIONS].$ = [signal]);
   return signal;
+}
+
+function createSignal<T>(
+  value: T | (() => T),
+  signalCreator: ((value: T) => Signal<T>) | ((value: () => T) => Signal<T>),
+) {
+  if (typeof value === "function" && signalCreator === computed) {
+    return (<typeof computed> signalCreator)(value as () => T);
+  }
+  if (signalCreator === signal) {
+    return (<typeof signal> signalCreator)(value as T);
+  }
+  throw new Error("Invalid signal creator");
 }
 
 export function $effect(fn: () => void): void {

@@ -1,10 +1,5 @@
 import type { JSX } from "../jsx-runtime/mod.ts";
-import {
-  type Cleanup,
-  clearSubscriber,
-  setSubscriber,
-  type Subscriber,
-} from "../signal/mod.ts";
+import { type Cleanup, setSubscriber, type Subscriber } from "../signal/mod.ts";
 
 export enum VMode {
   NotCreated,
@@ -330,14 +325,21 @@ function vComponent<T>(
   };
 
   _vNodeScope.push(vComponent);
-  typeof vNodeSignalUpdater === "function" &&
-    setSubscriber(vNodeSignalUpdater(component, vComponent, globalOptions));
-  vComponent[VNodeProps.AST] = create(
-    vComponent[VNodeProps.FN](props),
-    globalOptions,
-  );
+  typeof vNodeSignalUpdater === "function"
+    ? setSubscriber(
+      () => {
+        return vComponent[VNodeProps.AST] = create(
+          vComponent[VNodeProps.FN](props),
+          globalOptions,
+        );
+      },
+      vNodeSignalUpdater(component, vComponent, globalOptions),
+    )
+    : vComponent[VNodeProps.AST] = create(
+      vComponent[VNodeProps.FN](props),
+      globalOptions,
+    );
   vComponent[VNodeProps.MODE] = VMode.Created;
-  clearSubscriber();
   _vNodeScope.shift();
 
   return vComponent;
@@ -350,11 +352,15 @@ function updateVComponent<T>(
 ) {
   _vNodeScope.push(vComponent);
   vComponent[VNodeProps.PROPS] = component.props;
-  typeof vNodeSignalUpdater === "function" && setSubscriber(
-    vNodeSignalUpdater(component, vComponent, globalOptions),
-  );
-  const updatedNode = vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
-  clearSubscriber();
+  const updatedNode = typeof vNodeSignalUpdater === "function"
+    ? setSubscriber(
+      () => {
+        return vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
+      },
+      vNodeSignalUpdater(component, vComponent, globalOptions),
+    )
+    : vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
+
   _vNodeScope.shift();
 
   vComponent[VNodeProps.AST] = update(

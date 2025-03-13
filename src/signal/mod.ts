@@ -12,27 +12,32 @@ export type Cleanup = () => void;
 
 const subscribers: Subscriber<unknown>[] = [];
 
-export function setSubscriber(
+export function setSubscriber<T>(
+  scopedCallback: () => T,
   newSubscriber: Subscriber<unknown>,
-): void {
+): T {
   subscribers.push(newSubscriber);
-}
-
-export function clearSubscriber(): void {
+  const value = scopedCallback();
   subscribers.pop();
+  return value;
 }
 
-export class Signal<T> {
+export abstract class Signal<T> {
+  abstract get(): T;
+}
+
+export class WritableSignal<T> extends Signal<T> {
   #value: T;
   #subscribers: Subscriber<T>[] = [];
 
   constructor(value: T) {
+    super();
     this.#value = value;
   }
 
-  get get(): T {
+  get(): T {
     if (subscribers.length) {
-      this.subscribe(<Subscriber<T>> subscribers[subscribers.length - 1]);
+      this.#subscribe(<Subscriber<T>> subscribers[subscribers.length - 1]);
     }
     return this.#value;
   }
@@ -43,7 +48,7 @@ export class Signal<T> {
     return value;
   }
 
-  subscribe(subscriber: Subscriber<T>): Cleanup {
+  #subscribe(subscriber: Subscriber<T>): Cleanup {
     if (!this.#subscribers.find((existing) => existing === subscriber)) {
       this.#subscribers.push(subscriber);
       subscriber.cleanupCallback?.call(this, () => {
@@ -67,38 +72,86 @@ export class Signal<T> {
   }
 }
 
-export function signal<T>(value: T): Signal<T> {
-  return new Signal(value);
+export function signal<T>(value: T): WritableSignal<T> {
+  return new WritableSignal(value);
 }
 
 export function effect(
   callback: () => void,
 ): () => void {
   const cleanups: Cleanup[] = [];
-  setSubscriber({
-    update: callback,
-    cleanupCallback: (cleanup) => {
-      cleanups.push(cleanup);
+  setSubscriber(
+    () => callback(),
+    {
+      update: callback,
+      cleanupCallback: (cleanup) => {
+        cleanups.push(cleanup);
+      },
     },
-  });
-  callback();
-  clearSubscriber();
+  );
   return () => {
     cleanups.forEach((cleanup) => cleanup());
   };
 }
 
-export function computed<T>(callback: () => T): Signal<T> {
-  const computedSignal = new Signal<T | undefined>(undefined);
-  setSubscriber({
-    update: () => {
-      computedSignal.set(callback());
-    },
-    cleanupCallback: () => {
-      // cleanup references on destroy
-    },
-  });
-  callback();
-  clearSubscriber();
-  return <Signal<T>> computedSignal;
+export class ComputedSignal<T> extends Signal<T> {
+  #value: T;
+  #subscribers: Subscriber<T>[] = [];
+  #cleanups: Cleanup[] = [];
+
+  constructor(callbackFn: () => T) {
+    super();
+
+    const value = setSubscriber(
+      () => callbackFn(),
+      {
+        update: () => {
+          this.#set(callbackFn());
+        },
+        cleanupCallback: (cleanup) => {
+          this.#cleanups.push(cleanup);
+        },
+      },
+    );
+    this.#value = value;
+  }
+
+  get(): T {
+    if (subscribers.length) {
+      this.#subscribe(<Subscriber<T>> subscribers[subscribers.length - 1]);
+    }
+    return this.#value;
+  }
+
+  #set(value: T): void {
+    this.#value = value;
+    this.#notify();
+  }
+
+  #subscribe(subscriber: Subscriber<T>): Cleanup {
+    if (!this.#subscribers.find((existing) => existing === subscriber)) {
+      this.#subscribers.push(subscriber);
+      subscriber.cleanupCallback?.call(this, () => {
+        this.#subscribers = this.#subscribers.filter(
+          (existing) => existing !== subscriber,
+        );
+      });
+    }
+
+    return () => {
+      this.#subscribers = this.#subscribers.filter(
+        (existing) => existing === subscriber,
+      );
+    };
+  }
+
+  #notify(): void {
+    this.#subscribers?.forEach((subscriber) => {
+      subscriber.update(this.#value);
+    });
+  }
+}
+
+export function computed<T>(callback: () => T): ComputedSignal<T> {
+  return new ComputedSignal(callback);
 }
