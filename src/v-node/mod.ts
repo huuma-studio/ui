@@ -95,20 +95,14 @@ export interface HasVNodeRef<T> {
   [VNodeProps.NODE_REF]?: T;
 }
 
-export interface VText<T> extends VBase, HasVNodeRef<T> {
+export interface VText<T> extends VBase, HasVNodeRef<T>, HasVCleanup {
   type: VType.TEXT;
   [VNodeProps.TEXT]: string | VSignal;
   [VNodeProps.SKIP_ESCAPING]?: boolean;
 }
 
 export interface VElement<T>
-  extends
-    VBase,
-    HasVNodeRef<T>,
-    HasVChildren<T>,
-    HasVCleanup,
-    HasVOptions,
-    HasVKey {
+  extends VBase, HasVNodeRef<T>, HasVChildren<T>, HasVOptions, HasVKey {
   type: VType.ELEMENT;
   [VNodeProps.TAG]: string;
   [VNodeProps.PROPS]: JSX.ElementProps;
@@ -131,7 +125,7 @@ export interface VComponent<T>
 }
 
 export interface VFragment<T>
-  extends VBase, HasVChildren<T>, HasVOptions, HasVCleanup, HasVKey {
+  extends VBase, HasVChildren<T>, HasVOptions, HasVKey {
   type: VType.FRAGMENT;
 }
 
@@ -255,6 +249,7 @@ export function vText<T>(
     type: VType.TEXT,
     [VNodeProps.TEXT]: isVSignal(node) ? node : `${node}`,
     [VNodeProps.SKIP_ESCAPING]: options?.skipEscaping ?? false,
+    [VNodeProps.CLEANUP]: [],
   };
 }
 
@@ -278,7 +273,6 @@ export function vElement<T>(
     [VNodeProps.PROPS]: props,
     [VNodeProps.EVENT_REFS]: eventRefs,
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
-    [VNodeProps.CLEANUP]: [],
   };
 
   vElement[VNodeProps.CHILDREN] = props.children?.map((child) =>
@@ -380,7 +374,6 @@ function vFragment<T>(
     type: VType.FRAGMENT,
     [VNodeProps.KEY]: keyFrom(fragment),
     [VNodeProps.CHILDREN]: [],
-    [VNodeProps.CLEANUP]: [],
     [VNodeProps.OPTIONS]: {
       _GLOBAL: globalOptions,
     },
@@ -520,7 +513,7 @@ export function isVSignal(node: JSX.Node): node is VSignal {
 }
 
 export function cleanup(vNode: VNode<unknown>) {
-  if (vNode && VNodeProps.CLEANUP in vNode) {
+  if (vNode?.type === VType.COMPONENT) {
     for (const c of vNode[VNodeProps.CLEANUP]) {
       c();
     }

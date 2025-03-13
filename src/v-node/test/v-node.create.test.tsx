@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert/equals";
 import { create, VMode, VNodeProps, VType } from "./../mod.ts";
 
-import { Signal } from "../../signal/mod.ts";
+import { WritableSignal } from "../../signal/mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
 
 function ComponentA({ children }: JSX.ElementProps) {
@@ -15,6 +15,7 @@ Deno.test(create.name, async (t) => {
       type: VType.TEXT,
       [VNodeProps.TEXT]: "Hello",
       [VNodeProps.SKIP_ESCAPING]: false,
+      [VNodeProps.CLEANUP]: [],
     });
 
     const vNumber = create(0);
@@ -22,14 +23,16 @@ Deno.test(create.name, async (t) => {
       type: VType.TEXT,
       [VNodeProps.TEXT]: "0",
       [VNodeProps.SKIP_ESCAPING]: false,
+      [VNodeProps.CLEANUP]: [],
     });
 
-    const signal = new Signal("Signal");
+    const signal = new WritableSignal("Signal");
     const vSignal = create(signal);
     assertEquals(vSignal, {
       type: 0,
       [VNodeProps.TEXT]: signal,
       [VNodeProps.SKIP_ESCAPING]: false,
+      [VNodeProps.CLEANUP]: [],
     });
   });
 
@@ -65,9 +68,9 @@ Deno.test(create.name, async (t) => {
           type: VType.TEXT,
           [VNodeProps.TEXT]: text1,
           [VNodeProps.SKIP_ESCAPING]: false,
+          [VNodeProps.CLEANUP]: [],
         },
       ],
-      [VNodeProps.CLEANUP]: [],
       [VNodeProps.OPTIONS]: {
         _GLOBAL: {},
       },
@@ -96,16 +99,17 @@ Deno.test(create.name, async (t) => {
             type: VType.TEXT,
             [VNodeProps.TEXT]: "",
             [VNodeProps.SKIP_ESCAPING]: false,
+            [VNodeProps.CLEANUP]: [],
           },
           {
             type: VType.FRAGMENT,
             [VNodeProps.KEY]: undefined,
-            [VNodeProps.CLEANUP]: [],
             [VNodeProps.CHILDREN]: [
               {
                 type: VType.TEXT,
                 [VNodeProps.TEXT]: "Hello World!",
                 [VNodeProps.SKIP_ESCAPING]: false,
+                [VNodeProps.CLEANUP]: [],
               },
             ],
             [VNodeProps.OPTIONS]: {
@@ -118,7 +122,6 @@ Deno.test(create.name, async (t) => {
           class: "text-blue",
           children: ["", ["Hello World!"]],
         },
-        [VNodeProps.CLEANUP]: [],
         [VNodeProps.OPTIONS]: {
           _GLOBAL: {},
         },

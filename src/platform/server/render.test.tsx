@@ -14,7 +14,7 @@ function Headline(props: JSX.ElementProps) {
 Deno.test(renderToString.name, async (t) => {
   await t.step("should render headline component with text", () => {
     assertEquals(
-      renderToString(<Headline>Hello {"World"}!</Headline>),
+      renderToString(<Headline>Hello World!</Headline>),
       "<h1>Hello World!</h1>",
     );
   });
@@ -25,7 +25,7 @@ Deno.test(renderToString.name, async (t) => {
 
   await t.step("should render div with text as string", () => {
     assertEquals(
-      renderToString(<div class="bg-red">{"Hello World"}</div>),
+      renderToString(<div class="bg-red">Hello World</div>),
       '<div class="bg-red">Hello World</div>',
     );
   });

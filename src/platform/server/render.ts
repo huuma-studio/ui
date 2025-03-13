@@ -99,6 +99,6 @@ function stringFrom(attributes: JSX.IntrinsicElements): string {
 function textFromVText<T>(vText: VText<T>): string {
   return typeof vText[VNodeProps.TEXT] === "object" &&
       "get" in vText[VNodeProps.TEXT]
-    ? `${vText[VNodeProps.TEXT].get}`
+    ? `${vText[VNodeProps.TEXT].get()}`
     : `${vText[VNodeProps.TEXT]}`;
 }

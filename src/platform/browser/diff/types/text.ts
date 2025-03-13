@@ -1,5 +1,3 @@
-// TODO: replace with dedicated VSignal type
-import type { Signal } from "../../../../signal/mod.ts";
 import {
   VNodeProps,
   type VSignal,
@@ -106,11 +104,14 @@ function create({ vText }: CreateTextPayload): void {
     typeof vText[VNodeProps.TEXT] === "object" &&
     "get" in vText[VNodeProps.TEXT]
   ) {
-    const signal = <Signal<string | number>> vText[VNodeProps.TEXT];
-    node = new Text(`${signal.get}`);
+    const signal = vText[VNodeProps.TEXT];
+    node = new Text(`${signal.get()}`);
     signal.subscribe({
       update: (value: string | number) => {
         node.textContent = `${value}`;
+      },
+      cleanupCallback(cleanup) {
+        vText[VNodeProps.CLEANUP].push(cleanup);
       },
     });
   } else {
@@ -149,11 +150,14 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
     "get" in vText[VNodeProps.TEXT]
   ) {
     const signal = <VSignal> vText[VNodeProps.TEXT];
-    node = new Text(`${signal.get}`);
-    // TODO: Clean up subscription, probaly attach it the vText instance
+    node = new Text(`${signal.get()}`);
+
     signal.subscribe({
       update: (value: string | number) => {
         node.textContent = `${value}`;
+      },
+      cleanupCallback: (cleanup) => {
+        vText[VNodeProps.CLEANUP].push(cleanup);
       },
     });
   } else {
@@ -174,12 +178,13 @@ function update({ vText }: UpdateTextPayload): void {
   node.textContent = isSignal(
       vText,
     )
-    ? `${(<VSignal> vText[VNodeProps.TEXT]).get}`
+    ? `${(<VSignal> vText[VNodeProps.TEXT]).get()}`
     : `${vText[VNodeProps.TEXT]}`;
 }
 
 function remove({ vText }: DeleteTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
+  vText[VNodeProps.CLEANUP].forEach((cleanup) => cleanup());
   if (node) {
     node.parentNode?.removeChild(node);
   }

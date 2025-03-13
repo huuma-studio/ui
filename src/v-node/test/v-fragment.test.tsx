@@ -8,12 +8,12 @@ Deno.test("should create vFragment", () => {
   assertEquals(vFragement, {
     type: VType.FRAGMENT,
     [VNodeProps.KEY]: undefined,
-    [VNodeProps.CLEANUP]: [],
     [VNodeProps.CHILDREN]: [
       {
         type: VType.TEXT,
         [VNodeProps.TEXT]: text1,
         [VNodeProps.SKIP_ESCAPING]: false,
+        [VNodeProps.CLEANUP]: [],
       },
     ],
     [VNodeProps.OPTIONS]: {
@@ -25,17 +25,18 @@ Deno.test("should create vFragment", () => {
   assertEquals(vFragmentArrayLike, {
     type: VType.FRAGMENT,
     [VNodeProps.KEY]: undefined,
-    [VNodeProps.CLEANUP]: [],
     [VNodeProps.CHILDREN]: [
       {
         type: VType.TEXT,
         [VNodeProps.TEXT]: "Hello",
         [VNodeProps.SKIP_ESCAPING]: false,
+        [VNodeProps.CLEANUP]: [],
       },
       {
         type: VType.TEXT,
         [VNodeProps.TEXT]: "World",
         [VNodeProps.SKIP_ESCAPING]: false,
+        [VNodeProps.CLEANUP]: [],
       },
     ],
     [VNodeProps.OPTIONS]: {

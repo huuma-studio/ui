@@ -1,5 +1,6 @@
 import { eventName, isEventName } from "./event.ts";
 import { escapeHtml } from "../utils/escape-html.ts";
+import type { Signal } from "../signal/mod.ts";
 
 // deno-lint-ignore no-namespace
 export namespace JSX {
@@ -27,10 +28,7 @@ export namespace JSX {
 
   export type Component = (props: ElementProps) => Node;
 
-  export type SignalLike = {
-    get: string | number;
-    subscribe: (subscriber: { update: (value: string) => void }) => () => void;
-  };
+  export type SignalLike = Signal<string | number>;
 
   export type EventRef = {
     name: string;

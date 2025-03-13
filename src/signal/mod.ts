@@ -24,6 +24,7 @@ export function setSubscriber<T>(
 
 export abstract class Signal<T> {
   abstract get(): T;
+  abstract subscribe(subscriber: Subscriber<T>): Cleanup;
 }
 
 export class WritableSignal<T> extends Signal<T> {
@@ -37,7 +38,7 @@ export class WritableSignal<T> extends Signal<T> {
 
   get(): T {
     if (subscribers.length) {
-      this.#subscribe(<Subscriber<T>> subscribers[subscribers.length - 1]);
+      this.subscribe(<Subscriber<T>> subscribers[subscribers.length - 1]);
     }
     return this.#value;
   }
@@ -48,7 +49,7 @@ export class WritableSignal<T> extends Signal<T> {
     return value;
   }
 
-  #subscribe(subscriber: Subscriber<T>): Cleanup {
+  subscribe(subscriber: Subscriber<T>): Cleanup {
     if (!this.#subscribers.find((existing) => existing === subscriber)) {
       this.#subscribers.push(subscriber);
       subscriber.cleanupCallback?.call(this, () => {
@@ -118,7 +119,7 @@ export class ComputedSignal<T> extends Signal<T> {
 
   get(): T {
     if (subscribers.length) {
-      this.#subscribe(<Subscriber<T>> subscribers[subscribers.length - 1]);
+      this.subscribe(<Subscriber<T>> subscribers[subscribers.length - 1]);
     }
     return this.#value;
   }
@@ -128,7 +129,7 @@ export class ComputedSignal<T> extends Signal<T> {
     this.#notify();
   }
 
-  #subscribe(subscriber: Subscriber<T>): Cleanup {
+  subscribe(subscriber: Subscriber<T>): Cleanup {
     if (!this.#subscribers.find((existing) => existing === subscriber)) {
       this.#subscribers.push(subscriber);
       subscriber.cleanupCallback?.call(this, () => {

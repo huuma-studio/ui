@@ -9,8 +9,8 @@ import {
   VType,
 } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
-import { $ } from "../../hooks/signal.ts";
-import { Signal } from "../../signal/mod.ts";
+import { $signal } from "../../hooks/signal.ts";
+import { WritableSignal } from "../../signal/mod.ts";
 
 Deno.test(update.name, async (t) => {
   await t.step("update VText", () => {
@@ -21,6 +21,7 @@ Deno.test(update.name, async (t) => {
       type: VType.TEXT,
       [VNodeProps.TEXT]: "Hello Univers",
       [VNodeProps.SKIP_ESCAPING]: false,
+      [VNodeProps.CLEANUP]: [],
     });
 
     assert(vNode === updatedVNode);
@@ -48,6 +49,7 @@ Deno.test(update.name, async (t) => {
         type: VType.TEXT,
         [VNodeProps.TEXT]: "Hello Univers",
         [VNodeProps.SKIP_ESCAPING]: false,
+        [VNodeProps.CLEANUP]: [],
       }],
       [VNodeProps.EVENT_REFS]: [
         {
@@ -56,7 +58,6 @@ Deno.test(update.name, async (t) => {
         },
       ],
       [VNodeProps.OPTIONS]: { _GLOBAL: { $: [] } },
-      [VNodeProps.CLEANUP]: [],
     });
 
     //Check if its the same object
@@ -66,7 +67,7 @@ Deno.test(update.name, async (t) => {
     const vComponent = create(<A />);
 
     const signal = (vComponent as VComponent<unknown>)[VNodeProps.OPTIONS]
-      .$ as Signal<unknown>[];
+      .$ as WritableSignal<unknown>[];
 
     signal[0].set(2);
 
@@ -74,7 +75,6 @@ Deno.test(update.name, async (t) => {
 
     assertEquals(updatedVComponent, {
       [VNodeProps.AST]: {
-        [VNodeProps.CLEANUP]: [],
         [VNodeProps.KEY]: undefined,
         [VNodeProps.EVENT_REFS]: [],
         [VNodeProps.CHILDREN]: [
@@ -82,6 +82,7 @@ Deno.test(update.name, async (t) => {
             [VNodeProps.SKIP_ESCAPING]: false,
             [VNodeProps.TEXT]: "Hello",
             type: 0,
+            [VNodeProps.CLEANUP]: [],
           },
         ],
         [VNodeProps.TAG]: "div",
@@ -104,7 +105,7 @@ Deno.test(update.name, async (t) => {
       [VNodeProps.MODE]: 1,
       [VNodeProps.OPTIONS]: {
         "$": [
-          new Signal(1),
+          new WritableSignal(1),
         ],
         _GLOBAL: {},
       },
@@ -115,6 +116,6 @@ Deno.test(update.name, async (t) => {
 });
 
 const A = () => {
-  const show = $(null);
-  return show.get && <div>Hello</div>;
+  const show = $signal(null);
+  return show.get() && <div>Hello</div>;
 };

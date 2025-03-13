@@ -148,10 +148,10 @@ function updateText(
   );
 
   const text = isSignal(vText)
-    ? (<VSignal> vText[VNodeProps.TEXT]).get
+    ? (<VSignal> vText[VNodeProps.TEXT]).get()
     : vText[VNodeProps.TEXT];
   const previousText = isSignal(previousVNode)
-    ? (<VSignal> previousVNode[VNodeProps.TEXT]).get
+    ? (<VSignal> previousVNode[VNodeProps.TEXT]).get()
     : previousVNode[VNodeProps.TEXT];
 
   if (text !== previousText) {
