@@ -317,7 +317,7 @@ export class UIApp<
     params?: Record<string, string | undefined>,
     data?: D,
   ): JSX.Element<string | 0 | JSX.Component> {
-    return (layouts?.length ? [...layouts] : []).reduceRight<
+    return (layouts?.length ? [...layouts] : []).reduce<
       JSX.Element<string | JSX.Component | 0>
     >(
       (accumulator, currentLayout) => {

@@ -58,12 +58,14 @@ export async function listPages(
   path: string,
 ): Promise<Omit<Pack, "islands" | "scripts">> {
   let pages: FileImport[] = [];
-  const layouts: FileImport[] = [];
-  const middlewares: FileImport[] = [];
+  let layouts: FileImport[] = [];
+  let middlewares: FileImport[] = [];
 
   let layoutIndex = 0;
   let pageIndex = 0;
   let middlewareIndex = 0;
+
+  const paths: FileImport[] = [];
 
   for await (
     const file of walk(path, {
@@ -71,6 +73,11 @@ export async function listPages(
     })
   ) {
     if (/\/(layout\.tsx)$/.exec(file.path)?.length) {
+      paths.push({
+        name: "_",
+        filePath: file.path,
+        fileName: file.name,
+      });
       layouts.push({
         name: `L${layoutIndex}`,
         filePath: dirname(file.path),
@@ -96,7 +103,9 @@ export async function listPages(
     }
   }
 
-  pages = sortImports(pages, path);
+  pages = sortPages(pages, path);
+  layouts = sortImports(layouts);
+  middlewares = sortImports(middlewares);
 
   const pageRecords: Page[] = pages.map((page) => {
     const pageLayouts = layouts
@@ -239,7 +248,7 @@ function islandsExports(islands: FileImport[]): string {
   ).join(EOL);
 }
 
-function sortImports(imports: FileImport[], basePath?: string): FileImport[] {
+function sortPages(imports: FileImport[], basePath?: string): FileImport[] {
   return imports.sort((a, b) => {
     const al = a.filePath.toLowerCase();
     const bl = b.filePath.toLowerCase();
@@ -254,6 +263,33 @@ function sortImports(imports: FileImport[], basePath?: string): FileImport[] {
       return 0;
     }
     return 1;
+  });
+}
+
+function sortImports(imports: FileImport[]) {
+  return [...imports].sort((a, b) => {
+    // Split paths by '/' to determine nesting level
+    const aSegments = a.filePath.split("/");
+    const bSegments = b.filePath.split("/");
+
+    // Compare nesting level first (inverted)
+    if (aSegments.length !== bSegments.length) {
+      return bSegments.length - aSegments.length;
+    }
+
+    // If same nesting level, compare each path segment
+    for (let i = 0; i < aSegments.length; i++) {
+      const aSegment = aSegments[i];
+      const bSegment = bSegments[i];
+
+      // If both are the same type (both static or both dynamic), compare alphabetically (inverted)
+      if (aSegment !== bSegment) {
+        return bSegment.localeCompare(aSegment);
+      }
+    }
+
+    // If we get here, the paths are identical
+    return 0;
   });
 }
 
