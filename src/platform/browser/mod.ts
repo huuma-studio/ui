@@ -25,6 +25,8 @@ type Island = {
   islandId: string;
 };
 
+export const IS_BROWSER = !!globalThis.window;
+
 export function launch(islands: Island[], transferState: TransferState) {
   setVNodeUpdater<Node>((component, vComponent, globalOptions) => {
     return {
