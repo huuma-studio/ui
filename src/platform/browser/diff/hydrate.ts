@@ -140,6 +140,7 @@ function element(
   });
 
   for (const prop in vElement[VNodeProps.PROPS]) {
+    if (prop === "children") continue;
     changes.push(
       ...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement),
     );

@@ -114,6 +114,7 @@ function element(
 
   // Add attributes
   for (const prop in vElement[VNodeProps.PROPS]) {
+    if (prop === "children") continue;
     changeSets.push(
       <CreateAttributeChangeSet> {
         [Props.Type]: Type.Attribute,
