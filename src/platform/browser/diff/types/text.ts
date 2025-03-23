@@ -1,3 +1,4 @@
+import { setSubscriber } from "../../../../signal/mod.ts";
 import {
   VNodeProps,
   type VSignal,
@@ -105,8 +106,9 @@ function create({ vText }: CreateTextPayload): void {
     "get" in vText[VNodeProps.TEXT]
   ) {
     const signal = vText[VNodeProps.TEXT];
-    node = new Text(`${signal.get()}`);
-    signal.subscribe({
+    node = setSubscriber(() => {
+      return new Text(`${signal.get()}`);
+    }, {
       update: (value: string | number) => {
         node.textContent = `${value}`;
       },
@@ -150,9 +152,9 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
     "get" in vText[VNodeProps.TEXT]
   ) {
     const signal = <VSignal> vText[VNodeProps.TEXT];
-    node = new Text(`${signal.get()}`);
-
-    signal.subscribe({
+    node = setSubscriber(() => {
+      return new Text(`${signal.get()}`);
+    }, {
       update: (value: string | number) => {
         node.textContent = `${value}`;
       },
@@ -184,7 +186,7 @@ function update({ vText }: UpdateTextPayload): void {
 
 function remove({ vText }: DeleteTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
-  vText[VNodeProps.CLEANUP].forEach((cleanup) => cleanup());
+  vText[VNodeProps.CLEANUP].forEach((cleanup) => cleanup.cleanup());
   if (node) {
     node.parentNode?.removeChild(node);
   }

@@ -515,7 +515,7 @@ export function isVSignal(node: JSX.Node): node is VSignal {
 export function cleanup(vNode: VNode<unknown>) {
   if (vNode?.type === VType.COMPONENT) {
     for (const c of vNode[VNodeProps.CLEANUP]) {
-      c();
+      c.cleanup();
     }
     vNode[VNodeProps.CLEANUP] = [];
   }

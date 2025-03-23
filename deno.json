@@ -1,6 +1,6 @@
 {
   "name": "@huuma/ui",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "exports": {
     "./v-node": "./src/v-node/mod.ts",
     "./browser": "./src/platform/browser/mod.ts",

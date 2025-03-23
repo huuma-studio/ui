@@ -43,7 +43,7 @@ const scriptsDirectory = join(packDirectory, ".scripts");
  * with the provided routes, layouts, middleware, and client-side components.
  *
  * @param {UIApp<T>} app - The UI application instance to pack
- * @param {List} List - Object containing pages, islands, and scripts to add to the application
+ * @param {List} list - Object containing pages, islands, and scripts to add to the application
  * @returns {Promise<UIApp<T>>} A promise that resolves with the configured Huuma UIApp instance
  */
 export async function pack<T extends AppContext>(
