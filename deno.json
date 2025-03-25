@@ -1,6 +1,6 @@
 {
   "name": "@huuma/ui",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "exports": {
     "./v-node": "./src/v-node/mod.ts",
     "./browser": "./src/platform/browser/mod.ts",
@@ -41,6 +41,12 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "@huuma/ui",
-    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "dom.asynciterable",
+      "deno.ns",
+      "deno.unstable"
+    ]
   }
 }

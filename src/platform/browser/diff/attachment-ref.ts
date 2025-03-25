@@ -64,9 +64,7 @@ export function copyAttachmentRefTo(
   if (attachmentRef.type === AttachmentType.Parent) {
     vComponent[VNodeProps.OPTIONS].ATTACHMENT_REF = <ParentAttachmentRef> {
       type: attachmentRef.type,
-      vNode: {
-        [VNodeProps.NODE_REF]: attachmentRef.vNode,
-      },
+      vNode: { ...attachmentRef.vNode },
     };
   } else {
     vComponent[VNodeProps.OPTIONS].ATTACHMENT_REF = {
