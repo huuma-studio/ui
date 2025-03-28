@@ -91,6 +91,7 @@ export function launch(islands: Island[], transferState: TransferState) {
         }
       }
     }
+    removeIslandComments();
   }
 }
 
@@ -322,4 +323,26 @@ function trim(value: string | null): string | undefined {
 
 function removeNode(node?: Node) {
   node?.parentNode?.removeChild(node);
+}
+
+function removeIslandComments() {
+  const iterator = document.createNodeIterator(
+    document.body,
+    NodeFilter.SHOW_COMMENT,
+    (node) => {
+      return isIslandStart(node) || isIslandEnd(node)
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_REJECT;
+    },
+  );
+
+  let node: Node | null;
+
+  // deno-lint-ignore no-cond-assign
+  while (node = iterator.nextNode()) {
+    const comment = node;
+    queueMicrotask(() => {
+      comment?.parentNode?.removeChild(comment);
+    });
+  }
 }
