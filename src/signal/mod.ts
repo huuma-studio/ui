@@ -117,7 +117,7 @@ export class ComputedSignal<T> extends Signal<T> {
         update: () => {
           const value = callbackFn();
           if (value !== this.#value) {
-            this.#set(callbackFn());
+            this.#set(value);
           }
         },
         cleanupCallback: (cleanup) => {
