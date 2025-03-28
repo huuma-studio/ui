@@ -22,7 +22,7 @@ export function update(
   previousVNode: VNode<Node>,
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
-  if (vNode == null || previousVNode == null) {
+  if (vNode == null && previousVNode == null) {
     return [];
   }
 
@@ -30,26 +30,28 @@ export function update(
     return diff({ vNode, attachmentRef });
   }
 
-  if (vNode.type === VType.TEXT && previousVNode.type === VType.TEXT) {
+  if (vNode?.type === VType.TEXT && previousVNode?.type === VType.TEXT) {
     return updateText(vNode, previousVNode, attachmentRef);
   }
 
   if (
-    vNode.type === VType.ELEMENT && previousVNode.type === VType.ELEMENT &&
+    vNode?.type === VType.ELEMENT && previousVNode?.type === VType.ELEMENT &&
     vNode[VNodeProps.TAG] === previousVNode[VNodeProps.TAG]
   ) {
     return updateElement(vNode, previousVNode, attachmentRef);
   }
 
   if (
-    vNode.type === VType.COMPONENT &&
-    previousVNode.type === VType.COMPONENT &&
+    vNode?.type === VType.COMPONENT &&
+    previousVNode?.type === VType.COMPONENT &&
     vNode[VNodeProps.FN] === previousVNode[VNodeProps.FN]
   ) {
     return updateComponent(vNode, previousVNode, attachmentRef);
   }
 
-  if (vNode.type === VType.FRAGMENT && previousVNode.type === VType.FRAGMENT) {
+  if (
+    vNode?.type === VType.FRAGMENT && previousVNode?.type === VType.FRAGMENT
+  ) {
     return updateFragment(vNode, previousVNode, attachmentRef);
   }
 
