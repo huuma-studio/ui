@@ -1,7 +1,8 @@
-import type { Middleware } from "@huuma/route/middleware";
-import { info } from "@huuma/route/utils/logger";
-import type { AppContext } from "@huuma/route";
 import { join } from "@std/path/join";
+import { parseArgs } from "@std/cli/parse-args";
+import type { Middleware } from "@huuma/route/middleware";
+import { info, log } from "@huuma/route/utils/logger";
+import type { AppContext } from "@huuma/route";
 import type { PageLike, UIApp } from "../app.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
 import { Bundler, type EntryPoints } from "./bundler.ts";
@@ -36,6 +37,22 @@ export interface List {
 
 const packDirectory = ".pack";
 const scriptsDirectory = join(packDirectory, ".scripts");
+
+export async function prepare<T extends AppContext>(
+  app: UIApp<T>,
+): Promise<UIApp<T> | undefined> {
+  if (!parseArgs(Deno.args).bundle) {
+    await list(app, { isProd: false });
+    return app;
+  }
+
+  await list(app, { isProd: true });
+  log(
+    "BUNDLE",
+    '".pack" folder succesfully created.',
+    "PARCEL",
+  );
+}
 
 /**
  * Packs the application by adding pages, layouts, middleware, islands and scripts to the Huuma UI application.
