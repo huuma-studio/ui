@@ -212,7 +212,9 @@ export function effect(
 }
 
 export function untracked<T>(callbackFn: () => T): T {
-  return setSubscriber(callbackFn, {
-    update: () => void 0,
-  });
+  const _subscriberScopes = [...subscriberScopes];
+  subscriberScopes.length = 0;
+  const value = callbackFn();
+  subscriberScopes.push(..._subscriberScopes);
+  return value;
 }
