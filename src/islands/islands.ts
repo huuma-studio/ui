@@ -25,7 +25,7 @@ export function markIslands(
       if (island) {
         islands.push(island);
 
-        if (node.props.children?.length) {
+        if (Array.isArray(node.props.children) && node.props.children?.length) {
           node.props.children.unshift({
             templates: [`<!-- start_children_${island.id} -->`],
             nodes: [""],
@@ -34,6 +34,18 @@ export function markIslands(
             templates: [`<!-- end_children_${island.id} -->`],
             nodes: [""],
           });
+        } else if (node.props.children) {
+          node.props.children = [
+            {
+              templates: [`<!-- start_children_${island.id} -->`],
+              nodes: [""],
+            },
+            node.props.children,
+            {
+              templates: [`<!-- end_children_${island.id} -->`],
+              nodes: [""],
+            },
+          ];
         }
 
         node = jsx(Fragment, {

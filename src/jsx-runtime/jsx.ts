@@ -23,7 +23,7 @@ export namespace JSX {
 
   export type Template = {
     templates: string[];
-    nodes: JSX.Node[];
+    nodes: Node[];
   };
 
   export type Component = (props: ElementProps) => Node;
@@ -36,7 +36,7 @@ export namespace JSX {
   };
 
   export type ElementProps = {
-    children?: Node[];
+    children?: Node;
   } & IntrinsicElements;
 
   export type IntrinsicElements = {
@@ -99,6 +99,6 @@ export function jsxTemplate(
   return { templates, nodes };
 }
 
-export function Fragment(props: JSX.ElementProps): JSX.Node[] | null {
-  return props.children || null;
+export function Fragment({ children }: JSX.ElementProps): JSX.Node {
+  return children;
 }

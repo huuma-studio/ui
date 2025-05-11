@@ -275,9 +275,9 @@ export function vElement<T>(
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
   };
 
-  vElement[VNodeProps.CHILDREN] = props.children?.map((child) =>
-    create(child, globalOptions)
-  );
+  vElement[VNodeProps.CHILDREN] = Array.isArray(props.children)
+    ? props.children?.map((child) => create(child, globalOptions))
+    : [create(props.children)];
 
   return vElement;
 }
@@ -294,7 +294,7 @@ function updateVElement<T>(
 
   vElement[VNodeProps.CHILDREN] = track(
     vElement[VNodeProps.CHILDREN],
-    props.children,
+    Array.isArray(props.children) ? props.children : [props.children],
     globalOptions,
   );
 
@@ -388,7 +388,9 @@ function vFragment<T>(
       );
     }
   } else {
-    for (const node of childrenFrom(fragment)) {
+    const _nodes = childrenFrom(fragment);
+    const nodes = Array.isArray(_nodes) ? _nodes : [_nodes];
+    for (const node of nodes) {
       children.push(create(node, globalOptions));
     }
   }
@@ -401,7 +403,8 @@ function updateVFragment<T>(
   vFragment: VFragment<T>,
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
-  const children = childrenFrom(fragment);
+  const _children = childrenFrom(fragment);
+  const children = Array.isArray(_children) ? _children : [_children];
   vFragment[VNodeProps.CHILDREN] = track(
     vFragment[VNodeProps.CHILDREN],
     children,
@@ -565,7 +568,7 @@ export function snapshot<T>(vNode: VNode<T>): VNode<T> {
   return vNode;
 }
 
-function childrenFrom(fragment: JSX.Element<0> | JSX.Node[]): JSX.Node[] {
+function childrenFrom(fragment: JSX.Element<0> | JSX.Node[]): JSX.Node {
   // Array based fragment
   if (Array.isArray(fragment)) return fragment;
 
