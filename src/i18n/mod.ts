@@ -60,7 +60,7 @@ export function setupI18n<T extends AppContext>(
 export interface TProps extends JSX.ElementProps {
   name: string;
   props?: Record<string, string>;
-  dangerousInnerHTML?: {
+  dangerouslyInnerHTML?: {
     name: string;
     props?: JSX.ElementProps & { key?: string };
   };
@@ -70,15 +70,16 @@ export function T(
   props: TProps,
 ): // deno-lint-ignore no-explicit-any
 JSX.Element<any> {
-  const { name, props: _p, dangerousInnerHTML } = props;
+  const { name, props: _p, dangerouslyInnerHTML } = props;
+  const language = getI18nConfig().i18n.activeLanguage;
 
-  if (dangerousInnerHTML) {
-    const { key, ...elementProps } = dangerousInnerHTML.props ?? {};
+  if (dangerouslyInnerHTML) {
+    const { key, ...elementProps } = dangerouslyInnerHTML.props ?? {};
     elementProps.children = undefined;
-    elementProps.dangerouslySetInnerHTML = { __html: t(name, _p) };
-    return jsx(dangerousInnerHTML.name, elementProps, key);
+    elementProps.dangerouslySetInnerHTML = { __html: t(language, name, _p) };
+    return jsx(dangerouslyInnerHTML.name, elementProps, key);
   }
-  return jsx(Fragment, { children: [t(name, _p)] });
+  return jsx(Fragment, { children: [t(language, name, _p)] });
 }
 
 export const Translation = T;
@@ -96,15 +97,20 @@ export class NoLanguageSpecifiedException extends NotFoundException {
   }
 }
 
-export function getActiveLang(): string {
+export function $activeLang(): string {
   const { url, i18n } = getI18nConfig();
   return langFrom(url.pathname, i18n.config.pattern) ??
     i18n.config.defaultLanguage;
 }
+/** @deprecated Use $activeLang */
+export const getActiveLang = $activeLang;
 
-export function getLanguages(): string[] {
+export function $languages(): string[] {
   return getI18nConfig().i18n.availableLanguages;
 }
+
+/** @deprecated Use $languages */
+export const getLanguages = $languages;
 
 export function langFrom(
   url: string,
@@ -113,8 +119,11 @@ export function langFrom(
   return new RegExp(pattern.source, pattern.flags).exec(url)?.[1];
 }
 
-function t(key: string, params?: Record<string, string>): string {
-  const language = getI18nConfig().i18n.activeLanguage;
+export function t(
+  language: Language,
+  key: string,
+  params?: Record<string, string>,
+): string {
   if (language) {
     const keys = key.split(".");
     if (params) {
