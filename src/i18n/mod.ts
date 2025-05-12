@@ -119,7 +119,7 @@ export function langFrom(
   return new RegExp(pattern.source, pattern.flags).exec(url)?.[1];
 }
 
-export function t(
+function t(
   language: Language,
   key: string,
   params?: Record<string, string>,
@@ -132,6 +132,11 @@ export function t(
     return unnest([...keys], language, "") ?? key;
   }
   return key;
+}
+
+export function $t(key: string, params?: Record<string, string>) {
+  const language = getI18nConfig().i18n.activeLanguage;
+  return t(language, key, params);
 }
 
 function assertVNodeScope() {
