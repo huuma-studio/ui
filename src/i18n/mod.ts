@@ -134,7 +134,7 @@ function t(
   return key;
 }
 
-export function $t(key: string, params?: Record<string, string>) {
+export function $t(key: string, params?: Record<string, string>): string {
   const language = getI18nConfig().i18n.activeLanguage;
   return t(language, key, params);
 }
