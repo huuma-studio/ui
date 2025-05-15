@@ -1,6 +1,6 @@
 {
   "name": "@huuma/ui",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "exports": {
     "./v-node": "./src/v-node/mod.ts",
     "./browser": "./src/platform/browser/mod.ts",
@@ -12,7 +12,8 @@
     "./hooks/scope": "./src/hooks/scope.ts",
     "./jsx-runtime": "./src/jsx-runtime/mod.ts",
     "./i18n": "./src/i18n/mod.ts",
-    "./i18n/middleware": "./src/i18n/middleware/mod.ts"
+    "./i18n/middleware": "./src/i18n/middleware/mod.ts",
+    "./lint": "./src/lint/mod.ts"
   },
   "publish": {
     "exclude": [
@@ -27,6 +28,7 @@
   },
   "imports": {
     "@huuma/route": "jsr:@huuma/route@0.0",
+    "@huuma/validate": "jsr:@huuma/validate@^0.0.12",
     "@std/assert": "jsr:@std/assert@^1.0.11",
     "@std/cli": "jsr:@std/cli@^1.0.15",
     "@std/fs": "jsr:@std/fs@^1.0.11",
