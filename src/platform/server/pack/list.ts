@@ -22,17 +22,20 @@ interface Pack {
   middlewares: FileImport[];
   islands: FileImport[];
   scripts: List["scripts"];
+  actions: FileImport[];
 }
 
 type CreateListOptions = {
   packDirectory: string;
-  pagesList: Omit<Pack, "islands" | "scripts">;
+  pagesList: Omit<Pack, "islands" | "scripts" | "actions">;
   islandsList: FileImport[];
   scriptsList: List["scripts"];
+  actionsList: FileImport[];
 };
 
 export async function createList(
-  { pagesList, islandsList, scriptsList, packDirectory }: CreateListOptions,
+  { pagesList, islandsList, scriptsList, actionsList, packDirectory }:
+    CreateListOptions,
 ): Promise<List> {
   return (
     await import(
@@ -46,6 +49,7 @@ export async function createList(
             middlewares: pagesList.middlewares,
             islands: islandsList,
             scripts: scriptsList,
+            actions: actionsList,
           },
           packDirectory,
         ),
@@ -56,7 +60,7 @@ export async function createList(
 
 export async function listPages(
   path: string,
-): Promise<Omit<Pack, "islands" | "scripts">> {
+): Promise<Omit<Pack, "islands" | "scripts" | "actions">> {
   let pages: FileImport[] = [];
   let layouts: FileImport[] = [];
   let middlewares: FileImport[] = [];
@@ -148,7 +152,7 @@ export async function listIslands(path: string): Promise<FileImport[]> {
   for await (
     const file of walk(path, {
       includeDirs: false,
-      match: [/(.+\$\.tsx)$/],
+      match: [/(.+\.client\.tsx)$/],
     })
   ) {
     islands.push({
@@ -159,6 +163,27 @@ export async function listIslands(path: string): Promise<FileImport[]> {
     i++;
   }
   return islands;
+}
+
+export async function listActions(path: string): Promise<FileImport[]> {
+  const actions: FileImport[] = [];
+  let i = 0;
+
+  for await (
+    const file of walk(path, {
+      includeDirs: false,
+      match: [/(.+\.actions\.ts)$/],
+    })
+  ) {
+    actions.push({
+      filePath: dirname(file.path),
+      fileName: file.name,
+      name: `A${i}`,
+    });
+    i++;
+  }
+
+  return actions;
 }
 
 async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
@@ -178,6 +203,7 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
       ? [imports(pack.middlewares, "Middleware")]
       : []),
     ...(pack.islands.length ? [imports(pack.islands, "Islands")] : []),
+    ...(pack.actions.length ? [imports(pack.actions, "Actions")] : []),
     ...(pack.pages.length
       ? [
         "",
@@ -186,7 +212,10 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
           ? ["  pages: {", pagesExports(pack.pages), "  },"]
           : []),
         ...(pack.islands.length
-          ? ["  islands: {", islandsExports(pack.islands), "  },"]
+          ? ["  islands: {", fileExports(pack.islands), "  },"]
+          : []),
+        ...(pack.actions.length
+          ? ["  actions: {", fileExports(pack.actions), "  },"]
           : []),
         [
           "  scripts: [",
@@ -241,10 +270,9 @@ function pagesExports(pages: Page[]): string {
     .join(EOL);
 }
 
-function islandsExports(islands: FileImport[]): string {
-  return islands.map(
-    (island) =>
-      `    "${join(island.filePath, island.fileName)}": ${island.name},`,
+function fileExports(files: FileImport[]): string {
+  return files.map(
+    (file) => `    "${join(file.filePath, file.fileName)}": ${file.name},`,
   ).join(EOL);
 }
 
