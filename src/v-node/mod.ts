@@ -42,7 +42,7 @@ export interface VBase {
   type: VType;
 }
 
-export type VNodeBeforeCreateVisitor = (jsx: JSX.Node) => JSX.Node;
+export type VNodeBeforeCreateVisitor = (jsx: JSX.Element) => JSX.Element;
 
 export interface VNodeVisitor {
   beforeCreate?: VNodeBeforeCreateVisitor;
@@ -105,7 +105,7 @@ export interface VElement<T>
   extends VBase, HasVNodeRef<T>, HasVChildren<T>, HasVOptions, HasVKey {
   type: VType.ELEMENT;
   [VNodeProps.TAG]: string;
-  [VNodeProps.PROPS]: JSX.ElementProps;
+  [VNodeProps.PROPS]: JSX.ComponentProps;
   [VNodeProps.EVENT_REFS]: JSX.EventRef[];
 }
 
@@ -120,7 +120,7 @@ export interface VComponent<T>
     HasVNodeRef<T> {
   type: VType.COMPONENT;
   [VNodeProps.FN]: JSX.Component;
-  [VNodeProps.PROPS]: JSX.ElementProps;
+  [VNodeProps.PROPS]: JSX.ComponentProps;
   [VNodeProps.AST]: VNode<T>;
 }
 
@@ -143,7 +143,7 @@ export function getVNodeScope(): (VBase & HasVOptions)[] {
 }
 
 type VNodeSignalUpdater<T, V> = (
-  node: JSX.Element<JSX.Component>,
+  node: JSX.ComponentNode<JSX.Component>,
   vNode: VComponent<T>,
   globalOptions: VGlobalOptions,
 ) => Subscriber<V>;
@@ -156,7 +156,7 @@ export function setVNodeUpdater<T>(
 }
 
 export function create<T>(
-  node: JSX.Node,
+  node: JSX.Element,
   globalOptions: VGlobalOptions = {},
 ): VNode<T> {
   if (typeof globalOptions.beforeCreate === "function") {
@@ -185,7 +185,7 @@ export function create<T>(
 }
 
 export function update<T>(
-  node: JSX.Node,
+  node: JSX.Element,
   vNode: VNode<T> | undefined,
   globalOptions: VGlobalOptions,
   cleanupVNode = true,
@@ -214,7 +214,11 @@ export function update<T>(
       vNode?.type === VType.ELEMENT && node.type === vNode[VNodeProps.TAG] &&
       vNode[VNodeProps.KEY] === node.key
     ) {
-      return updateVElement(<JSX.Element<string>> node, vNode, globalOptions);
+      return updateVElement(
+        <JSX.ComponentNode<string>> node,
+        vNode,
+        globalOptions,
+      );
     }
     return vElement(node, globalOptions);
   }
@@ -239,7 +243,7 @@ export function update<T>(
   }
 }
 
-export function vText<T>(
+function vText<T>(
   node: string | number | JSX.SignalLike,
   options?: {
     skipEscaping?: boolean;
@@ -253,7 +257,7 @@ export function vText<T>(
   };
 }
 
-export function updateVText<T>(
+function updateVText<T>(
   node: string | number | JSX.SignalLike,
   vText: VText<T>,
 ): VText<T> {
@@ -262,7 +266,7 @@ export function updateVText<T>(
 }
 
 export function vElement<T>(
-  element: JSX.Element<string>,
+  element: JSX.ComponentNode<string>,
   globalOptions: VGlobalOptions,
 ): VElement<T> {
   const { type, eventRefs, props, key } = element;
@@ -272,6 +276,7 @@ export function vElement<T>(
     [VNodeProps.KEY]: key,
     [VNodeProps.PROPS]: props,
     [VNodeProps.EVENT_REFS]: eventRefs,
+    [VNodeProps.CHILDREN]: [],
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
   };
 
@@ -283,13 +288,13 @@ export function vElement<T>(
 }
 
 function updateVElement<T>(
-  element: JSX.Element<string>,
+  element: JSX.ComponentNode<string>,
   vElement: VElement<T>,
   globalOptions: VGlobalOptions,
 ) {
   const { eventRefs, props } = element;
 
-  vElement[VNodeProps.PROPS] = <JSX.ElementProps> props;
+  vElement[VNodeProps.PROPS] = <JSX.ComponentProps> props;
   vElement[VNodeProps.EVENT_REFS] = eventRefs;
 
   vElement[VNodeProps.CHILDREN] = track(
@@ -302,7 +307,7 @@ function updateVElement<T>(
 }
 
 function vComponent<T>(
-  component: JSX.Element<JSX.Component>,
+  component: JSX.ComponentNode<JSX.Component>,
   globalOptions: VGlobalOptions,
 ) {
   const { type, props, key } = component;
@@ -322,15 +327,16 @@ function vComponent<T>(
   typeof vNodeSignalUpdater === "function"
     ? setSubscriber(
       () => {
+        const node = throwIfPromise(vComponent[VNodeProps.FN](props));
         return vComponent[VNodeProps.AST] = create(
-          vComponent[VNodeProps.FN](props),
+          node,
           globalOptions,
         );
       },
       vNodeSignalUpdater(component, vComponent, globalOptions),
     )
     : vComponent[VNodeProps.AST] = create(
-      vComponent[VNodeProps.FN](props),
+      throwIfPromise(vComponent[VNodeProps.FN](props)),
       globalOptions,
     );
   vComponent[VNodeProps.MODE] = VMode.Created;
@@ -340,7 +346,7 @@ function vComponent<T>(
 }
 
 function updateVComponent<T>(
-  component: JSX.Element<JSX.Component>,
+  component: JSX.ComponentNode<JSX.Component>,
   vComponent: VComponent<T>,
   globalOptions: VGlobalOptions,
 ) {
@@ -358,7 +364,7 @@ function updateVComponent<T>(
   _vNodeScope.shift();
 
   vComponent[VNodeProps.AST] = update(
-    updatedNode,
+    throwIfPromise(updatedNode),
     vComponent[VNodeProps.AST],
     globalOptions,
     false,
@@ -367,7 +373,7 @@ function updateVComponent<T>(
 }
 
 function vFragment<T>(
-  fragment: JSX.Element<0> | JSX.Node[] | JSX.Template,
+  fragment: JSX.ComponentNode<0> | JSX.Element[] | JSX.TemplateNode,
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
   const vFragment: VFragment<T> = {
@@ -399,7 +405,7 @@ function vFragment<T>(
 }
 
 function updateVFragment<T>(
-  fragment: JSX.Element<0> | JSX.Node[],
+  fragment: JSX.ComponentNode<0> | JSX.Element[],
   vFragment: VFragment<T>,
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
@@ -415,7 +421,7 @@ function updateVFragment<T>(
 
 function track<T>(
   vChildren: VNode<T>[] = [],
-  nodes: JSX.Node[] | undefined,
+  nodes: JSX.Element[] | undefined,
   globalOptions: VGlobalOptions,
 ): VNode<T>[] {
   // No new nodes
@@ -440,13 +446,13 @@ function track<T>(
 }
 
 export function isEmptyNode(
-  node: JSX.Node,
+  node: JSX.Element,
 ): node is boolean | null | undefined {
   return typeof node === "boolean" || node == null;
 }
 
 export function isTextNode(
-  value: JSX.Node,
+  value: JSX.Element,
 ): value is string | number | JSX.SignalLike {
   return (
     value != null &&
@@ -455,15 +461,17 @@ export function isTextNode(
 }
 
 export function isFragmentNode(
-  node: JSX.Node,
-): node is JSX.Node[] | JSX.Element<0> {
+  node: JSX.Element,
+): node is JSX.Element[] | JSX.ComponentNode<0> {
   return (
     (typeof node === "object" && node && "type" in node && node.type === 0) ||
     Array.isArray(node)
   );
 }
 
-export function isElementNode(node: JSX.Node): node is JSX.Element<string> {
+export function isElementNode(
+  node: JSX.Element,
+): node is JSX.ComponentNode<string> {
   return (
     (node &&
       typeof node === "object" &&
@@ -474,8 +482,8 @@ export function isElementNode(node: JSX.Node): node is JSX.Element<string> {
 }
 
 export function isComponentNode(
-  node: JSX.Node,
-): node is JSX.Element<JSX.Component> {
+  node: JSX.Element,
+): node is JSX.ComponentNode<JSX.Component> {
   return (
     (node &&
       typeof node === "object" &&
@@ -485,7 +493,7 @@ export function isComponentNode(
   );
 }
 
-export function isTemplateNode(node: JSX.Node): node is JSX.Template {
+export function isTemplateNode(node: JSX.Element): node is JSX.TemplateNode {
   return (node && typeof node === "object" && "templates" in node) || false;
 }
 
@@ -511,7 +519,7 @@ export function isVText<T>(vNode: undefined | null | VBase): vNode is VText<T> {
   return vNode?.type === VType.TEXT;
 }
 
-export function isVSignal(node: JSX.Node): node is VSignal {
+export function isVSignal(node: JSX.Element): node is VSignal {
   return (node && typeof node === "object" && "get" in node) || false;
 }
 
@@ -568,7 +576,9 @@ export function snapshot<T>(vNode: VNode<T>): VNode<T> {
   return vNode;
 }
 
-function childrenFrom(fragment: JSX.Element<0> | JSX.Node[]): JSX.Node {
+function childrenFrom(
+  fragment: JSX.ComponentNode<0> | JSX.Element[],
+): JSX.Element {
   // Array based fragment
   if (Array.isArray(fragment)) return fragment;
 
@@ -577,8 +587,17 @@ function childrenFrom(fragment: JSX.Element<0> | JSX.Node[]): JSX.Node {
 }
 
 function keyFrom(
-  node: JSX.Element<0> | JSX.Node[] | JSX.Template,
+  node: JSX.ComponentNode<0> | JSX.Element[] | JSX.TemplateNode,
 ): string | number | undefined {
   if (Array.isArray(node) || isTemplateNode(node)) return undefined;
   return node.key;
+}
+
+function throwIfPromise<T>(
+  node: Promise<T> | T,
+): T {
+  if (node instanceof Promise) {
+    throw new Error("Promise not allowed in scoped context");
+  }
+  return node;
 }

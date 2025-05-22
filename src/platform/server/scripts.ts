@@ -3,7 +3,7 @@ import { Fragment, type JSX, jsx } from "../../jsx-runtime/mod.ts";
 import type { PageScripts, Script, TransferState } from "./app.ts";
 import type { Island } from "../../islands/islands.ts";
 
-interface ScriptsProps extends JSX.ElementProps {
+interface ScriptsProps extends JSX.ComponentProps {
   scripts?: { entryPoints: Script[] };
   nonce?: string;
 }
@@ -11,12 +11,11 @@ interface ScriptsProps extends JSX.ElementProps {
 // Preload, attach csp nonce and load head scripts
 export function Scripts(
   { scripts, nonce }: ScriptsProps,
-): // deno-lint-ignore no-explicit-any
-JSX.Element<any> | null {
+): JSX.Element | null {
   if (!scripts?.entryPoints?.length) return null;
 
   const templates: string[] = [];
-  const nodes: JSX.Node[] = [];
+  const nodes: JSX.Element[] = [];
 
   for (const script of scripts.entryPoints) {
     templates.push("");
@@ -35,7 +34,7 @@ JSX.Element<any> | null {
   });
 }
 
-interface LaunchProps extends JSX.ElementProps {
+interface LaunchProps extends JSX.ComponentProps {
   body?: PageScripts["body"];
   nonce?: string;
   islands?: Island[];
@@ -43,8 +42,7 @@ interface LaunchProps extends JSX.ElementProps {
 }
 export function Launch(
   { body, nonce, islands, transferState }: LaunchProps,
-): // deno-lint-ignore no-explicit-any
-JSX.Element<any> | null {
+): JSX.Element | null {
   if (!body?.runtime || !islands?.length) return null;
 
   const templates: string[] = [];
@@ -61,7 +59,7 @@ JSX.Element<any> | null {
 
     // Remove children.
     const { children: _, ...props } =
-      (<JSX.Element<JSX.Component>> island.node).props;
+      (<JSX.ComponentNode<JSX.Component>> island.node).props;
     _islands.push(
       `{fn: $I${i}, props: ${JSON.stringify(props)}, islandId: "${island.id}"}`,
     );
@@ -91,12 +89,11 @@ JSX.Element<any> | null {
   });
 }
 
-interface PreloadProps extends JSX.ElementProps {
+interface PreloadProps extends JSX.ComponentProps {
   preloadScripts: string[] | null;
 }
 
-// deno-lint-ignore no-explicit-any
-export function Preload(props: PreloadProps): JSX.Element<any> | null {
+export function Preload(props: PreloadProps): JSX.Element | null {
   return props.preloadScripts &&
     jsx(Fragment, {
       children: props.preloadScripts.map((script) =>

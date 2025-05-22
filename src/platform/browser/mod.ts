@@ -120,8 +120,8 @@ function collectIslandNodes(
 
 function findIslandChildren(
   props: { islandId: string; nodes: Node[]; islands: Island[] },
-): JSX.Node[] {
-  const children: JSX.Node = [];
+): JSX.Element[] {
+  const children: JSX.Element = [];
   let isChild = false;
 
   let childIslandId: string | undefined = undefined;
@@ -214,16 +214,16 @@ function findIslandChildren(
   return children;
 }
 
-function createChild(node: Node, islands: Island[]): JSX.Node {
+function createChild(node: Node, islands: Island[]): JSX.Element {
   if (isElement(node)) {
     // Convert element attributes to props
-    const props: JSX.ElementProps = node.getAttributeNames()
+    const props: JSX.ComponentProps = node.getAttributeNames()
       .reduce((prev, current) => {
         prev[current] = node.getAttribute(current);
         return prev;
       }, {} as Record<string, string | null>);
 
-    const children: JSX.Node[] = [];
+    const children: JSX.Element[] = [];
     let islandId: string | undefined = undefined;
     let islandChildren: Node[] = [];
     const nodes = [...node.childNodes];

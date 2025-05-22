@@ -22,9 +22,9 @@ export interface TransferState {
 
 export type PageLike<T> = (
   props: PageLikeProps<T>,
-) => JSX.Node;
+) => JSX.Element;
 
-export interface PageLikeProps<T> extends JSX.ElementProps {
+export interface PageLikeProps<T> extends JSX.ComponentProps {
   params: Record<string, string>;
   data: T;
   scripts?: PageScripts;
@@ -316,9 +316,9 @@ export class UIApp<
     layouts?: PageLike<D>[],
     params?: Record<string, string | undefined>,
     data?: D,
-  ): JSX.Element<string | 0 | JSX.Component> {
+  ): JSX.Element {
     return (layouts?.length ? [...layouts] : []).reduce<
-      JSX.Element<string | JSX.Component | 0>
+      JSX.Element
     >(
       (accumulator, currentLayout) => {
         return jsx(<JSX.Component> currentLayout, {

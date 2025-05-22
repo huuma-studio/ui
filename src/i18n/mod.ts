@@ -57,19 +57,18 @@ export function setupI18n<T extends AppContext>(
   };
 }
 
-export interface TProps extends JSX.ElementProps {
+export interface TProps extends JSX.ComponentProps {
   name: string;
   props?: Record<string, string>;
   dangerouslyInnerHTML?: {
     name: string;
-    props?: JSX.ElementProps & { key?: string };
+    props?: JSX.ComponentProps & { key?: string };
   };
 }
 
 export function T(
   props: TProps,
-): // deno-lint-ignore no-explicit-any
-JSX.Element<any> {
+): JSX.Element {
   const { name, props: _p, dangerouslyInnerHTML } = props;
   const language = getI18nConfig().i18n.activeLanguage;
 

@@ -1,3 +1,4 @@
+import { escape } from "@std/html/entities";
 import {
   create,
   type VElement,
@@ -8,8 +9,6 @@ import {
   VType,
 } from "../../v-node/mod.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
-
-import { escapeHtml } from "../../utils/escape-html.ts";
 
 const selfClosingTags = [
   "area",
@@ -33,7 +32,7 @@ export function vNodeToString(vNode: VNode<unknown>): string {
 }
 
 export function renderToString(
-  node: JSX.Node,
+  node: JSX.Element,
   globalOptions?: VGlobalOptions,
 ): string {
   return stringify(create<unknown>(node, globalOptions));
@@ -45,7 +44,7 @@ function stringify<T>(vNode: VNode<T>): string {
     case VType.TEXT:
       return vNode[VNodeProps.SKIP_ESCAPING]
         ? textFromVText(vNode)
-        : escapeHtml(textFromVText(vNode));
+        : escape(textFromVText(vNode));
     case VType.ELEMENT:
       return elementToString(vNode);
     case VType.COMPONENT:
@@ -87,7 +86,7 @@ function stringFrom(attributes: JSX.IntrinsicElements): string {
   for (const key in attributes) {
     const attribute = attributes[key];
     if (typeof attribute === "string") {
-      attributesString += ` ${key}="${escapeHtml(attribute)}"`;
+      attributesString += ` ${key}="${escape(attribute)}"`;
     }
     if (attribute === true) {
       attributesString += ` ${key}`;

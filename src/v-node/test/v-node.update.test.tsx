@@ -5,7 +5,6 @@ import {
   type VComponent,
   vElement,
   VNodeProps,
-  vText,
   VType,
 } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
@@ -14,7 +13,7 @@ import { WritableSignal } from "../../signal/mod.ts";
 
 Deno.test(update.name, async (t) => {
   await t.step("update VText", () => {
-    const vNode = vText("Hello World");
+    const vNode = create("Hello World");
     const updatedVNode = update("Hello Univers", vNode, { $: [] });
 
     assertEquals(vNode, {
@@ -28,9 +27,12 @@ Deno.test(update.name, async (t) => {
   });
 
   await t.step("update VElement", () => {
-    const vNode = vElement(<div>Hello World</div> as JSX.Element<string>, {
-      $: [],
-    });
+    const vNode = vElement(
+      <div>Hello World</div> as JSX.ComponentNode<string>,
+      {
+        $: [],
+      },
+    );
 
     const clickListener = () => {};
 

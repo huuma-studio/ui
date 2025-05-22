@@ -7,7 +7,7 @@ function Title() {
   return <h1>Hello World!</h1>;
 }
 
-function Headline(props: JSX.ElementProps) {
+function Headline(props: JSX.ComponentProps) {
   return <h1>{props.children}</h1>;
 }
 
