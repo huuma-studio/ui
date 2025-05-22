@@ -3,11 +3,11 @@ import type { Handler } from "@huuma/route/http/request";
 import { handle, type Middleware } from "@huuma/route/middleware";
 import { renderToString, vNodeToString } from "./render.ts";
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
-import { create } from "../../v-node/mod.ts";
 import { type Island, markIslands } from "../../islands/islands.ts";
 import { parse } from "@std/path/parse";
 import type { Route } from "@huuma/route/http/route";
 import { isProd } from "@huuma/route/utils/environment";
+import { create } from "../../v-node/sync.ts";
 
 export type TransferStateItem =
   | TransferState

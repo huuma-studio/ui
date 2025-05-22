@@ -1,13 +1,7 @@
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
 import type { Cleanup } from "../../signal/mod.ts";
-import {
-  create,
-  isVComponent,
-  setVNodeUpdater,
-  snapshot,
-  update,
-  VNodeProps,
-} from "../../v-node/mod.ts";
+import { isVComponent, snapshot, VNodeProps } from "../../v-node/mod.ts";
+import { create, setVNodeUpdater, update } from "../../v-node/sync.ts";
 // TODO: Move TransferState type to general location
 import type { TransferState } from "../server/app.ts";
 import {

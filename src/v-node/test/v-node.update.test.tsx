@@ -1,15 +1,9 @@
 import { assert, assertEquals } from "@std/assert";
-import {
-  create,
-  update,
-  type VComponent,
-  vElement,
-  VNodeProps,
-  VType,
-} from "../mod.ts";
+import { type VComponent, VNodeProps, VType } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
 import { $signal } from "../../hooks/signal.ts";
 import { WritableSignal } from "../../signal/mod.ts";
+import { create, update, vElement } from "../sync.ts";
 
 Deno.test(update.name, async (t) => {
   await t.step("update VText", () => {

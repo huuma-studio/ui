@@ -3,6 +3,7 @@
   "version": "0.0.15",
   "exports": {
     "./v-node": "./src/v-node/mod.ts",
+    "./v-node/sync": "./src/v-node/sync.ts",
     "./browser": "./src/platform/browser/mod.ts",
     "./server": "./src/platform/server/mod.ts",
     "./server/pack": "./src/platform/server/pack/mod.ts",

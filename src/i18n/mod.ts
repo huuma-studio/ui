@@ -2,8 +2,9 @@ import { NotFoundException } from "@huuma/route/http/exception/not-found-excepti
 import { HttpStatus } from "@huuma/route/http/http-status";
 import type { AppContext } from "@huuma/route";
 
+import { $scope } from "../hooks/scope.ts";
 import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
-import { getVNodeScope, VNodeProps } from "../v-node/mod.ts";
+import { VNodeProps } from "../v-node/mod.ts";
 import type { UIApp } from "../platform/server/mod.ts";
 
 export interface I18nConfig {
@@ -138,16 +139,8 @@ export function $t(key: string, params?: Record<string, string>): string {
   return t(language, key, params);
 }
 
-function assertVNodeScope() {
-  const vNode = getVNodeScope()[0];
-  if (!vNode) {
-    throw new Error("This is only allowed in a vComponent scope");
-  }
-  return vNode;
-}
-
 function getI18nConfig(): { url: URL; i18n: I18nTransferState } {
-  const globalOptions = assertVNodeScope()[VNodeProps.OPTIONS]._GLOBAL;
+  const globalOptions = $scope()[VNodeProps.OPTIONS]._GLOBAL;
   return {
     url: globalOptions.url,
     i18n: globalOptions.transferState.i18n,

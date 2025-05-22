@@ -1,8 +1,9 @@
 import { assertEquals } from "@std/assert/equals";
-import { create, VMode, VNodeProps, VType } from "./../mod.ts";
+import { VMode, VNodeProps, VType } from "./../mod.ts";
 
 import { WritableSignal } from "../../signal/mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
+import { create } from "../sync.ts";
 
 function ComponentA({ children }: JSX.ComponentProps) {
   return <div class="text-blue">{["", children]}</div>;
