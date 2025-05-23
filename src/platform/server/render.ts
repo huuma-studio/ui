@@ -35,7 +35,7 @@ export function vNodeToString(vNode: VNode<unknown>): string {
 export async function renderToString(
   node: JSX.Element,
   globalOptions: VGlobalOptions,
-) {
+): Promise<string> {
   return stringify(await create(node, globalOptions));
 }
 

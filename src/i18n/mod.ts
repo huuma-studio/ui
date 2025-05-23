@@ -71,7 +71,7 @@ export function T(
   props: TProps,
 ): JSX.Element {
   const { name, props: _p, dangerouslyInnerHTML } = props;
-  const language = getI18nConfig().i18n.activeLanguage;
+  const language = $config().i18n.activeLanguage;
 
   if (dangerouslyInnerHTML) {
     const { key, ...elementProps } = dangerouslyInnerHTML.props ?? {};
@@ -98,7 +98,7 @@ export class NoLanguageSpecifiedException extends NotFoundException {
 }
 
 export function $activeLang(): string {
-  const { url, i18n } = getI18nConfig();
+  const { url, i18n } = $config();
   return langFrom(url.pathname, i18n.config.pattern) ??
     i18n.config.defaultLanguage;
 }
@@ -106,7 +106,7 @@ export function $activeLang(): string {
 export const getActiveLang = $activeLang;
 
 export function $languages(): string[] {
-  return getI18nConfig().i18n.availableLanguages;
+  return $config().i18n.availableLanguages;
 }
 
 /** @deprecated Use $languages */
@@ -135,16 +135,21 @@ function t(
 }
 
 export function $t(key: string, params?: Record<string, string>): string {
-  const language = getI18nConfig().i18n.activeLanguage;
+  const language = $config().i18n.activeLanguage;
   return t(language, key, params);
 }
 
-function getI18nConfig(): { url: URL; i18n: I18nTransferState } {
+function $config(): { url: URL; i18n: I18nTransferState } {
   const globalOptions = $scope()[VNodeProps.OPTIONS]._GLOBAL;
-  return {
+  const config = {
     url: globalOptions.url,
     i18n: globalOptions.transferState.i18n,
   };
+
+  if (config.url && config.i18n) {
+    return config;
+  }
+  throw new Error("Could not find I18N config. Is I18N correctly setup?");
 }
 
 function unnest(
