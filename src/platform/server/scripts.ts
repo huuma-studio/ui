@@ -11,7 +11,7 @@ interface ScriptsProps extends JSX.ComponentProps {
 // Preload, attach csp nonce and load head scripts
 export function Scripts(
   { scripts, nonce }: ScriptsProps,
-): JSX.Element | null {
+): JSX.Element {
   if (!scripts?.entryPoints?.length) return null;
 
   const templates: string[] = [];
@@ -42,7 +42,7 @@ interface LaunchProps extends JSX.ComponentProps {
 }
 export function Launch(
   { body, nonce, islands, transferState }: LaunchProps,
-): JSX.Element | null {
+): JSX.Element {
   if (!body?.runtime || !islands?.length) return null;
 
   const templates: string[] = [];

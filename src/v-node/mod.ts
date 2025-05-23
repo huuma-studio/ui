@@ -42,7 +42,9 @@ export interface VBase {
   type: VType;
 }
 
-export type VNodeBeforeCreateVisitor = (jsx: JSX.Element) => JSX.Element;
+export type VNodeBeforeCreateVisitor = (
+  jsx: JSX.Element,
+) => JSX.Element;
 
 export interface VNodeVisitor {
   beforeCreate?: VNodeBeforeCreateVisitor;
@@ -137,6 +139,20 @@ export type VNode<T> =
   | undefined
   | null;
 
+export function vText<T>(
+  node: string | number | JSX.SignalLike,
+  options?: {
+    skipEscaping?: boolean;
+  },
+): VText<T> {
+  return {
+    type: VType.TEXT,
+    [VNodeProps.TEXT]: isVSignal(node) ? node : `${node}`,
+    [VNodeProps.SKIP_ESCAPING]: options?.skipEscaping ?? false,
+    [VNodeProps.CLEANUP]: [],
+  };
+}
+
 export function isEmptyNode(
   node: JSX.Element,
 ): node is boolean | null | undefined {
@@ -157,7 +173,7 @@ export function isFragmentNode(
 ): node is JSX.Element[] | JSX.ComponentNode<0> {
   return (
     (typeof node === "object" && node && "type" in node && node.type === 0) ||
-    Array.isArray(node)
+    isArray(node)
   );
 }
 
@@ -185,7 +201,9 @@ export function isComponentNode(
   );
 }
 
-export function isTemplateNode(node: JSX.Element): node is JSX.TemplateNode {
+export function isTemplateNode(
+  node: JSX.Element,
+): node is JSX.TemplateNode {
   return (node && typeof node === "object" && "templates" in node) || false;
 }
 
@@ -272,7 +290,7 @@ export function childrenFrom(
   fragment: JSX.ComponentNode<0> | JSX.Element[],
 ): JSX.Element {
   // Array based fragment
-  if (Array.isArray(fragment)) return fragment;
+  if (isArray(fragment)) return fragment;
 
   // Function based fragment
   return fragment.props.children ?? [];
@@ -281,6 +299,12 @@ export function childrenFrom(
 export function keyFrom(
   node: JSX.ComponentNode<0> | JSX.Element[] | JSX.TemplateNode,
 ): string | number | undefined {
-  if (Array.isArray(node) || isTemplateNode(node)) return undefined;
+  if (isArray(node) || isTemplateNode(node)) return undefined;
   return node.key;
+}
+
+// TODO: Move to a the appropiate location (maybe @huuma/validate)
+// deno-lint-ignore no-explicit-any
+export function isArray(value: any): value is any[] {
+  return Array.isArray(value);
 }

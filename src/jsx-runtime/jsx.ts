@@ -4,8 +4,10 @@ import type { Signal } from "../signal/mod.ts";
 
 // deno-lint-ignore no-namespace
 export namespace JSX {
+  export type SignalLike = Signal<EmptyNode | TextNode>;
   export type TextNode = string | number | SignalLike;
   export type EmptyNode = undefined | null | boolean;
+
   export type ComponentNode<T extends string | Component | 0> = {
     type: T; // Fragment = 0;
     eventRefs: EventRef[];
@@ -18,18 +20,36 @@ export namespace JSX {
     nodes: Element[];
   };
 
-  export type ElementNode =
+  export type Element =
     | TextNode
     | EmptyNode
     | ComponentNode<string | Component | 0>
     | Element[] // ComponentNode<0> and Element[] are handled as fragment
     | TemplateNode;
 
-  export type Element = ElementNode | Promise<ElementNode>;
+  export type IntrinsicElements =
+    & {
+      [K in keyof HTMLElementTagNameMap]: Attributes;
+    }
+    & {
+      [K in keyof SVGElementTagNameMap]: Attributes;
+    };
 
-  export type Component = (props: ComponentProps) => Element | Promise<Element>;
+  export type Attributes = {
+    [key: string]: unknown;
+    children?: Element;
+    dangerouslySetInnerHTML?: { __html: string };
+  };
 
-  export type SignalLike = Signal<string | number>;
+  export interface ElementChildrenAttribute {
+    children: Element;
+  }
+
+  export type Component = (
+    props: ComponentProps,
+  ) => Element | Promise<Element>;
+
+  export type ElementType = Component | keyof IntrinsicElements;
 
   export type EventRef = {
     name: string;
@@ -37,14 +57,10 @@ export namespace JSX {
   };
 
   export type ComponentProps = {
-    children?: Element | Element[];
+    children?: Element;
     dangerouslySetInnerHTML?: { __html: string };
     [key: string]: unknown;
   };
-
-  export interface IntrinsicElements {
-    [key: string]: unknown;
-  }
 }
 
 export function jsx(

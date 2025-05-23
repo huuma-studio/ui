@@ -4,6 +4,7 @@ import { setSubscriber, type Subscriber } from "../signal/mod.ts";
 import {
   childrenFrom,
   cleanup,
+  isArray,
   isComponentNode,
   isElementNode,
   isEmptyNode,
@@ -21,6 +22,7 @@ import {
   type VNode,
   VNodeProps,
   type VText,
+  vText,
   VType,
 } from "./mod.ts";
 
@@ -133,20 +135,6 @@ function updateVText<T>(
   return vText;
 }
 
-function vText<T>(
-  node: string | number | JSX.SignalLike,
-  options?: {
-    skipEscaping?: boolean;
-  },
-): VText<T> {
-  return {
-    type: VType.TEXT,
-    [VNodeProps.TEXT]: isVSignal(node) ? node : `${node}`,
-    [VNodeProps.SKIP_ESCAPING]: options?.skipEscaping ?? false,
-    [VNodeProps.CLEANUP]: [],
-  };
-}
-
 export function vElement<T>(
   element: JSX.ComponentNode<string>,
   globalOptions: VGlobalOptions,
@@ -162,7 +150,7 @@ export function vElement<T>(
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
   };
 
-  vElement[VNodeProps.CHILDREN] = Array.isArray(props.children)
+  vElement[VNodeProps.CHILDREN] = isArray(props.children)
     ? props.children?.map((child) => create(child, globalOptions))
     : [create(props.children)];
 
@@ -181,7 +169,7 @@ function updateVElement<T>(
 
   vElement[VNodeProps.CHILDREN] = track(
     vElement[VNodeProps.CHILDREN],
-    Array.isArray(props.children) ? props.children : [props.children],
+    isArray(props.children) ? props.children : [props.children],
     globalOptions,
   );
 
@@ -209,7 +197,8 @@ function vComponent<T>(
     typeof vNodeSignalUpdater === "function"
       ? setSubscriber(
         () => {
-          const node = throwIfPromise(vComponent[VNodeProps.FN](props));
+          const node = vComponent[VNodeProps.FN](props);
+          if (node instanceof Promise) throw Error("Peng");
           return vComponent[VNodeProps.AST] = create(
             node,
             globalOptions,
@@ -218,7 +207,7 @@ function vComponent<T>(
         vNodeSignalUpdater(component, vComponent, globalOptions),
       )
       : vComponent[VNodeProps.AST] = create(
-        throwIfPromise(vComponent[VNodeProps.FN](props)),
+        assertSyncCall(vComponent[VNodeProps.FN](props)),
         globalOptions,
       );
     vComponent[VNodeProps.MODE] = VMode.Created;
@@ -245,7 +234,7 @@ function updateVComponent<T>(
   });
 
   vComponent[VNodeProps.AST] = update(
-    throwIfPromise(updatedNode),
+    assertSyncCall(updatedNode),
     vComponent[VNodeProps.AST],
     globalOptions,
     false,
@@ -276,7 +265,7 @@ function vFragment<T>(
     }
   } else {
     const _nodes = childrenFrom(fragment);
-    const nodes = Array.isArray(_nodes) ? _nodes : [_nodes];
+    const nodes = isArray(_nodes) ? _nodes : [_nodes];
     for (const node of nodes) {
       children.push(create(node, globalOptions));
     }
@@ -291,7 +280,7 @@ function updateVFragment<T>(
   globalOptions: VGlobalOptions,
 ): VFragment<T> {
   const _children = childrenFrom(fragment);
-  const children = Array.isArray(_children) ? _children : [_children];
+  const children = isArray(_children) ? _children : [_children];
   vFragment[VNodeProps.CHILDREN] = track(
     vFragment[VNodeProps.CHILDREN],
     children,
@@ -320,17 +309,19 @@ function track<T>(
   let i = 0;
   const children: VNode<T>[] = [];
   for (const node of nodes) {
-    children.push(update(node, vChildren[i], globalOptions, false));
+    children.push(
+      update(node, vChildren[i], globalOptions, false),
+    );
     i++;
   }
   return children;
 }
 
-export function throwIfPromise<T>(
+export function assertSyncCall<T>(
   node: Promise<T> | T,
 ): T {
   if (node instanceof Promise) {
-    throw new Error("Promise not allowed in scoped context");
+    throw new Error("Promise not allowed in sync call scope");
   }
   return node;
 }
