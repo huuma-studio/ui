@@ -46,7 +46,8 @@ export namespace JSX {
   }
 
   export type Component = (
-    props: ComponentProps,
+    // deno-lint-ignore no-explicit-any
+    props: ComponentProps & any,
   ) => Element | Promise<Element>;
 
   export type ElementType = Component | keyof IntrinsicElements;
