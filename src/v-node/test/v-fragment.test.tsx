@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert/equals";
-import { create, VNodeProps, VType } from "../mod.ts";
-
+import { create } from "../sync.ts";
+import { VNodeProps, VType } from "../mod.ts";
 Deno.test("should create vFragment", () => {
   const text1 = "Hello World";
 

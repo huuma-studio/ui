@@ -1,5 +1,5 @@
 import type { JSX } from "../jsx-runtime/mod.ts";
-import { type Cleanup, setSubscriber, type Subscriber } from "../signal/mod.ts";
+import type { Cleanup } from "../signal/mod.ts";
 
 export enum VMode {
   NotCreated,
@@ -42,7 +42,9 @@ export interface VBase {
   type: VType;
 }
 
-export type VNodeBeforeCreateVisitor = (jsx: JSX.Node) => JSX.Node;
+export type VNodeBeforeCreateVisitor = (
+  jsx: JSX.Element,
+) => JSX.Element;
 
 export interface VNodeVisitor {
   beforeCreate?: VNodeBeforeCreateVisitor;
@@ -105,7 +107,7 @@ export interface VElement<T>
   extends VBase, HasVNodeRef<T>, HasVChildren<T>, HasVOptions, HasVKey {
   type: VType.ELEMENT;
   [VNodeProps.TAG]: string;
-  [VNodeProps.PROPS]: JSX.ElementProps;
+  [VNodeProps.PROPS]: JSX.ComponentProps;
   [VNodeProps.EVENT_REFS]: JSX.EventRef[];
 }
 
@@ -120,7 +122,7 @@ export interface VComponent<T>
     HasVNodeRef<T> {
   type: VType.COMPONENT;
   [VNodeProps.FN]: JSX.Component;
-  [VNodeProps.PROPS]: JSX.ElementProps;
+  [VNodeProps.PROPS]: JSX.ComponentProps;
   [VNodeProps.AST]: VNode<T>;
 }
 
@@ -137,108 +139,6 @@ export type VNode<T> =
   | undefined
   | null;
 
-const _vNodeScope: (VBase & HasVOptions)[] = [];
-export function getVNodeScope(): (VBase & HasVOptions)[] {
-  return [..._vNodeScope];
-}
-
-type VNodeSignalUpdater<T, V> = (
-  node: JSX.Element<JSX.Component>,
-  vNode: VComponent<T>,
-  globalOptions: VGlobalOptions,
-) => Subscriber<V>;
-let vNodeSignalUpdater: VNodeSignalUpdater<unknown, unknown> | undefined;
-
-export function setVNodeUpdater<T>(
-  updater: VNodeSignalUpdater<T, unknown>,
-): void {
-  vNodeSignalUpdater = <VNodeSignalUpdater<unknown, unknown>> updater;
-}
-
-export function create<T>(
-  node: JSX.Node,
-  globalOptions: VGlobalOptions = {},
-): VNode<T> {
-  if (typeof globalOptions.beforeCreate === "function") {
-    node = globalOptions.beforeCreate(node);
-  }
-
-  if (isEmptyNode(node)) {
-    return null;
-  }
-
-  if (isTextNode(node)) {
-    return vText(node);
-  }
-
-  if (isElementNode(node)) {
-    return vElement(node, globalOptions);
-  }
-
-  if (isFragmentNode(node) || isTemplateNode(node)) {
-    return vFragment(node, globalOptions);
-  }
-
-  if (isComponentNode(node)) {
-    return vComponent(node, globalOptions);
-  }
-}
-
-export function update<T>(
-  node: JSX.Node,
-  vNode: VNode<T> | undefined,
-  globalOptions: VGlobalOptions,
-  cleanupVNode = true,
-): VNode<T> {
-  /*
-   * Root update call should cleanup the vNode.
-   * Subsequent nested update calls do not need to cleanup.
-   */
-  if (cleanupVNode) {
-    cleanup(vNode);
-  }
-
-  if (isEmptyNode(node) || typeof node === "undefined") {
-    return null;
-  }
-
-  if (isTextNode(node)) {
-    if (vNode?.type === VType.TEXT) {
-      return updateVText(node, vNode);
-    }
-    return vText(node);
-  }
-
-  if (isElementNode(node)) {
-    if (
-      vNode?.type === VType.ELEMENT && node.type === vNode[VNodeProps.TAG] &&
-      vNode[VNodeProps.KEY] === node.key
-    ) {
-      return updateVElement(<JSX.Element<string>> node, vNode, globalOptions);
-    }
-    return vElement(node, globalOptions);
-  }
-
-  if (isComponentNode(node)) {
-    if (
-      isVComponent(vNode) && vNode[VNodeProps.FN] === node.type &&
-      vNode[VNodeProps.KEY] === node.key
-    ) {
-      return updateVComponent(node, vNode, globalOptions);
-    }
-    return vComponent(node, globalOptions);
-  }
-
-  if (isFragmentNode(node)) {
-    if (
-      vNode?.type === VType.FRAGMENT
-    ) {
-      return updateVFragment(node, vNode, globalOptions);
-    }
-    return vFragment(node, globalOptions);
-  }
-}
-
 export function vText<T>(
   node: string | number | JSX.SignalLike,
   options?: {
@@ -253,200 +153,14 @@ export function vText<T>(
   };
 }
 
-export function updateVText<T>(
-  node: string | number | JSX.SignalLike,
-  vText: VText<T>,
-): VText<T> {
-  vText[VNodeProps.TEXT] = isVSignal(node) ? node : `${node}`;
-  return vText;
-}
-
-export function vElement<T>(
-  element: JSX.Element<string>,
-  globalOptions: VGlobalOptions,
-): VElement<T> {
-  const { type, eventRefs, props, key } = element;
-  const vElement: VElement<T> = {
-    type: VType.ELEMENT,
-    [VNodeProps.TAG]: type,
-    [VNodeProps.KEY]: key,
-    [VNodeProps.PROPS]: props,
-    [VNodeProps.EVENT_REFS]: eventRefs,
-    [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
-  };
-
-  vElement[VNodeProps.CHILDREN] = Array.isArray(props.children)
-    ? props.children?.map((child) => create(child, globalOptions))
-    : [create(props.children)];
-
-  return vElement;
-}
-
-function updateVElement<T>(
-  element: JSX.Element<string>,
-  vElement: VElement<T>,
-  globalOptions: VGlobalOptions,
-) {
-  const { eventRefs, props } = element;
-
-  vElement[VNodeProps.PROPS] = <JSX.ElementProps> props;
-  vElement[VNodeProps.EVENT_REFS] = eventRefs;
-
-  vElement[VNodeProps.CHILDREN] = track(
-    vElement[VNodeProps.CHILDREN],
-    Array.isArray(props.children) ? props.children : [props.children],
-    globalOptions,
-  );
-
-  return vElement;
-}
-
-function vComponent<T>(
-  component: JSX.Element<JSX.Component>,
-  globalOptions: VGlobalOptions,
-) {
-  const { type, props, key } = component;
-
-  const vComponent: VComponent<T> = {
-    type: VType.COMPONENT,
-    [VNodeProps.KEY]: key,
-    [VNodeProps.AST]: undefined,
-    [VNodeProps.MODE]: VMode.NotCreated,
-    [VNodeProps.FN]: type,
-    [VNodeProps.CLEANUP]: [],
-    [VNodeProps.PROPS]: props,
-    [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
-  };
-
-  _vNodeScope.push(vComponent);
-  typeof vNodeSignalUpdater === "function"
-    ? setSubscriber(
-      () => {
-        return vComponent[VNodeProps.AST] = create(
-          vComponent[VNodeProps.FN](props),
-          globalOptions,
-        );
-      },
-      vNodeSignalUpdater(component, vComponent, globalOptions),
-    )
-    : vComponent[VNodeProps.AST] = create(
-      vComponent[VNodeProps.FN](props),
-      globalOptions,
-    );
-  vComponent[VNodeProps.MODE] = VMode.Created;
-  _vNodeScope.shift();
-
-  return vComponent;
-}
-
-function updateVComponent<T>(
-  component: JSX.Element<JSX.Component>,
-  vComponent: VComponent<T>,
-  globalOptions: VGlobalOptions,
-) {
-  _vNodeScope.push(vComponent);
-  vComponent[VNodeProps.PROPS] = component.props;
-  const updatedNode = typeof vNodeSignalUpdater === "function"
-    ? setSubscriber(
-      () => {
-        return vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
-      },
-      vNodeSignalUpdater(component, vComponent, globalOptions),
-    )
-    : vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
-
-  _vNodeScope.shift();
-
-  vComponent[VNodeProps.AST] = update(
-    updatedNode,
-    vComponent[VNodeProps.AST],
-    globalOptions,
-    false,
-  );
-  return vComponent;
-}
-
-function vFragment<T>(
-  fragment: JSX.Element<0> | JSX.Node[] | JSX.Template,
-  globalOptions: VGlobalOptions,
-): VFragment<T> {
-  const vFragment: VFragment<T> = {
-    type: VType.FRAGMENT,
-    [VNodeProps.KEY]: keyFrom(fragment),
-    [VNodeProps.CHILDREN]: [],
-    [VNodeProps.OPTIONS]: {
-      _GLOBAL: globalOptions,
-    },
-  };
-
-  const children: VNode<T>[] = [];
-  if (isTemplateNode(fragment)) {
-    for (const template of fragment.templates) {
-      children.push(
-        vText(template, { skipEscaping: true }),
-        create(fragment.nodes?.shift(), globalOptions),
-      );
-    }
-  } else {
-    const _nodes = childrenFrom(fragment);
-    const nodes = Array.isArray(_nodes) ? _nodes : [_nodes];
-    for (const node of nodes) {
-      children.push(create(node, globalOptions));
-    }
-  }
-  vFragment[VNodeProps.CHILDREN] = children;
-  return vFragment;
-}
-
-function updateVFragment<T>(
-  fragment: JSX.Element<0> | JSX.Node[],
-  vFragment: VFragment<T>,
-  globalOptions: VGlobalOptions,
-): VFragment<T> {
-  const _children = childrenFrom(fragment);
-  const children = Array.isArray(_children) ? _children : [_children];
-  vFragment[VNodeProps.CHILDREN] = track(
-    vFragment[VNodeProps.CHILDREN],
-    children,
-    globalOptions,
-  );
-  return vFragment;
-}
-
-function track<T>(
-  vChildren: VNode<T>[] = [],
-  nodes: JSX.Node[] | undefined,
-  globalOptions: VGlobalOptions,
-): VNode<T>[] {
-  // No new nodes
-  if (!nodes?.length) {
-    return [];
-  }
-
-  // No previous nodes.
-  if (!vChildren?.length) {
-    return nodes.map((node) => create(node, globalOptions));
-  }
-
-  // Update
-  // TODO: use key for comparision and sorting
-  let i = 0;
-  const children: VNode<T>[] = [];
-  for (const node of nodes) {
-    children.push(update(node, vChildren[i], globalOptions, false));
-    i++;
-  }
-  return children;
-}
-
 export function isEmptyNode(
-  node: JSX.Node,
+  node: JSX.Element,
 ): node is boolean | null | undefined {
   return typeof node === "boolean" || node == null;
 }
 
 export function isTextNode(
-  value: JSX.Node,
+  value: JSX.Element,
 ): value is string | number | JSX.SignalLike {
   return (
     value != null &&
@@ -455,15 +169,17 @@ export function isTextNode(
 }
 
 export function isFragmentNode(
-  node: JSX.Node,
-): node is JSX.Node[] | JSX.Element<0> {
+  node: JSX.Element,
+): node is JSX.Element[] | JSX.ComponentNode<0> {
   return (
     (typeof node === "object" && node && "type" in node && node.type === 0) ||
-    Array.isArray(node)
+    isArray(node)
   );
 }
 
-export function isElementNode(node: JSX.Node): node is JSX.Element<string> {
+export function isElementNode(
+  node: JSX.Element,
+): node is JSX.ComponentNode<string> {
   return (
     (node &&
       typeof node === "object" &&
@@ -474,8 +190,8 @@ export function isElementNode(node: JSX.Node): node is JSX.Element<string> {
 }
 
 export function isComponentNode(
-  node: JSX.Node,
-): node is JSX.Element<JSX.Component> {
+  node: JSX.Element,
+): node is JSX.ComponentNode<JSX.Component> {
   return (
     (node &&
       typeof node === "object" &&
@@ -485,7 +201,9 @@ export function isComponentNode(
   );
 }
 
-export function isTemplateNode(node: JSX.Node): node is JSX.Template {
+export function isTemplateNode(
+  node: JSX.Element,
+): node is JSX.TemplateNode {
   return (node && typeof node === "object" && "templates" in node) || false;
 }
 
@@ -511,7 +229,7 @@ export function isVText<T>(vNode: undefined | null | VBase): vNode is VText<T> {
   return vNode?.type === VType.TEXT;
 }
 
-export function isVSignal(node: JSX.Node): node is VSignal {
+export function isVSignal(node: JSX.Element): node is VSignal {
   return (node && typeof node === "object" && "get" in node) || false;
 }
 
@@ -568,17 +286,25 @@ export function snapshot<T>(vNode: VNode<T>): VNode<T> {
   return vNode;
 }
 
-function childrenFrom(fragment: JSX.Element<0> | JSX.Node[]): JSX.Node {
+export function childrenFrom(
+  fragment: JSX.ComponentNode<0> | JSX.Element[],
+): JSX.Element {
   // Array based fragment
-  if (Array.isArray(fragment)) return fragment;
+  if (isArray(fragment)) return fragment;
 
   // Function based fragment
   return fragment.props.children ?? [];
 }
 
-function keyFrom(
-  node: JSX.Element<0> | JSX.Node[] | JSX.Template,
+export function keyFrom(
+  node: JSX.ComponentNode<0> | JSX.Element[] | JSX.TemplateNode,
 ): string | number | undefined {
-  if (Array.isArray(node) || isTemplateNode(node)) return undefined;
+  if (isArray(node) || isTemplateNode(node)) return undefined;
   return node.key;
+}
+
+// TODO: Move to a the appropiate location (maybe @huuma/validate)
+// deno-lint-ignore no-explicit-any
+export function isArray(value: any): value is any[] {
+  return Array.isArray(value);
 }

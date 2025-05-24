@@ -14,7 +14,7 @@ export default {
               context.report({
                 node,
                 message:
-                  "Huuma server actions MUST be named async function export",
+                  "Huuma server actions MUST be async an async function export",
               });
             }
           },
@@ -27,7 +27,7 @@ export default {
           "FunctionDeclaration[async=true] CallExpression > Identifier, ArrowFunctionExpression[async=true] CallExpression > Identifier, FunctionExpression[async=true] CallExpression > Identifier"(
             node: Deno.lint.Identifier,
           ) {
-            if (node.name.startsWith("$")) {
+            if (node.name.endsWith("actions.tsx")) {
               context.report({
                 node,
                 message: "Huuma component hooks not allowed in async functions",

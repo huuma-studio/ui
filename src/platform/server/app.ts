@@ -3,11 +3,11 @@ import type { Handler } from "@huuma/route/http/request";
 import { handle, type Middleware } from "@huuma/route/middleware";
 import { renderToString, vNodeToString } from "./render.ts";
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
-import { create } from "../../v-node/mod.ts";
 import { type Island, markIslands } from "../../islands/islands.ts";
 import { parse } from "@std/path/parse";
 import type { Route } from "@huuma/route/http/route";
 import { isProd } from "@huuma/route/utils/environment";
+import { create } from "../../v-node/async.ts";
 
 export type TransferStateItem =
   | TransferState
@@ -22,9 +22,9 @@ export interface TransferState {
 
 export type PageLike<T> = (
   props: PageLikeProps<T>,
-) => JSX.Node;
+) => JSX.Element;
 
-export interface PageLikeProps<T> extends JSX.ElementProps {
+export interface PageLikeProps<T> extends JSX.ComponentProps {
   params: Record<string, string>;
   data: T;
   scripts?: PageScripts;
@@ -186,16 +186,17 @@ export class UIApp<
       // deno-lint-ignore no-explicit-any
       ctx.set<any>("transferState", {});
       const nonce = crypto.randomUUID();
+
       return handle(
         ctx,
         props.middleware,
-        (ctx) => {
+        async (ctx) => {
           const transferState = {
             ...ctx.get("transferState"),
             ...this.#transferState,
           };
           return new Response(
-            this.#render({
+            await this.#render({
               root: this.#root,
               page: props.page,
               layouts: props.layouts,
@@ -220,9 +221,9 @@ export class UIApp<
     };
   }
 
-  #render(
+  async #render(
     { page, layouts, params, transferState, data, nonce, url }: RenderProps<D>,
-  ): string {
+  ): Promise<string> {
     const islands: Island[] = [];
 
     const node = this.#applyLayouts(
@@ -232,7 +233,7 @@ export class UIApp<
       data,
     );
 
-    const vNode = create(
+    const vNode = await create(
       node,
       {
         transferState,
@@ -242,25 +243,22 @@ export class UIApp<
           : undefined,
       },
     );
-
-    return `<!DOCTYPE html>${
-      renderToString(
-        jsx(<JSX.Component> this.#root, {
-          children: [
-            {
-              templates: [vNodeToString(vNode)],
-              nodes: [""],
-            },
-          ],
-          params: params,
-          data: data,
-          scripts: this.#splitScripts(this.#scripts, islands, nonce),
-          islands,
-          transferState,
-        }),
-        { transferState, url },
-      )
-    }`;
+    return `<!DOCTYPE html>${await renderToString(
+      jsx(<JSX.Component> this.#root, {
+        children: [
+          {
+            templates: [vNodeToString(vNode)],
+            nodes: [""],
+          },
+        ],
+        params: params,
+        data: data,
+        scripts: this.#splitScripts(this.#scripts, islands, nonce),
+        islands,
+        transferState,
+      }),
+      { transferState, url },
+    )}`;
   }
 
   #splitScripts(
@@ -316,9 +314,9 @@ export class UIApp<
     layouts?: PageLike<D>[],
     params?: Record<string, string | undefined>,
     data?: D,
-  ): JSX.Element<string | 0 | JSX.Component> {
+  ): JSX.Element {
     return (layouts?.length ? [...layouts] : []).reduce<
-      JSX.Element<string | JSX.Component | 0>
+      JSX.Element
     >(
       (accumulator, currentLayout) => {
         return jsx(<JSX.Component> currentLayout, {

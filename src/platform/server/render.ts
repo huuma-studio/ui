@@ -1,5 +1,5 @@
+import { escape } from "@std/html/entities";
 import {
-  create,
   type VElement,
   type VGlobalOptions,
   type VNode,
@@ -8,8 +8,8 @@ import {
   VType,
 } from "../../v-node/mod.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
-
-import { escapeHtml } from "../../utils/escape-html.ts";
+import { create } from "../../v-node/async.ts";
+import { create as syncCreate } from "../../v-node/sync.ts";
 
 const selfClosingTags = [
   "area",
@@ -32,11 +32,18 @@ export function vNodeToString(vNode: VNode<unknown>): string {
   return stringify(vNode);
 }
 
-export function renderToString(
-  node: JSX.Node,
+export async function renderToString(
+  node: JSX.Element,
+  globalOptions: VGlobalOptions,
+): Promise<string> {
+  return stringify(await create(node, globalOptions));
+}
+
+export function syncRenderToString(
+  node: JSX.Element,
   globalOptions?: VGlobalOptions,
 ): string {
-  return stringify(create<unknown>(node, globalOptions));
+  return stringify(syncCreate<unknown>(node, globalOptions));
 }
 
 function stringify<T>(vNode: VNode<T>): string {
@@ -45,7 +52,7 @@ function stringify<T>(vNode: VNode<T>): string {
     case VType.TEXT:
       return vNode[VNodeProps.SKIP_ESCAPING]
         ? textFromVText(vNode)
-        : escapeHtml(textFromVText(vNode));
+        : escape(textFromVText(vNode));
     case VType.ELEMENT:
       return elementToString(vNode);
     case VType.COMPONENT:
@@ -65,13 +72,13 @@ function elementToString<T>(vNode: VElement<T>): string {
   const props = vNode[VNodeProps.PROPS];
 
   if (selfClosingTags.includes(tag)) {
-    const { dangerouslySetInnerHTML: _, ...p } = props;
+    const { dangerouslySetInnerHTML: _d, children: _c, ...p } = props;
     return `<${tag}${stringFrom(p)}/>`;
   }
 
   const children = vNode[VNodeProps.CHILDREN];
 
-  const { dangerouslySetInnerHTML, ...attributes } = props;
+  const { dangerouslySetInnerHTML, children: _c, ...attributes } = props;
   if (dangerouslySetInnerHTML) {
     return `<${tag}${
       stringFrom(attributes)
@@ -82,12 +89,12 @@ function elementToString<T>(vNode: VElement<T>): string {
   }</${tag}>`;
 }
 
-function stringFrom(attributes: JSX.IntrinsicElements): string {
+function stringFrom(attributes: JSX.Attributes): string {
   let attributesString = "";
   for (const key in attributes) {
     const attribute = attributes[key];
     if (typeof attribute === "string") {
-      attributesString += ` ${key}="${escapeHtml(attribute)}"`;
+      attributesString += ` ${key}="${escape(attribute)}"`;
     }
     if (attribute === true) {
       attributesString += ` ${key}`;

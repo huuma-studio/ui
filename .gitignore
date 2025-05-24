@@ -4,3 +4,4 @@
 examples/*
 deno.lock
 old/*
+.zed

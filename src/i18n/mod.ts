@@ -2,8 +2,9 @@ import { NotFoundException } from "@huuma/route/http/exception/not-found-excepti
 import { HttpStatus } from "@huuma/route/http/http-status";
 import type { AppContext } from "@huuma/route";
 
+import { $scope } from "../hooks/scope.ts";
 import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
-import { getVNodeScope, VNodeProps } from "../v-node/mod.ts";
+import { VNodeProps } from "../v-node/mod.ts";
 import type { UIApp } from "../platform/server/mod.ts";
 
 export interface I18nConfig {
@@ -57,21 +58,20 @@ export function setupI18n<T extends AppContext>(
   };
 }
 
-export interface TProps extends JSX.ElementProps {
+export interface TProps extends JSX.ComponentProps {
   name: string;
   props?: Record<string, string>;
   dangerouslyInnerHTML?: {
     name: string;
-    props?: JSX.ElementProps & { key?: string };
+    props?: JSX.ComponentProps & { key?: string };
   };
 }
 
 export function T(
   props: TProps,
-): // deno-lint-ignore no-explicit-any
-JSX.Element<any> {
+): JSX.Element {
   const { name, props: _p, dangerouslyInnerHTML } = props;
-  const language = getI18nConfig().i18n.activeLanguage;
+  const language = $config().i18n.activeLanguage;
 
   if (dangerouslyInnerHTML) {
     const { key, ...elementProps } = dangerouslyInnerHTML.props ?? {};
@@ -98,7 +98,7 @@ export class NoLanguageSpecifiedException extends NotFoundException {
 }
 
 export function $activeLang(): string {
-  const { url, i18n } = getI18nConfig();
+  const { url, i18n } = $config();
   return langFrom(url.pathname, i18n.config.pattern) ??
     i18n.config.defaultLanguage;
 }
@@ -106,7 +106,7 @@ export function $activeLang(): string {
 export const getActiveLang = $activeLang;
 
 export function $languages(): string[] {
-  return getI18nConfig().i18n.availableLanguages;
+  return $config().i18n.availableLanguages;
 }
 
 /** @deprecated Use $languages */
@@ -135,24 +135,21 @@ function t(
 }
 
 export function $t(key: string, params?: Record<string, string>): string {
-  const language = getI18nConfig().i18n.activeLanguage;
+  const language = $config().i18n.activeLanguage;
   return t(language, key, params);
 }
 
-function assertVNodeScope() {
-  const vNode = getVNodeScope()[0];
-  if (!vNode) {
-    throw new Error("This is only allowed in a vComponent scope");
-  }
-  return vNode;
-}
-
-function getI18nConfig(): { url: URL; i18n: I18nTransferState } {
-  const globalOptions = assertVNodeScope()[VNodeProps.OPTIONS]._GLOBAL;
-  return {
+function $config(): { url: URL; i18n: I18nTransferState } {
+  const globalOptions = $scope()[VNodeProps.OPTIONS]._GLOBAL;
+  const config = {
     url: globalOptions.url,
     i18n: globalOptions.transferState.i18n,
   };
+
+  if (config.url && config.i18n) {
+    return config;
+  }
+  throw new Error("Could not find I18N config. Is I18N correctly setup?");
 }
 
 function unnest(

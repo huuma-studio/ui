@@ -9,14 +9,14 @@ import { generateRandomString } from "../utils/generate-random-string.ts";
 export interface Island {
   id: string;
   path: string;
-  node: JSX.Node;
+  node: JSX.Element;
 }
 
 export function markIslands(
   islandsRef: { path: string; island: JSX.Component }[],
   islands: Island[],
 ): VNodeBeforeCreateVisitor {
-  return (node: JSX.Node) => {
+  return (node: JSX.Element) => {
     if (
       isComponentNode(node) &&
       !islands.filter((island) => island.node === node).length
@@ -68,7 +68,7 @@ export function markIslands(
 }
 
 function isIsland(
-  node: VComponent<unknown> | JSX.Element<JSX.Component>,
+  node: VComponent<unknown> | JSX.ComponentNode<JSX.Component>,
   islands: { path: string; island: JSX.Component }[],
 ): Island | undefined {
   for (const island of islands) {

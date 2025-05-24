@@ -7,7 +7,6 @@ import {
   type WritableSignal,
 } from "../signal/mod.ts";
 import {
-  getVNodeScope,
   type HasVMode,
   type HasVOptions,
   type VBase,
@@ -15,7 +14,8 @@ import {
   VMode,
   VNodeProps,
 } from "../v-node/mod.ts";
-import { addHookVComponent } from "./lifecycle.ts";
+import { $hook } from "./lifecycle.ts";
+import { $scope } from "./scope.ts";
 
 type VNodeWithSignal<T> =
   & VBase
@@ -54,13 +54,13 @@ function signalFromScope<T>(
   value: T | (() => T),
   signalCreator: ((value: T) => Signal<T>) | ((value: () => T) => Signal<T>),
 ): Signal<T> {
-  const vNodeScope = getVNodeScope();
+  const scope = $scope();
 
-  if (!vNodeScope.length) {
+  if (!scope) {
     return createSignal(value, signalCreator);
   }
 
-  const vNode = <VNodeWithSignal<T>> vNodeScope[vNodeScope.length - 1];
+  const vNode = <VNodeWithSignal<T>> scope;
 
   // If signal is left in the current VNode return it.
   if (signalCache.length) {
@@ -114,5 +114,5 @@ function createSignal<T>(
 }
 
 export function $effect(fn: () => void): void {
-  addHookVComponent(() => effect(fn), VHook.MOUNT);
+  $hook(() => effect(fn), VHook.MOUNT);
 }

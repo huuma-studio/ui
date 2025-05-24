@@ -1,45 +1,63 @@
 import { eventName, isEventName } from "./event.ts";
-import { escapeHtml } from "../utils/escape-html.ts";
+import { escape } from "@std/html/entities";
 import type { Signal } from "../signal/mod.ts";
 
 // deno-lint-ignore no-namespace
 export namespace JSX {
+  export type SignalLike = Signal<EmptyNode | TextNode>;
   export type TextNode = string | number | SignalLike;
   export type EmptyNode = undefined | null | boolean;
 
-  export type Node =
-    | TextNode
-    | EmptyNode
-    | Element<string | Component | 0>
-    | Node[] // Element<0> and Node[] are handled as framgent
-    | Template;
-
-  export type Element<T extends string | Component | 0> = {
+  export type ComponentNode<T extends string | Component | 0> = {
     type: T; // Fragment = 0;
     eventRefs: EventRef[];
-    props: ElementProps;
+    props: ComponentProps;
     key?: string | number;
   };
 
-  export type Template = {
+  export type TemplateNode = {
     templates: string[];
-    nodes: Node[];
+    nodes: Element[];
   };
 
-  export type Component = (props: ElementProps) => Node;
+  export type Element =
+    | TextNode
+    | EmptyNode
+    | ComponentNode<string | Component | 0>
+    | Element[] // ComponentNode<0> and Element[] are handled as fragment
+    | TemplateNode;
 
-  export type SignalLike = Signal<string | number>;
+  export type IntrinsicElements =
+    & {
+      [K in keyof HTMLElementTagNameMap]: Attributes;
+    }
+    & {
+      [K in keyof SVGElementTagNameMap]: Attributes;
+    };
+
+  export type Attributes = {
+    [key: string]: unknown;
+    children?: Element;
+    dangerouslySetInnerHTML?: { __html: string };
+  };
+
+  export interface ElementChildrenAttribute {
+    children: Element;
+  }
+
+  export type Component = (
+    props: ComponentProps,
+  ) => Element | Promise<Element>;
+
+  export type ElementType = Component | keyof IntrinsicElements;
 
   export type EventRef = {
     name: string;
     listener: () => void;
   };
 
-  export type ElementProps = {
-    children?: Node;
-  } & IntrinsicElements;
-
-  export type IntrinsicElements = {
+  export type ComponentProps = {
+    children?: Element;
     dangerouslySetInnerHTML?: { __html: string };
     [key: string]: unknown;
   };
@@ -47,9 +65,9 @@ export namespace JSX {
 
 export function jsx(
   type: string | JSX.Component,
-  props?: JSX.ElementProps,
+  props?: JSX.ComponentProps,
   key?: string | number,
-): JSX.Element<string | JSX.Component | 0> {
+): JSX.Element {
   const eventRefs: JSX.EventRef[] = [];
   props ??= {};
 
@@ -78,27 +96,28 @@ export function jsx(
   };
 }
 
-export function jsxAttr(name: string, value: unknown): JSX.Node {
+export function jsxAttr(name: string, value: unknown): JSX.Element {
   if (typeof value === "string") {
     return {
-      templates: [`${escapeHtml(name)}="${escapeHtml(value)}"`],
+      templates: [`${escape(name)}="${escape(value)}"`],
       nodes: [""],
     };
   }
   return "";
 }
 
-export function jsxEscape(node: JSX.Node): JSX.Node {
+// TODO: Properly implement and test escape here!
+export function jsxEscape(node: JSX.Element): JSX.Element {
   return node;
 }
 
 export function jsxTemplate(
   templates: string[],
-  ...nodes: JSX.Node[]
-): JSX.Template {
+  ...nodes: JSX.Element[]
+): JSX.TemplateNode {
   return { templates, nodes };
 }
 
-export function Fragment({ children }: JSX.ElementProps): JSX.Node {
+export function Fragment({ children }: JSX.ComponentProps): JSX.Element {
   return children;
 }

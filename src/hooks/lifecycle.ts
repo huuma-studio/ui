@@ -1,25 +1,19 @@
-import {
-  getVNodeScope,
-  isVComponent,
-  VHook,
-  VMode,
-  VNodeProps,
-} from "../v-node/mod.ts";
+import { isVComponent, VHook, VMode, VNodeProps } from "../v-node/mod.ts";
+import { $scope } from "./scope.ts";
 
 export function $mount(fn: (() => () => void) | (() => void)): void {
-  addHookVComponent(fn, VHook.MOUNT);
+  $hook(fn, VHook.MOUNT);
 }
 
 export function $unmount(fn: () => void): void {
-  addHookVComponent(fn, VHook.UNMOUNT);
+  $hook(fn, VHook.UNMOUNT);
 }
 
-export function addHookVComponent(
+export function $hook(
   fn: (() => () => void) | (() => void),
   vHook: VHook,
 ) {
-  const vNodeScope = getVNodeScope();
-  const vNode = vNodeScope[vNodeScope.length - 1];
+  const vNode = $scope();
 
   if (isVComponent(vNode) && vNode[VNodeProps.MODE] === VMode.NotCreated) {
     if (!vNode[VNodeProps.HOOKS]) {
