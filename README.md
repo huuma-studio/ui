@@ -2,17 +2,17 @@
 
 [![JSR Score](https://jsr.io/badges/@huuma/ui/score)](https://jsr.io/@huuma/ui) [![JSR Version](https://jsr.io/badges/@huuma/ui)](https://jsr.io/@huuma/ui)
 
-Huuma UI is a lightweight, modern UI framework for Deno that enables building interactive web applications with a component-based architecture. It provides server-side rendering with client-side hydration for optimized performance and SEO.
+Huuma UI An easy to use web framework for Deno that lets you build interactive websites with components that work on both server and client. Features server actions, reactive state management, and automatic code splitting for optimal performance.
 
 ## Features
 
 - **JSX Support**: Create component-based UIs with familiar JSX syntax
-- **Server-Side Rendering**: Render components on the server for improved SEO and initial load performance
-- **Islands Architecture**: Selectively hydrate components on the client for interactivity
+- **Server-Side Rendering**: Render async components on the server for improved SEO and initial load performance
+- **Islands Interactivity**: Selectively hydrate components on the client for interactivity
+- **Server Actions**: Type-safe server-side functions for handling form submissions and data mutations
 - **Signal-Based Reactivity**: Fine-grained reactivity system for efficient updates
 - **Internationalization (i18n)**: Built-in support for multilingual applications
 - **TypeScript First**: Fully typed API for improved developer experience
-- **Zero Dependencies**: Lightweight and optimized for Deno's runtime
 - **Live Module Reloading**: Fast development cycle with live reloading
 
 ## Quick Start
@@ -70,7 +70,7 @@ export default function HomePage() {
 ### 3. Add Interactivity with Islands
 
 ```tsx
-// pages/Counter$.tsx (the $ suffix marks this as an island component)
+// pages/counter.client.tsx (the .client.tsx suffix marks this as an island component)
 import { $signal } from "@huuma/ui/hooks/signal";
 
 export default function Counter() {
@@ -81,6 +81,75 @@ export default function Counter() {
       <p>Count: {count.get()}</p>
       <button on-click={() => count.set(count.get() + 1)}>Increment</button>
     </div>
+  );
+}
+```
+
+## Server Actions
+
+Server actions provide a type-safe way to handle form submissions and server-side data mutations. They run exclusively on the server and can be called from both server and client components. Server actions are defined in files with the `.actions.ts` suffix and must be exported async functions.
+
+### Basic Server Action
+
+```tsx
+// src/user.actions.ts
+export async function createUser(formData: FormData) {
+  const name = formData.get("name") as string;
+  const email = formData.get("email") as string;
+
+  // Validate input
+  if (!name || !email) {
+    throw new Error("Name and email are required");
+  }
+
+  // Save to database
+  const user = await db.users.create({ name, email });
+
+  return { success: true, user };
+}
+```
+
+### Using Server Actions in Forms
+
+```tsx
+// pages/create-user.client.tsx
+import { createUser } from "../src/user.actions.ts";
+import { $signal } from "@huuma/ui/hooks/signal";
+
+export default function CreateUserForm() {
+  const pending = $signal(false);
+  const message = $signal("");
+
+  const handleSubmit = async (event: Event) => {
+    event.preventDefault();
+    pending.set(true);
+
+    try {
+      const formData = new FormData(event.target as HTMLFormElement);
+      const result = await createUser(formData);
+      message.set(`User ${result.user.name} created successfully!`);
+    } catch (error) {
+      message.set(`Error: ${error.message}`);
+    } finally {
+      pending.set(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div>
+        <label htmlFor="name">Name:</label>
+        <input type="text" id="name" name="name" required />
+      </div>
+      <div>
+        <label htmlFor="email">Email:</label>
+        <input type="email" id="email" name="email" required />
+      </div>
+      <button type="submit" disabled={pending.get()}>
+        {pending.get() ? "Creating..." : "Create User"}
+      </button>
+      {message.get() && <p>{message.get()}</p>}
+    </form>
   );
 }
 ```
@@ -260,8 +329,10 @@ my-app/
 ├── pages/            # Page components
 │   ├── layout.tsx    # Layout components
 │   ├── page.tsx      # Page components
-│   └── Counter$.tsx  # Island components (with $ suffix)
+│   └── counter.client.tsx  # Island components (with .client.tsx suffix)
 ├── src/              # Application code
+│   ├── user.actions.ts    # Server actions for user operations
+│   └── blog.actions.ts    # Server actions for blog operations
 ├── app.ts            # Main application entry
 └── deno.json         # Deno configuration
 ```
