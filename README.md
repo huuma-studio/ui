@@ -2,6 +2,8 @@
 
 [![JSR Score](https://jsr.io/badges/@huuma/ui/score)](https://jsr.io/@huuma/ui) [![JSR Version](https://jsr.io/badges/@huuma/ui)](https://jsr.io/@huuma/ui)
 
+> ⚠️ **Developer Preview** - Huuma UI is currently in active development and should be considered experimental software. This release contains known bugs, incomplete features, and APIs that will change without notice. Documentation may be outdated or incorrect. Performance has not been optimized and memory leaks may occur. **Do not use in production environments.** We encourage experimentation and feedback, but please expect breaking changes, data loss, and unstable behavior. Use at your own risk.
+
 Huuma UI An easy to use web framework for Deno that lets you build interactive websites with components that work on both server and client. Features server actions, reactive state management, and automatic code splitting for optimal performance.
 
 ## Features
