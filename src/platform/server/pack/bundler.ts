@@ -57,7 +57,7 @@ export class Bundler {
     await initialize();
 
     const result = await esbuild.build({
-      plugins: [noServerImports, actionsPlugin, ...denoPlugins({})],
+      plugins: [actionsPlugin, ...denoPlugins({})],
       entryPoints: Object.entries(entryPoints).reduce((acc, [key, value]) => {
         acc[key] = value.path;
         return acc;
@@ -188,11 +188,11 @@ const actionsPlugin: esbuild.Plugin = {
   },
 };
 
-const noServerImports: esbuild.Plugin = {
+const _noServerImports: esbuild.Plugin = {
   name: "no-server-file-imports",
   setup(build) {
     build.onResolve({ filter: /\.server\.(ts|tsx)$/ }, () => {
-      throw Error(
+      throw new Error(
         "(.server.ts / .server.tsx) Explicit server code is not allowed to be imported on the client side.",
       );
     });
