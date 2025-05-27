@@ -57,7 +57,7 @@ export class Bundler {
     await initialize();
 
     const result = await esbuild.build({
-      plugins: [actionsPlugin, ...denoPlugins({})],
+      plugins: [noServerImports, actionsPlugin, ...denoPlugins({})],
       entryPoints: Object.entries(entryPoints).reduce((acc, [key, value]) => {
         acc[key] = value.path;
         return acc;
@@ -118,7 +118,7 @@ export async function generateHash(value: string): Promise<string> {
 const actionsPlugin: esbuild.Plugin = {
   name: "huuma-actions-plugin",
   setup(build) {
-    build.onLoad({ filter: /\.actions.ts/ }, async (args) => {
+    build.onLoad({ filter: /\.actions\.ts$/ }, async (args) => {
       // Look into the file in scope and find the names of all exported functions
       const fileContent = await Deno.readTextFile(args.path);
 
@@ -147,8 +147,8 @@ const actionsPlugin: esbuild.Plugin = {
 
       const fileName = parse(args.path).name;
       const fileHash = await generateHash(args.path.replace(Deno.cwd(), ""));
-      // Create exports for each function found
 
+      // Create exports for each function found
       const exportContents = `
         ${
         exportedFunctions.map((fn) => {
@@ -184,6 +184,17 @@ const actionsPlugin: esbuild.Plugin = {
         contents: exportContents,
         loader: "js",
       };
+    });
+  },
+};
+
+const noServerImports: esbuild.Plugin = {
+  name: "no-server-file-imports",
+  setup(build) {
+    build.onResolve({ filter: /\.server\.(ts|tsx)$/ }, () => {
+      throw Error(
+        "(.server.ts / .server.tsx) Explicit server code is not allowed to be imported on the client side.",
+      );
     });
   },
 };

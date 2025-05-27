@@ -22,7 +22,7 @@ export interface TransferState {
 
 export type PageLike<T> = (
   props: PageLikeProps<T>,
-) => JSX.Element;
+) => JSX.Element | Promise<JSX.Element>;
 
 export interface PageLikeProps<T> extends JSX.ComponentProps {
   params: Record<string, string>;
