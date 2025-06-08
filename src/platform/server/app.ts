@@ -24,8 +24,9 @@ export type PageLike<T> = (
   props: PageLikeProps<T>,
 ) => JSX.Element | Promise<JSX.Element>;
 
-export interface PageLikeProps<T> extends JSX.ComponentProps {
+export interface PageLikeProps<T, A = unknown> extends JSX.ComponentProps {
   params: Record<string, string>;
+  auth: A;
   data: T;
   scripts?: PageScripts;
   islands?: Island[];

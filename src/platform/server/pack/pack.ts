@@ -103,7 +103,6 @@ export async function packActions<T extends AppContext>(
       const fileHash = await generateHash(`/${key}`);
       app.post(`/_huuma/actions/${fileHash}/${fileName}`, async ({ body }) => {
         const { action, args } = actionSchema.parse(body);
-        console.log(body);
         if (action in actions && typeof actions[action] === "function") {
           const res = await actions[action](...(args?.length ? args : []));
           return new Response(JSON.stringify(res), {

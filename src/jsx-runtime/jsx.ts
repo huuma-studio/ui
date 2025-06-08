@@ -38,6 +38,7 @@ export namespace JSX {
   export type Attributes = {
     [key: string]: unknown;
     children?: Element;
+    key?: unknown;
     dangerouslySetInnerHTML?: { __html: string };
   };
 
@@ -59,6 +60,7 @@ export namespace JSX {
 
   export type ComponentProps = {
     children?: Element;
+    key?: unknown;
     dangerouslySetInnerHTML?: { __html: string };
     [key: string]: unknown;
   };
