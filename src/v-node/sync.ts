@@ -13,7 +13,8 @@ import {
   isTextNode,
   isVComponent,
   isVSignal,
-  keyFrom,
+  keyFromNode,
+  keyFromVNode,
   type VComponent,
   type VElement,
   type VFragment,
@@ -119,7 +120,8 @@ export function update<T>(
 
   if (isFragmentNode(node)) {
     if (
-      vNode?.type === VType.FRAGMENT
+      vNode?.type === VType.FRAGMENT &&
+      keyFromNode(node) === vNode[VNodeProps.KEY]
     ) {
       return updateVFragment(node, vNode, globalOptions);
     }
@@ -198,7 +200,9 @@ function vComponent<T>(
       ? setSubscriber(
         () => {
           const node = vComponent[VNodeProps.FN](props);
-          if (node instanceof Promise) throw Error("Peng");
+          if (node instanceof Promise) {
+            throw Error("Promise/Async not supported in scoped functions");
+          }
           return vComponent[VNodeProps.AST] = create(
             node,
             globalOptions,
@@ -248,7 +252,7 @@ function vFragment<T>(
 ): VFragment<T> {
   const vFragment: VFragment<T> = {
     type: VType.FRAGMENT,
-    [VNodeProps.KEY]: keyFrom(fragment),
+    [VNodeProps.KEY]: keyFromNode(fragment),
     [VNodeProps.CHILDREN]: [],
     [VNodeProps.OPTIONS]: {
       _GLOBAL: globalOptions,
@@ -291,30 +295,63 @@ function updateVFragment<T>(
 
 function track<T>(
   vChildren: VNode<T>[] = [],
-  nodes: JSX.Element[] | undefined,
+  children: JSX.Element[] | undefined,
   globalOptions: VGlobalOptions,
 ): VNode<T>[] {
   // No new nodes
-  if (!nodes?.length) {
+  if (!children?.length) {
     return [];
   }
 
   // No previous nodes.
   if (!vChildren?.length) {
-    return nodes.map((node) => create(node, globalOptions));
+    return children.map((node) => create(node, globalOptions));
   }
 
-  // Update
-  // TODO: use key for comparision and sorting
+  const vNodes = [...vChildren];
+
   let i = 0;
-  const children: VNode<T>[] = [];
-  for (const node of nodes) {
-    children.push(
-      update(node, vChildren[i], globalOptions, false),
-    );
+  const _children: VNode<T>[] = [];
+
+  for (const node of children) {
+    const vNode = vChildren[i];
+    const vNodeKey = keyFromVNode(vNode);
+    const nodeKey = keyFromNode(node);
+
+    /*
+     * Key matches, this happens in the following cases:
+     * - keys are the same (update)
+     * - both values are undefined (update)
+     */
+    if (nodeKey === vNodeKey) {
+      removeByVNode(vNode, vNodes);
+      _children.push(
+        update(node, vNode, globalOptions, false),
+      );
+      i++;
+      continue;
+    }
+
+    /*
+     * Key does not match and node might have been moved, eighter:
+     * - to a lower index
+     * - to a higher index
+     */
+    const movedVNode = removeByKey(nodeKey, vNodes);
+    if (movedVNode) {
+      removeByVNode(movedVNode, vNodes);
+      _children.push(update(node, movedVNode, globalOptions, false));
+      i++;
+      continue;
+    }
+
+    /*
+     * No match found -> create a new node
+     */
+    _children.push(create(node, globalOptions));
     i++;
   }
-  return children;
+  return _children;
 }
 
 export function assertSyncCall<T>(
@@ -324,4 +361,35 @@ export function assertSyncCall<T>(
     throw new Error("Promise not allowed in sync call scope");
   }
   return node;
+}
+
+function removeByKey<T>(
+  key: number | string | undefined,
+  vNodes: VNode<T>[],
+): VNode<T> | undefined {
+  const index = vNodes.findIndex((vNode) => {
+    return keyFromVNode(vNode) === key;
+  });
+  return remove(index, vNodes);
+}
+
+function removeByVNode<T>(
+  vNode: VNode<T>,
+  vNodes: VNode<T>[],
+): VNode<T> | undefined {
+  const index = vNodes.findIndex((v) => {
+    return v === vNode;
+  });
+  return remove(index, vNodes);
+}
+
+function remove<T>(index: number, vNodes: VNode<T>[]): VNode<T> {
+  if (index !== -1) {
+    const movedVNodes = vNodes.splice(index, 1);
+    if (!movedVNodes.length || movedVNodes.length > 1) {
+      throw new Error("Exact 1 VNode expected");
+    }
+    return movedVNodes[0];
+  }
+  return undefined;
 }
