@@ -7,7 +7,7 @@ import {
   isFragmentNode,
   isTemplateNode,
   isTextNode,
-  keyFrom,
+  keyFromNode,
   type VComponent,
   type VElement,
   type VFragment,
@@ -117,7 +117,7 @@ async function vFragment<T>(
 ): Promise<VFragment<T>> {
   const vFragment: VFragment<T> = {
     type: VType.FRAGMENT,
-    [VNodeProps.KEY]: keyFrom(fragment),
+    [VNodeProps.KEY]: keyFromNode(fragment),
     [VNodeProps.CHILDREN]: [],
     [VNodeProps.OPTIONS]: {
       _GLOBAL: globalOptions,

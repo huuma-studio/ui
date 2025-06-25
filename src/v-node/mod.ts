@@ -169,7 +169,7 @@ export function isTextNode(
 }
 
 export function isFragmentNode(
-  node: JSX.Element,
+  node: unknown,
 ): node is JSX.Element[] | JSX.ComponentNode<0> {
   return (
     (typeof node === "object" && node && "type" in node && node.type === 0) ||
@@ -178,33 +178,37 @@ export function isFragmentNode(
 }
 
 export function isElementNode(
-  node: JSX.Element,
+  node: unknown,
 ): node is JSX.ComponentNode<string> {
   return (
-    (node &&
+    (
       typeof node === "object" &&
+      node &&
       "type" in node &&
-      typeof node.type === "string") ||
+      typeof node.type === "string"
+    ) ||
     false
   );
 }
 
 export function isComponentNode(
-  node: JSX.Element,
+  node: unknown,
 ): node is JSX.ComponentNode<JSX.Component> {
   return (
-    (node &&
+    (
       typeof node === "object" &&
+      node &&
       "type" in node &&
-      typeof node.type === "function") ||
+      typeof node.type === "function"
+    ) ||
     false
   );
 }
 
 export function isTemplateNode(
-  node: JSX.Element,
+  node: unknown,
 ): node is JSX.TemplateNode {
-  return (node && typeof node === "object" && "templates" in node) || false;
+  return (typeof node === "object" && node && "templates" in node) || false;
 }
 
 export function isVComponent<T>(
@@ -296,11 +300,23 @@ export function childrenFrom(
   return fragment.props.children ?? [];
 }
 
-export function keyFrom(
-  node: JSX.ComponentNode<0> | JSX.Element[] | JSX.TemplateNode,
+export function keyFromNode(
+  node:
+    | JSX.Element[]
+    | JSX.Element,
 ): string | number | undefined {
-  if (isArray(node) || isTemplateNode(node)) return undefined;
-  return node.key;
+  if (isArray(node) || isTemplateNode(node) && !node) return undefined;
+
+  if (isFragmentNode(node) || isComponentNode(node) || isElementNode(node)) {
+    return node.key;
+  }
+}
+
+export function keyFromVNode<T>(vNode: VNode<T>): string | number | undefined {
+  if (!vNode || isVText(vNode)) {
+    return undefined;
+  }
+  return vNode[VNodeProps.KEY];
 }
 
 // TODO: Move to a the appropiate location (maybe @huuma/validate)
