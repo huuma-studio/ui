@@ -100,16 +100,20 @@ export function jsx(
 }
 
 export function jsxAttr(name: string, value: unknown): JSX.Element {
-  if (typeof value === "string") {
+  if (typeof value === "string" || value === true) {
     return {
-      templates: [`${escape(name)}="${escape(value)}"`],
+      templates: [
+        ...(value === true
+          ? escape(name)
+          : `${escape(name)}="${escape(value)}"`),
+      ],
       nodes: [""],
     };
   }
   return "";
 }
 
-// TODO: Properly implement and test escape here!
+// TODO: We escape in the render step but to be sure check impact of not escaping here!
 export function jsxEscape(node: JSX.Element): JSX.Element {
   return node;
 }
