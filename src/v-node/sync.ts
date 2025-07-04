@@ -298,7 +298,7 @@ function track<T>(
   children: JSX.Element[] | undefined,
   globalOptions: VGlobalOptions,
 ): VNode<T>[] {
-  // No new nodes
+  // No new nodes - remove old
   if (!children?.length) {
     return [];
   }
@@ -315,6 +315,7 @@ function track<T>(
 
   for (const node of children) {
     const vNode = vChildren[i];
+
     const vNodeKey = keyFromVNode(vNode);
     const nodeKey = keyFromNode(node);
 
@@ -339,7 +340,6 @@ function track<T>(
      */
     const movedVNode = removeByKey(nodeKey, vNodes);
     if (movedVNode) {
-      removeByVNode(movedVNode, vNodes);
       _children.push(update(node, movedVNode, globalOptions, false));
       i++;
       continue;
@@ -363,7 +363,7 @@ export function assertSyncCall<T>(
   return node;
 }
 
-function removeByKey<T>(
+export function removeByKey<T>(
   key: number | string | undefined,
   vNodes: VNode<T>[],
 ): VNode<T> | undefined {
@@ -373,7 +373,7 @@ function removeByKey<T>(
   return remove(index, vNodes);
 }
 
-function removeByVNode<T>(
+export function removeByVNode<T>(
   vNode: VNode<T>,
   vNodes: VNode<T>[],
 ): VNode<T> | undefined {
