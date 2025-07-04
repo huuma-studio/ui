@@ -9,7 +9,7 @@ export namespace JSX {
   export type EmptyNode = undefined | null | boolean;
 
   export type ComponentNode<T extends string | Component | 0> = {
-    type: T; // Fragment = 0;
+    type: T; // Element = string, Component = Component, Fragment = 0;
     eventRefs: EventRef[];
     props: ComponentProps;
     key?: string | number;
