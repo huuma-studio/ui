@@ -23,7 +23,7 @@ export function diff(props: DiffProps<Node>): ChangeSet<unknown>[] {
   }
 
   if (vNode && !previousVNode && attachmentRef) {
-    return render(vNode, attachmentRef);
+    return render(vNode, attachmentRef, true);
   }
 
   if (vNode && previousVNode && attachmentRef) {
@@ -31,7 +31,7 @@ export function diff(props: DiffProps<Node>): ChangeSet<unknown>[] {
   }
 
   if (vNode == null && previousVNode) {
-    return remove(previousVNode);
+    return remove(previousVNode, true);
   }
 
   return [];
