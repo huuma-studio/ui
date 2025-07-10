@@ -116,8 +116,9 @@ function attach({ vElement, attachmentRef }: AttachElementPayload): void {
   const node = vElement[VNodeProps.NODE_REF];
   if (!node) return;
   if (attachmentRef.type === AttachmentType.Parent) {
-    attachmentRef.vNode[VNodeProps.NODE_REF]?.appendChild(
+    attachmentRef.vNode[VNodeProps.NODE_REF]?.insertBefore(
       node,
+      attachmentRef.vNode[VNodeProps.NODE_REF]?.firstChild,
     );
   }
   if (attachmentRef.type === AttachmentType.Sibling) {

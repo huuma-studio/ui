@@ -13,7 +13,7 @@ import type { DeleteTextChangeSet } from "./types/text.ts";
 
 export function remove(
   vNode: VNode<Node>,
-  unmount: boolean,
+  unmount: boolean = true,
 ): ChangeSet<unknown>[] {
   if (isVComponent(vNode)) {
     const changeSet = [

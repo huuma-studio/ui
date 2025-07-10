@@ -7,7 +7,11 @@ import {
   type VText,
   VType,
 } from "../../../v-node/mod.ts";
-import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
+import {
+  type AttachmentRef,
+  AttachmentType,
+  type ParentAttachmentRef,
+} from "./attachment-ref.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import type { CreateAttributeChangeSet } from "./types/attribute.ts";
 import type {
@@ -24,7 +28,7 @@ import type { TextChangeSet } from "./types/text.ts";
 export function render(
   vNode: VNode<Node>,
   attachmentRef: AttachmentRef,
-  mount: boolean,
+  mount: boolean = true,
 ): ChangeSet<unknown>[] {
   if (!vNode) {
     return [];
@@ -135,10 +139,13 @@ function element(
       },
     );
   }
-
+  const childrenAttachmentRef: ParentAttachmentRef = {
+    type: AttachmentType.Parent,
+    vNode: vElement,
+  };
   vElement[VNodeProps.CHILDREN]?.forEach((child) => {
     changeSets.push(
-      ...render(child, { type: AttachmentType.Parent, vNode: vElement }, mount),
+      ...render(child, childrenAttachmentRef, mount),
     );
   });
 
