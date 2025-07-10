@@ -238,14 +238,11 @@ export function isVSignal(node: JSX.Element): node is VSignal {
 }
 
 export function cleanup(vNode: VNode<unknown>) {
-  if (vNode?.type === VType.COMPONENT) {
+  if (isVComponent(vNode)) {
     for (const c of vNode[VNodeProps.CLEANUP]) {
       c.cleanup();
     }
     vNode[VNodeProps.CLEANUP] = [];
-  }
-
-  if (isVComponent(vNode)) {
     cleanup(vNode[VNodeProps.AST]);
   }
 

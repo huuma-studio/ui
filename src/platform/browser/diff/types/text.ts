@@ -127,8 +127,9 @@ function attach({ vText, attachmentRef }: AttachTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
   if (!node) return;
   if (attachmentRef.type === AttachmentType.Parent) {
-    attachmentRef.vNode[VNodeProps.NODE_REF]?.appendChild(
+    attachmentRef.vNode[VNodeProps.NODE_REF]?.insertBefore(
       node,
+      attachmentRef.vNode[VNodeProps.NODE_REF]?.firstChild,
     );
   } else {
     attachmentRef.node.parentNode?.insertBefore(

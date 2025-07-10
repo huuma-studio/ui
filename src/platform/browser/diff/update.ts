@@ -1,4 +1,5 @@
 import {
+  keyFromVNode,
   type VComponent,
   type VElement,
   type VFragment,
@@ -11,6 +12,8 @@ import {
 import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
+import { remove } from "./remove.ts";
+import { render } from "./render.ts";
 import { compareAttributes } from "./types/attribute.ts";
 import type { LinkComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet } from "./types/element.ts";
@@ -36,7 +39,8 @@ export function update(
 
   if (
     vNode?.type === VType.ELEMENT && previousVNode?.type === VType.ELEMENT &&
-    vNode[VNodeProps.TAG] === previousVNode[VNodeProps.TAG]
+    vNode[VNodeProps.TAG] === previousVNode[VNodeProps.TAG] &&
+    vNode[VNodeProps.KEY] === previousVNode[VNodeProps.KEY]
   ) {
     return updateElement(vNode, previousVNode, attachmentRef);
   }
@@ -44,13 +48,15 @@ export function update(
   if (
     vNode?.type === VType.COMPONENT &&
     previousVNode?.type === VType.COMPONENT &&
-    vNode[VNodeProps.FN] === previousVNode[VNodeProps.FN]
+    vNode[VNodeProps.FN] === previousVNode[VNodeProps.FN] &&
+    vNode[VNodeProps.KEY] === previousVNode[VNodeProps.KEY]
   ) {
     return updateComponent(vNode, previousVNode, attachmentRef);
   }
 
   if (
-    vNode?.type === VType.FRAGMENT && previousVNode?.type === VType.FRAGMENT
+    vNode?.type === VType.FRAGMENT && previousVNode?.type === VType.FRAGMENT &&
+    vNode[VNodeProps.KEY] === previousVNode[VNodeProps.KEY]
   ) {
     return updateFragment(vNode, previousVNode, attachmentRef);
   }
@@ -85,18 +91,14 @@ function updateFragment(
   previousVFragment: VFragment<Node>,
   attachmentRef: AttachmentRef,
 ) {
-  const previousVNodes = [
-    ...(previousVFragment[VNodeProps.CHILDREN] ?? []),
-  ];
   const changeSet: ChangeSet<unknown>[] = [];
-
-  for (const vNode of vFragement[VNodeProps.CHILDREN] ?? []) {
-    changeSet.push(...update(vNode, previousVNodes.shift(), attachmentRef));
-  }
-
-  for (const previousVNode of previousVNodes) {
-    changeSet.push(...diff({ previousVNode }));
-  }
+  changeSet.push(
+    ...updateChildren(
+      vFragement,
+      previousVFragment,
+      attachmentRef,
+    ),
+  );
 
   return changeSet;
 }
@@ -207,28 +209,107 @@ export function updateChildren(
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   const changeSet: ChangeSet<unknown>[] = [];
+  // No new vNodes – remove previous vNode
+  if (!vNode[VNodeProps.CHILDREN]?.length) {
+    previousVNode[VNodeProps.CHILDREN]?.forEach((previousVChild) => {
+      changeSet.push(...diff({ previousVNode: previousVChild }));
+    });
+    return changeSet;
+  }
+
+  // No previous
+  if (!previousVNode[VNodeProps.CHILDREN]?.length) {
+    vNode[VNodeProps.CHILDREN]?.forEach((vChild) =>
+      changeSet.push(...diff({ attachmentRef, vNode: vChild }))
+    );
+    return changeSet;
+  }
 
   const previousVChildren: VNode<Node>[] = [
     ...(previousVNode[VNodeProps.CHILDREN] ?? []),
   ];
 
-  vNode[VNodeProps.CHILDREN]?.forEach((vChild) => {
-    const previousVChild = previousVChildren.shift();
+  vNode[VNodeProps.CHILDREN]?.forEach((vChild, index) => {
+    const previousVChild = previousVNode[VNodeProps.CHILDREN]?.[index];
 
-    changeSet.push(
-      ...diff({
-        vNode: vChild,
-        previousVNode: previousVChild,
-        attachmentRef,
-      }),
-    );
+    const previousKey = keyFromVNode(previousVChild);
+    const key = keyFromVNode(vChild);
+
+    if (key === previousKey) {
+      changeSet.push(
+        ...diff({
+          vNode: vChild,
+          previousVNode: previousVChild,
+          attachmentRef,
+        }),
+      );
+      return;
+    }
+
+    if (
+      isRemoved(vNode[VNodeProps.CHILDREN] || [], previousVChildren, index)
+    ) {
+      changeSet.push(...diff({ previousVNode: previousVChild }));
+      return;
+    }
+
+    const movedPreviousVNode = findAndMove(key, previousVChildren, index);
+    if (movedPreviousVNode) {
+      changeSet.push(
+        ...remove(movedPreviousVNode, false),
+        ...render(vChild, attachmentRef, false),
+      );
+      return;
+    }
+
+    addAndSkew(index, previousVChildren);
+    changeSet.push(...diff({ vNode: vChild, attachmentRef }));
   });
 
-  previousVChildren.forEach((previousVChild) => {
-    changeSet.push(...diff({ previousVNode: previousVChild }));
-  });
+  if (previousVChildren.length > vNode[VNodeProps.CHILDREN].length) {
+    previousVChildren.slice(
+      vNode[VNodeProps.CHILDREN].length - previousVChildren.length,
+    ).forEach((removedVNode) => {
+      changeSet.push(...diff({ previousVNode: removedVNode }));
+    });
+  }
 
   return changeSet;
+}
+
+function isRemoved(
+  vNodes: VNode<Node>[],
+  previousVNodes: VNode<Node>[],
+  index: number,
+): boolean {
+  const key = keyFromVNode(previousVNodes[index]);
+  if (!key) return false;
+  const i = vNodes.findIndex((vNode) => keyFromVNode(vNode) === key);
+  if (i >= 0) {
+    return false;
+  }
+  previousVNodes.splice(index, 1);
+  return true;
+}
+
+function addAndSkew(index: number, vNodes: VNode<Node>[]) {
+  vNodes.splice(index, 0, undefined);
+}
+
+function findAndMove(
+  key: string | number | undefined,
+  vNodes: VNode<Node>[],
+  index: number,
+): VNode<Node> {
+  const originalIndex = vNodes.findIndex((vNode) =>
+    keyFromVNode(vNode) === key
+  );
+  if (originalIndex < 0) {
+    return undefined;
+  }
+  const vNode = vNodes.splice(originalIndex, 1)[0];
+  vNodes.splice(index, 0, vNode);
+  return vNode;
 }
 
 export function isSignal(vNode: VText<Node>) {
