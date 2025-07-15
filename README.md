@@ -89,15 +89,14 @@ export default function Counter() {
 
 ## Server Actions
 
-Server actions provide a type-safe way to handle form submissions and server-side data mutations. They run exclusively on the server and can be called from both server and client components. Server actions are defined in files with the `.actions.ts` suffix and must be exported async functions.
+Server actions provide a type-safe way to handle form submissions and server-side data mutations. They run exclusively on the server and can be called from both server and client components. Server actions are defined in files with the `.actions.ts` suffix and must be exported async functions. Server actions only accept JSON-conform data as function input.
 
 ### Basic Server Action
 
 ```tsx
 // src/user.actions.ts
-export async function createUser(formData: FormData) {
-  const name = formData.get("name") as string;
-  const email = formData.get("email") as string;
+export async function createUser(data: { name: string; email: string }) {
+  const { name, email } = data;
 
   // Validate input
   if (!name || !email) {
@@ -128,7 +127,11 @@ export default function CreateUserForm() {
 
     try {
       const formData = new FormData(event.target as HTMLFormElement);
-      const result = await createUser(formData);
+      const data = {
+        name: formData.get("name") as string,
+        email: formData.get("email") as string,
+      };
+      const result = await createUser(data);
       message.set(`User ${result.user.name} created successfully!`);
     } catch (error) {
       message.set(`Error: ${error.message}`);
