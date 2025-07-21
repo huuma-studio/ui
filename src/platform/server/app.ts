@@ -1,5 +1,5 @@
 import { App, type AppContext, type AppOptions } from "@huuma/route";
-import type { Handler } from "@huuma/route/http/request";
+import type { Handler, SearchParams } from "@huuma/route/http/request";
 import { handle, type Middleware } from "@huuma/route/middleware";
 import { renderToString, vNodeToString } from "./render.ts";
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
@@ -24,9 +24,11 @@ export type PageLike<T> = (
   props: PageLikeProps<T>,
 ) => JSX.Element | Promise<JSX.Element>;
 
-export interface PageLikeProps<T, A = unknown> extends JSX.ComponentProps {
+export interface PageLikeProps<T = undefined> extends JSX.ComponentProps {
   params: Record<string, string>;
-  auth: A;
+  searchParams: Record<string, string>;
+  request: Request;
+  auth: unknown;
   data: T;
   scripts?: PageScripts;
   islands?: Island[];
@@ -59,10 +61,12 @@ export interface RenderProps<T> {
   page: PageLike<T>;
   layouts?: PageLike<T>[];
   params: Record<string, string | undefined>;
+  searchParams: SearchParams;
   data: T;
   transferState: TransferState;
   nonce: string;
-  url: URL;
+  request: Request;
+  auth?: unknown;
 }
 
 export interface Script {
@@ -78,9 +82,7 @@ interface ScriptWithImports {
   imports?: string[];
 }
 
-export function createUIApp<D>(
-  root: PageLike<D>,
-): UIApp<D> {
+export function createUIApp<D>(root: PageLike<D>): UIApp<D> {
   return new UIApp<D>(root);
 }
 
@@ -106,11 +108,14 @@ export class UIApp<
     return this.get(path, this.#pageHandler({ root: this.#root, ...props }));
   }
 
-  addIsland(island: JSX.Component, script: {
-    path: string;
-    contents: Uint8Array;
-    imports?: string[];
-  }): void {
+  addIsland(
+    island: JSX.Component,
+    script: {
+      path: string;
+      contents: Uint8Array;
+      imports?: string[];
+    },
+  ): void {
     this.addScript(script.path, script.contents, {
       isIsland: true,
       imports: script.imports,
@@ -126,12 +131,10 @@ export class UIApp<
   addScript(
     path: string,
     content: Uint8Array,
-    options?:
-      & {
-        isEntryPoint: boolean;
-        head?: boolean;
-      }
-      & ScriptWithImports,
+    options?: {
+      isEntryPoint: boolean;
+      head?: boolean;
+    } & ScriptWithImports,
   ): void;
   addScript(
     path: string,
@@ -147,13 +150,17 @@ export class UIApp<
       isRuntime: boolean;
     } & ScriptWithImports,
   ): void;
-  addScript(path: string, content: Uint8Array, options?: {
-    isEntryPoint?: boolean;
-    isIsland?: boolean;
-    isRuntime?: boolean;
-    head?: boolean;
-    imports?: string[];
-  }) {
+  addScript(
+    path: string,
+    content: Uint8Array,
+    options?: {
+      isEntryPoint?: boolean;
+      isIsland?: boolean;
+      isRuntime?: boolean;
+      head?: boolean;
+      imports?: string[];
+    },
+  ) {
     this.#scripts.push({
       path,
       isRuntime: options?.isRuntime,
@@ -179,71 +186,75 @@ export class UIApp<
     this.#transferState[key] = state;
   }
 
-  #pageHandler(
-    props: PageHandlerProps<D>,
-  ): Handler<T> {
+  #pageHandler(props: PageHandlerProps<D>): Handler<T> {
     return (ctx) => {
       // TODO: Fix type
       // deno-lint-ignore no-explicit-any
       ctx.set<any>("transferState", {});
       const nonce = crypto.randomUUID();
 
-      return handle(
-        ctx,
-        props.middleware,
-        async (ctx) => {
-          const transferState = {
-            ...ctx.get("transferState"),
-            ...this.#transferState,
-          };
-          return new Response(
-            await this.#render({
-              root: this.#root,
-              page: props.page,
-              layouts: props.layouts,
-              params: ctx.params ?? {},
-              data: ctx.get("data") ??
-                {} as D,
-              transferState,
-              nonce,
-              url: new URL(ctx.request.url),
-            }),
-            {
-              status: props.statusCode,
-              headers: {
-                "Content-Type": "text/html",
-                "Content-Security-Policy":
-                  `script-src 'none'; script-src-elem 'nonce-${nonce}';`,
-              },
+      return handle(ctx, props.middleware, async (ctx) => {
+        const transferState = {
+          ...ctx.get("transferState"),
+          ...this.#transferState,
+        };
+        return new Response(
+          await this.#render({
+            root: this.#root,
+            page: props.page,
+            layouts: props.layouts,
+            params: ctx.params ?? {},
+            searchParams: ctx.search ?? {},
+            data: ctx.get("data") ?? ({} as D),
+            transferState,
+            nonce,
+            auth: ctx.auth,
+            request: ctx.request,
+          }),
+          {
+            status: props.statusCode,
+            headers: {
+              "Content-Type": "text/html",
+              "Content-Security-Policy":
+                `script-src 'none'; script-src-elem 'nonce-${nonce}';`,
             },
-          );
-        },
-      );
+          },
+        );
+      });
     };
   }
 
-  async #render(
-    { page, layouts, params, transferState, data, nonce, url }: RenderProps<D>,
-  ): Promise<string> {
+  async #render({
+    page,
+    layouts,
+    params,
+    searchParams,
+    request,
+    auth,
+    transferState,
+    data,
+    nonce,
+  }: RenderProps<D>): Promise<string> {
     const islands: Island[] = [];
 
-    const node = this.#applyLayouts(
+    const node = this.#applyLayouts({
       page,
       layouts,
       params,
+      searchParams,
       data,
-    );
+      auth,
+      request,
+    });
 
-    const vNode = await create(
-      node,
-      {
-        transferState,
-        url,
-        ...this.#islands.length
-          ? { beforeCreate: markIslands(this.#islands, islands) }
-          : undefined,
-      },
-    );
+    const url = new URL(request.url);
+    const vNode = await create(node, {
+      transferState,
+      url,
+      ...(this.#islands.length
+        ? { beforeCreate: markIslands(this.#islands, islands) }
+        : undefined),
+    });
     return `<!DOCTYPE html>${await renderToString(
       jsx(<JSX.Component> this.#root, {
         children: [
@@ -252,8 +263,11 @@ export class UIApp<
             nodes: [""],
           },
         ],
-        params: params,
-        data: data,
+        params,
+        searchParams,
+        request,
+        auth,
+        data,
         scripts: this.#splitScripts(this.#scripts, islands, nonce),
         islands,
         transferState,
@@ -291,9 +305,9 @@ export class UIApp<
       }
       if (
         this.#islands.length &&
-        script.isIsland && !!islands.filter((island) =>
-          parse(island.path).name === script.name
-        ).length
+        script.isIsland &&
+        !!islands.filter((island) => parse(island.path).name === script.name)
+          .length
       ) {
         _scripts.body.islands.push(script);
         continue;
@@ -310,25 +324,41 @@ export class UIApp<
     return _scripts;
   }
 
-  #applyLayouts(
-    page: PageLike<D>,
-    layouts?: PageLike<D>[],
-    params?: Record<string, string | undefined>,
-    data?: D,
-  ): JSX.Element {
-    return (layouts?.length ? [...layouts] : []).reduce<
-      JSX.Element
-    >(
+  #applyLayouts(props: {
+    page: PageLike<D>;
+    layouts: PageLike<D>[] | undefined;
+    params: Record<string, string | undefined>;
+    searchParams: SearchParams;
+    data: D | undefined;
+    auth: unknown;
+    request: Request;
+  }): JSX.Element {
+    const {
+      page,
+      layouts,
+      params,
+      searchParams,
+      data,
+      auth,
+      request,
+    } = props;
+    return (layouts?.length ? [...layouts] : []).reduce<JSX.Element>(
       (accumulator, currentLayout) => {
         return jsx(<JSX.Component> currentLayout, {
           params,
+          searchParams,
+          request,
+          auth,
           data,
           children: [accumulator],
         });
       },
       jsx(<JSX.Component> page, {
-        params: params,
-        data: data,
+        params,
+        searchParams,
+        request,
+        auth,
+        data,
       }),
     );
   }
