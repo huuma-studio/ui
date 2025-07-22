@@ -8,6 +8,8 @@ import { parse } from "@std/path/parse";
 import type { Route } from "@huuma/route/http/route";
 import { isProd } from "@huuma/route/utils/environment";
 import { create } from "../../v-node/async.ts";
+import { DEFAULT_STYLES_PATH, type Stylesheet } from "./stylesheet.tsx";
+import { info } from "@huuma/route/utils/logger";
 
 export type TransferStateItem =
   | TransferState
@@ -30,8 +32,6 @@ export interface PageLikeProps<T = undefined> extends JSX.ComponentProps {
   request: Request;
   auth: unknown;
   data: T;
-  scripts?: PageScripts;
-  islands?: Island[];
   transferState?: TransferState;
 }
 
@@ -55,6 +55,16 @@ export interface PageScripts {
     entryPoints: Script[];
   };
 }
+
+export type RootPageProps<T> = PageLikeProps<T> & {
+  scripts?: PageScripts;
+  stylesheets?: Stylesheet[];
+  islands?: Island[];
+};
+
+export type RootPage<T> = (
+  props: RootPageProps<T>,
+) => JSX.Element | Promise<JSX.Element>;
 
 export interface RenderProps<T> {
   root: PageLike<T>;
@@ -82,7 +92,7 @@ interface ScriptWithImports {
   imports?: string[];
 }
 
-export function createUIApp<D>(root: PageLike<D>): UIApp<D> {
+export function createUIApp<D>(root: RootPage<D>): UIApp<D> {
   return new UIApp<D>(root);
 }
 
@@ -90,12 +100,13 @@ export class UIApp<
   D,
   T extends AppContext = { State: { data: D; transferState: TransferState } },
 > extends App<T> {
-  #root: PageLike<D>;
+  #root: RootPage<D>;
   #islands: { path: string; island: JSX.Component }[] = [];
   #scripts: Script[] = [];
+  #stylesheets: Stylesheet[] = [];
   #transferState: TransferState = {};
 
-  constructor(root: PageLike<D>, options?: AppOptions<T>) {
+  constructor(root: RootPage<D>, options?: AppOptions<T>) {
     super(options);
     this.#root = root;
   }
@@ -180,6 +191,25 @@ export class UIApp<
         },
       });
     });
+  }
+
+  addStyleSheet(stylesheet: Stylesheet) {
+    const existing = this.#stylesheets.find((s) => s.name === stylesheet.name);
+    if (!existing) {
+      this.#stylesheets.push(stylesheet);
+      this.get(`${DEFAULT_STYLES_PATH}/${stylesheet.name}`, () => {
+        return new Response(stylesheet.content, {
+          headers: {
+            "Content-Type": "text/css",
+            ...(isProd() ? { "Cache-Control": "max-age=3600" } : {}),
+          },
+        });
+      });
+    }
+    info(
+      "UI",
+      `Skipped stylesheet. Stylesheet with ${stylesheet.name} already register.`,
+    );
   }
 
   addTransferState(key: string, state: TransferStateItem) {
@@ -269,9 +299,10 @@ export class UIApp<
         auth,
         data,
         scripts: this.#splitScripts(this.#scripts, islands, nonce),
+        stylesheets: this.#stylesheets,
         islands,
         transferState,
-      }),
+      } as RootPageProps<D>),
       { transferState, url },
     )}`;
   }
