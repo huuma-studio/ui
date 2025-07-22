@@ -193,7 +193,7 @@ export class UIApp<
     });
   }
 
-  addStyleSheet(stylesheet: Stylesheet) {
+  addStylesheet(stylesheet: Stylesheet) {
     const existing = this.#stylesheets.find((s) => s.name === stylesheet.name);
     if (!existing) {
       this.#stylesheets.push(stylesheet);
