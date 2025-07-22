@@ -1,4 +1,8 @@
 import { escape } from "@std/html/entities";
+
+import { create as syncCreate } from "../../v-node/sync.ts";
+import type { JSX } from "../../jsx-runtime/mod.ts";
+import { create } from "../../v-node/async.ts";
 import {
   type VElement,
   type VGlobalOptions,
@@ -7,9 +11,6 @@ import {
   type VText,
   VType,
 } from "../../v-node/mod.ts";
-import type { JSX } from "../../jsx-runtime/mod.ts";
-import { create } from "../../v-node/async.ts";
-import { create as syncCreate } from "../../v-node/sync.ts";
 
 const selfClosingTags = [
   "area",

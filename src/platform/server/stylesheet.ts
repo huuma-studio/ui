@@ -1,4 +1,4 @@
-import type { JSX } from "../../jsx-runtime/mod.ts";
+import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
 import type { Props } from "../../mod.ts";
 
 export const DEFAULT_STYLES_PATH = "/_huuma/styles";
@@ -13,14 +13,10 @@ interface StylesheetsProps extends Props {
 }
 
 export function Stylesheets({ styleSheets }: StylesheetsProps): JSX.Element {
-  return (
-    <>
-      {styleSheets.map((stylesheet) => (
-        <link
-          href={`${DEFAULT_STYLES_PATH}/${stylesheet.name}`}
-          rel="stylesheet"
-        />
-      ))}
-    </>
+  return styleSheets.map((stylesheet) =>
+    jsx("link", {
+      href: `${DEFAULT_STYLES_PATH}/${stylesheet.name}`,
+      rel: "stylesheet",
+    })
   );
 }
