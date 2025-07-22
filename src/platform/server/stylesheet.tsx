@@ -1,4 +1,4 @@
-import type { JSX } from "../../jsx-runtime/jsx.ts";
+import type { JSX } from "../../jsx-runtime/mod.ts";
 import type { Props } from "../../mod.ts";
 
 export const DEFAULT_STYLES_PATH = "/_huuma/styles";
