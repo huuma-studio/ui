@@ -209,8 +209,9 @@ export class UIApp<
       });
     } else {
       info(
-        "UI",
+        "STYLESHEET",
         `Skipped stylesheet. Stylesheet "${stylesheet.name}" already registered.`,
+        "Huuma/UI",
       );
     }
   }
