@@ -196,7 +196,9 @@ export class UIApp<
   addStylesheet(stylesheet: Stylesheet) {
     const existing = this.#stylesheets.find((s) => s.name === stylesheet.name);
     if (!existing) {
-      this.#stylesheets.push(stylesheet);
+      if (stylesheet.entrypoint) {
+        this.#stylesheets.push(stylesheet);
+      }
       this.get(`${DEFAULT_STYLES_PATH}/${stylesheet.name}`, () => {
         return new Response(stylesheet.content, {
           headers: {
@@ -205,11 +207,13 @@ export class UIApp<
           },
         });
       });
+    } else {
+      info(
+        "STYLESHEET",
+        `Skipped stylesheet. Stylesheet "${stylesheet.name}" already registered.`,
+        "Huuma/UI",
+      );
     }
-    info(
-      "UI",
-      `Skipped stylesheet. Stylesheet with ${stylesheet.name} already register.`,
-    );
   }
 
   addTransferState(key: string, state: TransferStateItem) {
