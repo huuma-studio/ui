@@ -81,7 +81,7 @@ export class Bundler {
     let hash: string = "";
 
     result.outputFiles?.forEach((file) => {
-      const metaInfo = result.metafile.outputs[parse(file.path).base];
+      const metaInfo = result.metafile?.outputs[parse(file.path).base];
 
       hash = hash.concat(hash, file.hash);
       const entryPoint: EntryPoint | undefined =
@@ -93,7 +93,7 @@ export class Bundler {
         isIsland: entryPoint && "isIsland" in entryPoint && entryPoint.isIsland,
         isRuntime: entryPoint && "isRuntime" in entryPoint &&
           entryPoint.isRuntime,
-        imports: metaInfo.imports,
+        imports: metaInfo?.imports ?? [],
         ...file,
       });
     });
