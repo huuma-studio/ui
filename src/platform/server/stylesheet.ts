@@ -5,7 +5,7 @@ export const DEFAULT_STYLES_PATH = "/_huuma/styles";
 
 export interface Stylesheet {
   name: string;
-  content: Uint8Array<ArrayBuffer>;
+  content: Uint8Array<ArrayBufferLike> | string;
   entrypoint: boolean;
 }
 
