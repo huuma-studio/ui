@@ -4,14 +4,14 @@
 
 > ⚠️ **Developer Preview** - Huuma UI is currently in active development and should be considered experimental software. This release contains known bugs, incomplete features, and APIs that will change without notice. Documentation may be outdated or incorrect. Performance has not been optimized and memory leaks may occur. **Do not use in production environments.** We encourage experimentation and feedback, but please expect breaking changes, data loss, and unstable behavior. Use at your own risk.
 
-Huuma UI An easy to use web framework for Deno that lets you build interactive websites with components that work on both server and client. Features server actions, reactive state management, and automatic code splitting for optimal performance.
+Huuma UI An easy to use web framework for Deno that lets you build interactive websites with components that work on both server and client. Features remote server functions, reactive state management, and automatic code splitting for optimal performance.
 
 ## Features
 
 - **JSX Support**: Create component-based UIs with familiar JSX syntax
 - **Server-Side Rendering**: Render async components on the server for improved SEO and initial load performance
 - **Islands Interactivity**: Selectively hydrate components on the client for interactivity
-- **Server Actions**: Type-safe server-side functions for handling form submissions and data mutations
+- **Remote Server Functions**: Type-safe server-side functions for handling form submissions and data mutations
 - **Signal-Based Reactivity**: Fine-grained reactivity system for efficient updates
 - **Internationalization (i18n)**: Built-in support for multilingual applications
 - **TypeScript First**: Fully typed API for improved developer experience
@@ -87,14 +87,14 @@ export default function Counter() {
 }
 ```
 
-## Server Actions
+## Remote server functions
 
-Server actions provide a type-safe way to handle form submissions and server-side data mutations. They run exclusively on the server and can be called from both server and client components. Server actions are defined in files with the `.actions.ts` suffix and must be exported async functions. Server actions only accept JSON-conform data as function input.
+Remote server functions provide a type-safe way to handle form submissions and server-side data mutations. They run exclusively on the server and can be called from both server and client components. Remote server functions are defined in files with the `.remote.ts` suffix and must be exported async functions. Remote server functions only accept JSON-conform data as function input.
 
-### Basic Server Action
+### Basic Remote server functions
 
 ```tsx
-// src/user.actions.ts
+// src/user.remote.ts
 export async function createUser(data: { name: string; email: string }) {
   const { name, email } = data;
 
@@ -110,11 +110,11 @@ export async function createUser(data: { name: string; email: string }) {
 }
 ```
 
-### Using Server Actions in Forms
+### Using Remote server functions in Forms
 
 ```tsx
 // pages/create-user.client.tsx
-import { createUser } from "../src/user.actions.ts";
+import { createUser } from "../src/user.remote.ts";
 import { $signal } from "@huuma/ui/hooks/signal";
 
 export default function CreateUserForm() {
@@ -336,8 +336,8 @@ my-app/
 │   ├── page.tsx      # Page components
 │   └── counter.client.tsx  # Island components (with .client.tsx suffix)
 ├── src/              # Application code
-│   ├── user.actions.ts    # Server actions for user operations
-│   └── blog.actions.ts    # Server actions for blog operations
+│   ├── user.remote.ts    # Remote server functions for user operations
+│   └── blog.remote.ts    # Remote server functions for blog operations
 ├── app.ts            # Main application entry
 └── deno.json         # Deno configuration
 ```
