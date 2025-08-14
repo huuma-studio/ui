@@ -6,8 +6,18 @@ import type { AppContext } from "@huuma/route";
 import type { PageLike, UIApp } from "../app.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
 import { Bundler, type EntryPoints } from "./bundler.ts";
-import { createList, listActions, listIslands, listPages } from "./list.ts";
-import { packActions, packIslands, packPages, packScripts } from "./pack.ts";
+import {
+  createList,
+  listIslands,
+  listPages,
+  remoteFunctionsList,
+} from "./list.ts";
+import {
+  packIslands,
+  packPages,
+  packRemoteFunctions,
+  packScripts,
+} from "./pack.ts";
 import { parse } from "@std/path";
 
 export type PageRoute = {
@@ -23,7 +33,7 @@ type Renderable = {
 export interface List {
   pages: Record<string, PageRoute>;
   islands?: Record<string, { default: JSX.Component }>;
-  actions?: Record<
+  remoteFunctions?: Record<
     string,
     // deno-lint-ignore no-explicit-any
     Record<string, (...args: any[]) => Promise<any>>
@@ -97,8 +107,8 @@ export async function pack<T extends AppContext>(
     app,
   );
 
-  await packActions(
-    list.actions,
+  await packRemoteFunctions(
+    list.remoteFunctions,
     app,
   );
 
@@ -121,7 +131,7 @@ export async function list<T extends AppContext>(
 
   const pages = await listPages(pagesPath);
   const islands = await listIslands("./");
-  const actions = await listActions("./");
+  const remoteFunctions = await remoteFunctionsList("./");
   const scripts: List["scripts"] = [];
 
   const entryPoints: EntryPoints = {
@@ -167,7 +177,7 @@ export async function list<T extends AppContext>(
       pagesList: pages,
       islandsList: islands,
       scriptsList: scripts,
-      actionsList: actions,
+      remoteFunctionsList: remoteFunctions,
       packDirectory,
     });
 

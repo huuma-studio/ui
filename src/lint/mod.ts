@@ -1,7 +1,7 @@
 export default {
   name: "huuma",
   rules: {
-    "async-actions": {
+    "async-remote-functions": {
       create(context) {
         return {
           ExportNamedDeclaration(node) {
@@ -10,11 +10,11 @@ export default {
               node.declaration.async
             ) {
               return;
-            } else if (context.filename.endsWith(".actions.ts")) {
+            } else if (context.filename.endsWith(".remote.ts")) {
               context.report({
                 node,
                 message:
-                  "Huuma server actions MUST be an async function export",
+                  "Huuma remote function MUST be an async function export",
               });
             }
           },

@@ -89,27 +89,34 @@ export async function packScripts<T extends AppContext>(
   return app;
 }
 
-export async function packActions<T extends AppContext>(
-  _actions: List["actions"],
+export async function packRemoteFunctions<T extends AppContext>(
+  _remoteFunctions: List["remoteFunctions"],
   app: UIApp<T>,
 ): Promise<UIApp<T>> {
-  const actionSchema = object({
-    action: string(),
+  const remoteFunctionsSchema = object({
+    remoteFunction: string(),
     args: array(unknown()).optional(),
   });
-  if (_actions) {
-    for (const [key, actions] of Object.entries(_actions)) {
+  if (_remoteFunctions) {
+    for (const [key, remoteFunctions] of Object.entries(_remoteFunctions)) {
       const fileName = parse(key).name;
       const fileHash = await generateHash(`/${key}`);
-      app.post(`/_huuma/actions/${fileHash}/${fileName}`, async ({ body }) => {
-        const { action, args } = actionSchema.parse(body);
-        if (action in actions && typeof actions[action] === "function") {
-          const res = await actions[action](...(args?.length ? args : []));
+      app.post(`/_huuma/remote/${fileHash}/${fileName}`, async ({ body }) => {
+        const { remoteFunction, args } = remoteFunctionsSchema.parse(body);
+        if (
+          remoteFunction in remoteFunctions &&
+          typeof remoteFunctions[remoteFunction] === "function"
+        ) {
+          const res = await remoteFunctions[remoteFunction](
+            ...(args?.length ? args : []),
+          );
           return new Response(JSON.stringify(res), {
             headers: { "content-type": "application/json" },
           });
         }
-        throw new NotFoundException(`Action "${action}" not found`);
+        throw new NotFoundException(
+          `Remote function "${remoteFunction}" not found`,
+        );
       });
     }
   }

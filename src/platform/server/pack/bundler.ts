@@ -57,7 +57,7 @@ export class Bundler {
     await initialize();
 
     const result = await esbuild.build({
-      plugins: [actionsPlugin, ...denoPlugins({})],
+      plugins: [remoteRemotePlugin, ...denoPlugins({})],
       entryPoints: Object.entries(entryPoints).reduce((acc, [key, value]) => {
         acc[key] = value.path;
         return acc;
@@ -115,10 +115,10 @@ export async function generateHash(value: string): Promise<string> {
   ).slice(0, 8);
 }
 
-const actionsPlugin: esbuild.Plugin = {
-  name: "huuma-actions-plugin",
+const remoteRemotePlugin: esbuild.Plugin = {
+  name: "huuma-remote-function-plugin",
   setup(build) {
-    build.onLoad({ filter: /\.actions\.ts$/ }, async (args) => {
+    build.onLoad({ filter: /\.remote\.ts$/ }, async (args) => {
       // Look into the file in scope and find the names of all exported functions
       const fileContent = await Deno.readTextFile(args.path);
 
@@ -161,19 +161,19 @@ const actionsPlugin: esbuild.Plugin = {
               },
               body: JSON.stringify({
                 args,
-                action: "${fn}",
+                remoteFunction: "${fn}",
               }),
             }).then(res=>res.json());};`;
           }
           return `export async function ${fn}(...args){
-          return fetch("/_huuma/actions/${fileHash}/${fileName}", {
+          return fetch("/_huuma/remote/${fileHash}/${fileName}", {
             method: "POST",
             headers: {
               "content-type": "application/json",
             },
             body: JSON.stringify({
               args,
-              action: "${fn}",
+              remoteFunction: "${fn}",
             }),
           }).then(res=>res.json());};`;
         }).join(EOL)

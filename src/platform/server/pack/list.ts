@@ -22,19 +22,19 @@ interface Pack {
   middlewares: FileImport[];
   islands: FileImport[];
   scripts: List["scripts"];
-  actions: FileImport[];
+  remoteFunctions: FileImport[];
 }
 
 type CreateListOptions = {
   packDirectory: string;
-  pagesList: Omit<Pack, "islands" | "scripts" | "actions">;
+  pagesList: Omit<Pack, "islands" | "scripts" | "remoteFunctions">;
   islandsList: FileImport[];
   scriptsList: List["scripts"];
-  actionsList: FileImport[];
+  remoteFunctionsList: FileImport[];
 };
 
 export async function createList(
-  { pagesList, islandsList, scriptsList, actionsList, packDirectory }:
+  { pagesList, islandsList, scriptsList, remoteFunctionsList, packDirectory }:
     CreateListOptions,
 ): Promise<List> {
   return (
@@ -49,7 +49,7 @@ export async function createList(
             middlewares: pagesList.middlewares,
             islands: islandsList,
             scripts: scriptsList,
-            actions: actionsList,
+            remoteFunctions: remoteFunctionsList,
           },
           packDirectory,
         ),
@@ -60,7 +60,7 @@ export async function createList(
 
 export async function listPages(
   path: string,
-): Promise<Omit<Pack, "islands" | "scripts" | "actions">> {
+): Promise<Omit<Pack, "islands" | "scripts" | "remoteFunctions">> {
   let pages: FileImport[] = [];
   let layouts: FileImport[] = [];
   let middlewares: FileImport[] = [];
@@ -165,17 +165,17 @@ export async function listIslands(path: string): Promise<FileImport[]> {
   return islands;
 }
 
-export async function listActions(path: string): Promise<FileImport[]> {
-  const actions: FileImport[] = [];
+export async function remoteFunctionsList(path: string): Promise<FileImport[]> {
+  const remoteFunctions: FileImport[] = [];
   let i = 0;
 
   for await (
     const file of walk(path, {
       includeDirs: false,
-      match: [/(.+\.actions\.ts)$/],
+      match: [/(.+\.remote\.ts)$/],
     })
   ) {
-    actions.push({
+    remoteFunctions.push({
       filePath: dirname(file.path),
       fileName: file.name,
       name: `A${i}`,
@@ -183,7 +183,7 @@ export async function listActions(path: string): Promise<FileImport[]> {
     i++;
   }
 
-  return actions;
+  return remoteFunctions;
 }
 
 async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
@@ -203,7 +203,9 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
       ? [imports(pack.middlewares, "Middleware")]
       : []),
     ...(pack.islands.length ? [imports(pack.islands, "Islands")] : []),
-    ...(pack.actions.length ? [imports(pack.actions, "Actions")] : []),
+    ...(pack.remoteFunctions.length
+      ? [imports(pack.remoteFunctions, "Remote Functions")]
+      : []),
     ...(pack.pages.length
       ? [
         "",
@@ -214,8 +216,8 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
         ...(pack.islands.length
           ? ["  islands: {", fileExports(pack.islands), "  },"]
           : []),
-        ...(pack.actions.length
-          ? ["  actions: {", fileExports(pack.actions), "  },"]
+        ...(pack.remoteFunctions.length
+          ? ["  remoteFunctions: {", fileExports(pack.remoteFunctions), "  },"]
           : []),
         [
           "  scripts: [",
