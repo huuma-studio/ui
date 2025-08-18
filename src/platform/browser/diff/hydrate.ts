@@ -10,7 +10,11 @@ import {
   VNodeProps,
   type VText,
 } from "../../../v-node/mod.ts";
-import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
+import {
+  type AttachmentRef,
+  AttachmentType,
+  type ParentAttachmentRef,
+} from "./attachment-ref.ts";
 
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
@@ -148,12 +152,17 @@ function element(
 
   const nodes = !skipChildren ? [...node.childNodes] : undefined;
 
+  const childrenAttachmentRef: ParentAttachmentRef = {
+    type: AttachmentType.Parent,
+    vNode: vElement,
+  };
+
   vElement[VNodeProps.CHILDREN]?.forEach((vNode) => {
     changes.push(
       ...diff({
         nodes,
         vNode,
-        attachmentRef: { type: AttachmentType.Parent, vNode: vElement },
+        attachmentRef: childrenAttachmentRef,
       }),
     );
   });
