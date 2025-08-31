@@ -3,7 +3,7 @@ import { parseArgs } from "@std/cli/parse-args";
 import type { Middleware } from "@huuma/route/middleware";
 import { info, log } from "@huuma/route/utils/logger";
 import type { AppContext } from "@huuma/route";
-import type { PageLike, UIApp } from "../app.ts";
+import type { Metadata, PageLike, UIApp } from "../app.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
 import { Bundler, type EntryPoints } from "./bundler.ts";
 import {
@@ -28,6 +28,7 @@ export type PageRoute = {
 
 type Renderable = {
   default: PageLike<unknown>;
+  metadata?: Metadata;
 };
 
 export interface List {
