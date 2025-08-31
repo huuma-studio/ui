@@ -1,6 +1,6 @@
 {
   "name": "@huuma/ui",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "exports": {
     ".": "./src/mod.ts",
     "./v-node": "./src/v-node/mod.ts",
@@ -44,7 +44,7 @@
     "check": "deno check src/**/*.tsx src/**/*.ts"
   },
   "compilerOptions": {
-    "jsx": "react-jsx",
+    "jsx": "compile",
     "jsxImportSource": "@huuma/ui",
     "lib": [
       "dom",

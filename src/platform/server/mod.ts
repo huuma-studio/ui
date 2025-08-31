@@ -4,6 +4,7 @@ export { Launch, Scripts } from "./scripts.ts";
 export { Meta } from "./meta.ts";
 export {
   createUIApp,
+  type Metadata,
   type PageLike,
   type PageLikeProps,
   UIApp,

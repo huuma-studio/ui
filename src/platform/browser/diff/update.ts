@@ -255,6 +255,7 @@ export function updateChildren(
 
     const movedPreviousVNode = findAndMove(key, previousVChildren, index);
     if (movedPreviousVNode) {
+      //TODO: Some thing fishy here!
       changeSet.push(
         ...remove(movedPreviousVNode, false),
         ...render(vChild, attachmentRef, false),

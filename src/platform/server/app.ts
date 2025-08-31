@@ -22,6 +22,12 @@ export interface TransferState {
   [key: string]: TransferStateItem;
 }
 
+export type Metadata = {
+  title?: string;
+  description: string;
+  headers?: Record<string, string>;
+};
+
 export type PageLike<T> = (
   props: PageLikeProps<T>,
 ) => JSX.Element | Promise<JSX.Element>;
@@ -40,6 +46,7 @@ export interface PageProps<T> {
   layouts: PageLike<T>[];
   middleware: Middleware[];
   statusCode: number;
+  metadata?: Metadata;
 }
 
 type PageHandlerProps<T> = PageProps<T> & {
@@ -77,6 +84,7 @@ export interface RenderProps<T> {
   nonce: string;
   request: Request;
   auth?: unknown;
+  metadata?: Metadata;
 }
 
 export interface Script {
@@ -232,6 +240,7 @@ export class UIApp<
           ...ctx.get("transferState"),
           ...this.#transferState,
         };
+
         return new Response(
           await this.#render({
             root: this.#root,
@@ -244,6 +253,7 @@ export class UIApp<
             nonce,
             auth: ctx.auth,
             request: ctx.request,
+            metadata: props.metadata,
           }),
           {
             status: props.statusCode,
@@ -251,6 +261,7 @@ export class UIApp<
               "Content-Type": "text/html",
               "Content-Security-Policy":
                 `script-src 'none'; script-src-elem 'nonce-${nonce}';`,
+              ...(isProd() ? props.metadata?.headers : {}),
             },
           },
         );
@@ -268,6 +279,7 @@ export class UIApp<
     transferState,
     data,
     nonce,
+    metadata,
   }: RenderProps<D>): Promise<string> {
     const islands: Island[] = [];
 
@@ -302,6 +314,7 @@ export class UIApp<
         request,
         auth,
         data,
+        metadata,
         scripts: this.#splitScripts(this.#scripts, islands, nonce),
         stylesheets: this.#stylesheets,
         islands,
