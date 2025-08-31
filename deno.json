@@ -44,7 +44,7 @@
     "check": "deno check src/**/*.tsx src/**/*.ts"
   },
   "compilerOptions": {
-    "jsx": "precompile",
+    "jsx": "react-jsx",
     "jsxImportSource": "@huuma/ui",
     "lib": [
       "dom",
