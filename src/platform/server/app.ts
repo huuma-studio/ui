@@ -67,6 +67,7 @@ export type RootPageProps<T> = PageLikeProps<T> & {
   scripts?: PageScripts;
   stylesheets?: Stylesheet[];
   islands?: Island[];
+  metadata?: Metadata;
 };
 
 export type RootPage<T> = (
