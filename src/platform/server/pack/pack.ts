@@ -3,7 +3,7 @@ import { join } from "@std/path/join";
 import { parse } from "@std/path/parse";
 import { array, object, string, unknown } from "@huuma/validate";
 
-import type { Metadata, PageLike, UIApp } from "../app.ts";
+import type { Metadata, MetadataGenerator, PageLike, UIApp } from "../app.ts";
 import type { List } from "./mod.ts";
 import { mapPath } from "./path-mapping.ts";
 import { info } from "@huuma/route/utils/logger";
@@ -16,7 +16,8 @@ export function packPages<T>(
 ) {
   for (const route in pages) {
     const page: PageLike<unknown> = pages[route].page.default;
-    const metadata: Metadata | undefined = pages[route].page.metadata;
+    const metadata: Metadata | MetadataGenerator<unknown> | undefined =
+      pages[route].page.metadata;
     const layouts: PageLike<unknown>[] = pages[route].layouts.map(
       (layout) => {
         return layout.default;
