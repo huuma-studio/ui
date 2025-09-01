@@ -28,6 +28,17 @@ export type Metadata = {
   headers?: Record<string, string>;
 };
 
+export type MetadataGenerator<T> = (
+  ctx: {
+    request: Request;
+    params: Record<string, string | undefined>;
+    searchParams: SearchParams;
+    auth: unknown;
+    data: T;
+    transferState?: TransferState;
+  },
+) => Metadata | Promise<Metadata>;
+
 export type PageLike<T> = (
   props: PageLikeProps<T>,
 ) => JSX.Element | Promise<JSX.Element>;
@@ -46,7 +57,7 @@ export interface PageProps<T> {
   layouts: PageLike<T>[];
   middleware: Middleware[];
   statusCode: number;
-  metadata?: Metadata;
+  metadata?: Metadata | MetadataGenerator<T>;
 }
 
 type PageHandlerProps<T> = PageProps<T> & {
@@ -237,24 +248,40 @@ export class UIApp<
       const nonce = crypto.randomUUID();
 
       return handle(ctx, props.middleware, async (ctx) => {
+        const request = ctx.request;
         const transferState = {
           ...ctx.get("transferState"),
           ...this.#transferState,
         };
+        const params = ctx.params ?? {};
+        const searchParams = ctx.search ?? {};
+        const data = ctx.get("data") ?? ({} as D);
+        const auth = ctx.auth;
+
+        const metadata = typeof props.metadata === "function"
+          ? await props.metadata({
+            request,
+            params,
+            searchParams,
+            transferState,
+            data,
+            auth,
+          })
+          : props.metadata;
 
         return new Response(
           await this.#render({
             root: this.#root,
             page: props.page,
             layouts: props.layouts,
-            params: ctx.params ?? {},
-            searchParams: ctx.search ?? {},
-            data: ctx.get("data") ?? ({} as D),
+            params,
+            searchParams,
+            data,
             transferState,
             nonce,
-            auth: ctx.auth,
-            request: ctx.request,
-            metadata: props.metadata,
+            auth,
+            request,
+            metadata,
           }),
           {
             status: props.statusCode,
@@ -262,7 +289,7 @@ export class UIApp<
               "Content-Type": "text/html",
               "Content-Security-Policy":
                 `script-src 'none'; script-src-elem 'nonce-${nonce}';`,
-              ...(isProd() ? props.metadata?.headers : {}),
+              ...(isProd() ? metadata?.headers : {}),
             },
           },
         );

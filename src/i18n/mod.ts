@@ -71,15 +71,15 @@ export function T(
   props: TProps,
 ): JSX.Element {
   const { name, props: _p, dangerouslyInnerHTML } = props;
-  const language = $config().i18n.activeLanguage;
+  const i18n = $config();
 
   if (dangerouslyInnerHTML) {
     const { key, ...elementProps } = dangerouslyInnerHTML.props ?? {};
     elementProps.children = undefined;
-    elementProps.dangerouslySetInnerHTML = { __html: t(language, name, _p) };
+    elementProps.dangerouslySetInnerHTML = { __html: t(i18n, name, _p) };
     return jsx(dangerouslyInnerHTML.name, elementProps, key);
   }
-  return jsx(Fragment, { children: [t(language, name, _p)] });
+  return jsx(Fragment, { children: [t(i18n, name, _p)] });
 }
 
 export const Translation = T;
@@ -119,24 +119,33 @@ export function langFrom(
   return new RegExp(pattern.source, pattern.flags).exec(url)?.[1];
 }
 
-function t(
-  language: Language,
+export function t(
+  state: unknown,
   key: string,
   params?: Record<string, string>,
 ): string {
-  if (language) {
-    const keys = key.split(".");
-    if (params) {
-      return replaceParams(unnest([...keys], language, "") ?? key, params);
+  if (
+    state != null && typeof state === "object" && "i18n" in state &&
+    state.i18n != null && typeof state.i18n === "object" &&
+    "activeLanguage" in state.i18n
+  ) {
+    // TODO: Validate language schema
+    const language = state.i18n.activeLanguage as Language;
+    if (language) {
+      const keys = key.split(".");
+      if (params) {
+        return replaceParams(unnest([...keys], language, "") ?? key, params);
+      }
+      return unnest([...keys], language, "") ?? key;
     }
-    return unnest([...keys], language, "") ?? key;
+    return key;
   }
-  return key;
+  throw new Error("Could not find I18N state. Is I18N correctly setup?");
 }
 
 export function $t(key: string, params?: Record<string, string>): string {
-  const language = $config().i18n.activeLanguage;
-  return t(language, key, params);
+  const state = $config();
+  return t(state, key, params);
 }
 
 function $config(): { url: URL; i18n: I18nTransferState } {
