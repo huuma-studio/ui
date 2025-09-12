@@ -1,5 +1,5 @@
 import * as esbuild from "@esbuild";
-import { denoPlugins } from "@luca/esbuild-deno-loader";
+import { denoPlugin } from "@deno/esbuild-plugin";
 import { parse } from "@std/path/parse";
 import { EOL } from "@std/fs/eol";
 
@@ -57,7 +57,7 @@ export class Bundler {
     await initialize();
 
     const result = await esbuild.build({
-      plugins: [remoteRemotePlugin, ...denoPlugins({})],
+      plugins: [remoteRemotePlugin, denoPlugin({ preserveJsx: true })],
       entryPoints: Object.entries(entryPoints).reduce((acc, [key, value]) => {
         acc[key] = value.path;
         return acc;
