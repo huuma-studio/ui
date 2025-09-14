@@ -43,8 +43,8 @@ export interface List {
   ][];
 }
 
-export const packDirectory = ".pack";
-export const scriptsDirectory = join(packDirectory, ".scripts");
+export const packDirectory: string = ".pack";
+export const scriptsDirectory: string = join(packDirectory, ".scripts");
 
 /**
  * Packs the application by adding pages, layouts, middleware, islands and scripts to the Huuma UI application.
