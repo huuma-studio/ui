@@ -2,6 +2,7 @@ import * as esbuild from "@esbuild";
 import { denoPlugin } from "@deno/esbuild-plugin";
 import { parse } from "@std/path/parse";
 import { EOL } from "@std/fs/eol";
+import { generateHash } from "./utils.ts";
 
 export type EntryPoint =
   | {
@@ -104,15 +105,6 @@ export class Bundler {
   stop() {
     esbuild.stop();
   }
-}
-
-export async function generateHash(value: string): Promise<string> {
-  const data = new TextEncoder().encode(value);
-  return Array.from(
-    new Uint8Array(await crypto.subtle.digest("SHA-256", data)),
-  ).map((b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  ).slice(0, 8);
 }
 
 const remoteRemotePlugin: esbuild.Plugin = {

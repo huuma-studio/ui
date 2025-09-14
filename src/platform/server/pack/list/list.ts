@@ -2,7 +2,7 @@ import { dirname } from "@std/path/dirname";
 import { join } from "@std/path/join";
 import { walk } from "@std/fs/walk";
 import { EOL } from "@std/fs/eol";
-import type { List } from "./mod.ts";
+import type { List } from "../mod.ts";
 
 interface FileImport {
   name: string;
@@ -165,7 +165,7 @@ export async function listIslands(path: string): Promise<FileImport[]> {
   return islands;
 }
 
-export async function remoteFunctionsList(path: string): Promise<FileImport[]> {
+export async function listRemoteFunctions(path: string): Promise<FileImport[]> {
   const remoteFunctions: FileImport[] = [];
   let i = 0;
 

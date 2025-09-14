@@ -1,14 +1,14 @@
+import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
+import { array, object, string, unknown } from "@huuma/validate";
+import { info } from "@huuma/route/utils/logger";
 import type { AppContext } from "@huuma/route";
 import { join } from "@std/path/join";
 import { parse } from "@std/path/parse";
-import { array, object, string, unknown } from "@huuma/validate";
 
 import type { Metadata, MetadataGenerator, PageLike, UIApp } from "../app.ts";
-import type { List } from "./mod.ts";
+import { generateHash } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
-import { info } from "@huuma/route/utils/logger";
-import { generateHash } from "./bundler.ts";
-import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
+import type { List } from "./mod.ts";
 
 export function packPages<T>(
   pages: List["pages"],
