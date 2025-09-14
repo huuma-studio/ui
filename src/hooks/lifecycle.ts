@@ -5,8 +5,8 @@ export function $mount(fn: (() => () => void) | (() => void)): void {
   $hook(fn, VHook.MOUNT);
 }
 
-export function $unmount(fn: () => void): void {
-  $hook(fn, VHook.UNMOUNT);
+export function $destroy(fn: () => void): void {
+  $hook(fn, VHook.DESTROY);
 }
 
 export function $hook(

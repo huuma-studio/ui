@@ -62,7 +62,7 @@ export function hydrate(
     }
   }
 
-  return render(vNode, attachmentRef, true);
+  return render(vNode, attachmentRef);
 }
 
 function component(

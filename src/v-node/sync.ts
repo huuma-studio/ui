@@ -12,6 +12,8 @@ import {
   isTemplateNode,
   isTextNode,
   isVComponent,
+  isVElement,
+  isVFragment,
   isVSignal,
   keyFromNode,
   keyFromVNode,
@@ -19,6 +21,7 @@ import {
   type VElement,
   type VFragment,
   type VGlobalOptions,
+  VHook,
   VMode,
   type VNode,
   VNodeProps,
@@ -300,6 +303,7 @@ function track<T>(
 ): VNode<T>[] {
   // No new nodes - remove old
   if (!children?.length) {
+    vChildren.forEach((vNode) => destroy(vNode));
     return [];
   }
 
@@ -351,6 +355,9 @@ function track<T>(
     _children.push(create(node, globalOptions));
     i++;
   }
+
+  vNodes.forEach((vNode) => destroy(vNode));
+
   return _children;
 }
 
@@ -392,4 +399,16 @@ function remove<T>(index: number, vNodes: VNode<T>[]): VNode<T> {
     return movedVNodes[0];
   }
   return undefined;
+}
+
+function destroy<T>(vNode: VNode<T>) {
+  if (isVComponent(vNode)) {
+    vNode[VNodeProps.HOOKS]?.[VHook.DESTROY]?.forEach((hook) => {
+      hook();
+    });
+    destroy(vNode[VNodeProps.AST]);
+  }
+  if (isVElement(vNode) || isVFragment(vNode)) {
+    vNode[VNodeProps.CHILDREN]?.forEach((vChild) => destroy(vChild));
+  }
 }

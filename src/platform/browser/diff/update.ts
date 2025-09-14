@@ -225,92 +225,42 @@ export function updateChildren(
     return changeSet;
   }
 
+  const vChildren: VNode<Node>[] = [
+    ...(vNode[VNodeProps.CHILDREN] ?? []),
+  ];
   const previousVChildren: VNode<Node>[] = [
     ...(previousVNode[VNodeProps.CHILDREN] ?? []),
   ];
 
-  vNode[VNodeProps.CHILDREN]?.forEach((vChild, index) => {
-    const previousVChild = previousVNode[VNodeProps.CHILDREN]?.[index];
-
-    const previousKey = keyFromVNode(previousVChild);
+  for (const vChild of vChildren) {
     const key = keyFromVNode(vChild);
+    const existingIndex = previousVChildren.findIndex((vNode) =>
+      keyFromVNode(vNode) === key
+    );
 
-    if (key === previousKey) {
+    // The current VChild was there previously (eq. move the item to the new position)
+    // -> remove the old dom node but dont unmount
+    // -> create new dom node but dont mount
+    if (existingIndex >= 0) {
+      // remove the item from the previousVChildren so we can clean up the other ones later
+      const existingVNode = previousVChildren.splice(existingIndex, 1)[0];
       changeSet.push(
-        ...diff({
-          vNode: vChild,
-          previousVNode: previousVChild,
-          attachmentRef,
-        }),
+        ...remove(existingVNode),
+        ...render(vChild, attachmentRef),
       );
-      return;
+      continue;
     }
 
-    if (
-      isRemoved(vNode[VNodeProps.CHILDREN] || [], previousVChildren, index)
-    ) {
-      changeSet.push(...diff({ previousVNode: previousVChild }));
-      return;
-    }
+    // Previous vNode was not there
+    // -> create new dom node and mount componentn
+    changeSet.push(...render(vChild, attachmentRef));
+  }
 
-    const movedPreviousVNode = findAndMove(key, previousVChildren, index);
-    if (movedPreviousVNode) {
-      //TODO: Some thing fishy here!
-      changeSet.push(
-        ...remove(movedPreviousVNode, false),
-        ...render(vChild, attachmentRef, false),
-      );
-      return;
-    }
-
-    addAndSkew(index, previousVChildren);
-    changeSet.push(...diff({ vNode: vChild, attachmentRef }));
+  previousVChildren.forEach((previousVNode) => {
+    changeSet.push(...remove(previousVNode));
   });
 
-  if (previousVChildren.length > vNode[VNodeProps.CHILDREN].length) {
-    previousVChildren.slice(
-      vNode[VNodeProps.CHILDREN].length - previousVChildren.length,
-    ).forEach((removedVNode) => {
-      changeSet.push(...diff({ previousVNode: removedVNode }));
-    });
-  }
-
   return changeSet;
-}
-
-function isRemoved(
-  vNodes: VNode<Node>[],
-  previousVNodes: VNode<Node>[],
-  index: number,
-): boolean {
-  const key = keyFromVNode(previousVNodes[index]);
-  if (!key) return false;
-  const i = vNodes.findIndex((vNode) => keyFromVNode(vNode) === key);
-  if (i >= 0) {
-    return false;
-  }
-  previousVNodes.splice(index, 1);
-  return true;
-}
-
-function addAndSkew(index: number, vNodes: VNode<Node>[]) {
-  vNodes.splice(index, 0, undefined);
-}
-
-function findAndMove(
-  key: string | number | undefined,
-  vNodes: VNode<Node>[],
-  index: number,
-): VNode<Node> {
-  const originalIndex = vNodes.findIndex((vNode) =>
-    keyFromVNode(vNode) === key
-  );
-  if (originalIndex < 0) {
-    return undefined;
-  }
-  const vNode = vNodes.splice(originalIndex, 1)[0];
-  vNodes.splice(index, 0, vNode);
-  return vNode;
 }
 
 export function isSignal(vNode: VText<Node>) {

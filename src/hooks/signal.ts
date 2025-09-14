@@ -75,7 +75,7 @@ function signalFromScope<T>(
 
   // If VNode is created and has signals return its signals
   if (
-    vNode[VNodeProps.MODE] === VMode.Created &&
+    vNode[VNodeProps.MODE] !== VMode.NotCreated &&
     vNode[VNodeProps.OPTIONS]?.$?.length
   ) {
     signalCache.push(

@@ -4,6 +4,7 @@ import type { Cleanup } from "../signal/mod.ts";
 export enum VMode {
   NotCreated,
   Created,
+  Mounted,
 }
 
 export enum VType {
@@ -85,12 +86,12 @@ export interface HasVKey {
 
 export interface VHooks {
   [VHook.MOUNT]?: ((() => () => void) | (() => void))[];
-  [VHook.UNMOUNT]?: (() => void)[];
+  [VHook.DESTROY]?: (() => void)[];
 }
 
 export enum VHook {
   MOUNT,
-  UNMOUNT,
+  DESTROY,
 }
 
 export interface HasVNodeRef<T> {
