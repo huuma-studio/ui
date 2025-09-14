@@ -109,6 +109,34 @@ function create({ vElement, attachmentRef }: CreateElementPayload): void {
 
 function link({ vElement, node, attachmentRef }: LinkElementPayload): void {
   vElement[VNodeProps.NODE_REF] = node;
+
+  if (
+    attachmentRef.type === AttachmentType.Parent &&
+    node.previousSibling !== null &&
+    node.parentElement !== attachmentRef.vNode[VNodeProps.NODE_REF]
+  ) {
+    // Remove current node
+    node.parentNode?.removeChild(node);
+    // Move current node to attachment node
+    attachmentRef.vNode[VNodeProps.NODE_REF]?.insertBefore(
+      node,
+      attachmentRef.vNode[VNodeProps.NODE_REF]?.firstChild,
+    );
+  }
+
+  if (
+    attachmentRef.type === AttachmentType.Sibling &&
+    attachmentRef.node !== node.previousSibling
+  ) {
+    // Remove current node
+    node.parentNode?.removeChild(node);
+    // Move current node to attachment node
+    attachmentRef.node.parentNode?.insertBefore(
+      node,
+      attachmentRef.node.nextSibling,
+    );
+  }
+
   moveAttachmentRef(attachmentRef, node);
 }
 

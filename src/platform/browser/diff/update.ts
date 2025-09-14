@@ -13,7 +13,6 @@ import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { remove } from "./remove.ts";
-import { render } from "./render.ts";
 import { compareAttributes } from "./types/attribute.ts";
 import type { LinkComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet } from "./types/element.ts";
@@ -224,7 +223,7 @@ export function updateChildren(
     );
     return changeSet;
   }
-
+  removePreviousVNode;
   const vChildren: VNode<Node>[] = [
     ...(vNode[VNodeProps.CHILDREN] ?? []),
   ];
@@ -233,34 +232,33 @@ export function updateChildren(
   ];
 
   for (const vChild of vChildren) {
-    const key = keyFromVNode(vChild);
-    const existingIndex = previousVChildren.findIndex((vNode) =>
-      keyFromVNode(vNode) === key
-    );
+    // check if we have a previous vNode with a related key
+    const previousVNode = removePreviousVNode(vNode, previousVChildren);
 
-    // The current VChild was there previously (eq. move the item to the new position)
-    // -> remove the old dom node but dont unmount
-    // -> create new dom node but dont mount
-    if (existingIndex >= 0) {
-      // remove the item from the previousVChildren so we can clean up the other ones later
-      const existingVNode = previousVChildren.splice(existingIndex, 1)[0];
-      changeSet.push(
-        ...remove(existingVNode),
-        ...render(vChild, attachmentRef),
-      );
-      continue;
-    }
-
-    // Previous vNode was not there
-    // -> create new dom node and mount componentn
-    changeSet.push(...render(vChild, attachmentRef));
+    // if we have a previous vNode we add it otherwise the diffing creates a new one.
+    changeSet.push(...diff({ vNode: vChild, previousVNode, attachmentRef }));
   }
 
-  previousVChildren.forEach((previousVNode) => {
-    changeSet.push(...remove(previousVNode));
-  });
+  // Remove the remaining previous vNodes
+  for (const previousVChild of previousVChildren) {
+    changeSet.push(...remove(previousVChild));
+  }
 
   return changeSet;
+}
+
+function removePreviousVNode(
+  vNode: VNode<Node>,
+  previousVNodes: VNode<Node>[],
+): VNode<Node> {
+  const key = keyFromVNode(vNode);
+  const existingIndex = previousVNodes.findIndex((previousVNode) =>
+    keyFromVNode(previousVNode) === key
+  );
+  if (existingIndex < 0) {
+    return undefined;
+  }
+  return previousVNodes.splice(existingIndex, 1)[0];
 }
 
 export function isSignal(vNode: VText<Node>) {

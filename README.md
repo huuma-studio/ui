@@ -193,7 +193,7 @@ function Counter() {
 Control component lifecycle with hooks:
 
 ```tsx
-import { $mount, $unmount } from "@huuma/ui/hooks/lifecycle";
+import { $mount, $destroy } from "@huuma/ui/hooks/lifecycle";
 
 function Timer() {
   const time = $signal(new Date());

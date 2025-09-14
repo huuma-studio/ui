@@ -113,19 +113,19 @@ export function compareAttributes(
       changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
       delete previousProps[prop];
     }
+  }
 
-    // Remove left attributes from node
-    for (const prop in previousProps) {
-      if (!vNode[VNodeProps.PROPS][prop]) {
-        changes.push({
-          [Props.Action]: Action.Delete,
-          [Props.Type]: Type.Attribute,
-          [Props.Payload]: {
-            vNode,
-            name: prop,
-          },
-        });
-      }
+  // Remove left attributes from node
+  for (const prop in previousProps) {
+    if (!vNode[VNodeProps.PROPS][prop]) {
+      changes.push({
+        [Props.Action]: Action.Delete,
+        [Props.Type]: Type.Attribute,
+        [Props.Payload]: {
+          vNode,
+          name: prop,
+        },
+      });
     }
   }
 
