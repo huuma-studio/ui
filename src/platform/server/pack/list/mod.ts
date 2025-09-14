@@ -1,4 +1,5 @@
 import { info, log } from "@huuma/route/utils/logger";
+import { parseArgs } from "@std/cli/parse-args";
 import type { AppContext } from "@huuma/route";
 import { parse } from "@std/path/parse";
 import { join } from "@std/path/join";
@@ -46,7 +47,7 @@ export async function list<T extends AppContext>(
 
   const entryPoints: EntryPoints = {
     "huuma_ui_launch": {
-      path: new URL("../../browser/mod.ts", import.meta.url).href,
+      path: new URL("../../../browser/mod.ts", import.meta.url).href,
       isRuntime: true,
     },
   };
@@ -139,7 +140,7 @@ export async function enableLiveReload<T extends AppContext>(
   const bundler = new Bundler();
   const result = await bundler.bundle({
     "_live-reload": {
-      path: new URL("../../browser/live-reload.ts", import.meta.url).href,
+      path: new URL("../../../browser/live-reload.ts", import.meta.url).href,
       isEntryPoint: true,
     },
   });
