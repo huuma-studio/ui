@@ -19,7 +19,6 @@ export enum Action {
   Mount,
   Update,
   Replace,
-  Unmount,
   Delete,
 }
 

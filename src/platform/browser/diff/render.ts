@@ -2,6 +2,7 @@ import {
   type VComponent,
   type VElement,
   type VFragment,
+  VMode,
   type VNode,
   VNodeProps,
   type VText,
@@ -28,18 +29,17 @@ import type { TextChangeSet } from "./types/text.ts";
 export function render(
   vNode: VNode<Node>,
   attachmentRef: AttachmentRef,
-  mount: boolean = true,
 ): ChangeSet<unknown>[] {
   if (!vNode) {
     return [];
   }
 
   if (vNode.type === VType.COMPONENT) {
-    return component(vNode, attachmentRef, mount);
+    return component(vNode, attachmentRef);
   }
 
   if (vNode.type === VType.ELEMENT) {
-    return element(vNode, attachmentRef, mount);
+    return element(vNode, attachmentRef);
   }
 
   if (vNode.type === VType.TEXT) {
@@ -47,7 +47,7 @@ export function render(
   }
 
   if (vNode.type === VType.FRAGMENT) {
-    return fragment(vNode, attachmentRef, mount);
+    return fragment(vNode, attachmentRef);
   }
 
   return [];
@@ -56,7 +56,6 @@ export function render(
 function component(
   vComponent: VComponent<Node>,
   attachmentRef: AttachmentRef,
-  mount: boolean,
 ) {
   const changeSet: ChangeSet<unknown>[] = [
     <LinkComponentChangeSet> {
@@ -68,7 +67,7 @@ function component(
       },
     },
   ];
-  if (mount) {
+  if (vComponent[VNodeProps.MODE] === VMode.Created) {
     changeSet.push(
       <MountComponentChangeSet> {
         [Props.Type]: Type.Component,
@@ -79,14 +78,13 @@ function component(
       },
     );
   }
-  changeSet.push(...render(vComponent[VNodeProps.AST], attachmentRef, mount));
+  changeSet.push(...render(vComponent[VNodeProps.AST], attachmentRef));
   return changeSet;
 }
 
 function element(
   vElement: VElement<Node>,
   attachmentRef: AttachmentRef,
-  mount: boolean,
 ): ChangeSet<unknown>[] {
   const changeSets: ChangeSet<unknown>[] = [];
 
@@ -143,9 +141,10 @@ function element(
     type: AttachmentType.Parent,
     vNode: vElement,
   };
+
   vElement[VNodeProps.CHILDREN]?.forEach((child) => {
     changeSets.push(
-      ...render(child, childrenAttachmentRef, mount),
+      ...render(child, childrenAttachmentRef),
     );
   });
 
@@ -178,11 +177,10 @@ function text(
 function fragment(
   vFragement: VFragment<Node>,
   attachmentRef: AttachmentRef,
-  mount: boolean,
 ) {
   const changes: ChangeSet<unknown>[] = [];
   vFragement[VNodeProps.CHILDREN]?.forEach((vNode) => {
-    changes.push(...render(vNode, attachmentRef, mount));
+    changes.push(...render(vNode, attachmentRef));
   });
   return changes;
 }

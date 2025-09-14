@@ -1,4 +1,9 @@
-import { type VComponent, VHook, VNodeProps } from "../../../../v-node/mod.ts";
+import {
+  type VComponent,
+  VHook,
+  VMode,
+  VNodeProps,
+} from "../../../../v-node/mod.ts";
 import { type AttachmentRef, copyAttachmentRefTo } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 
@@ -25,19 +30,9 @@ export interface MountComponentChangeSet
   [Props.Action]: Action.Mount;
 }
 
-export interface UnmountComponentPayload {
-  vComponent: VComponent<Node>;
-}
-
-export interface UnmountComponentChangeSet
-  extends BaseComponentChangeSet<UnmountComponentPayload> {
-  [Props.Action]: Action.Unmount;
-}
-
 export type ComponentChangeSet =
   | LinkComponentChangeSet
-  | MountComponentChangeSet
-  | UnmountComponentChangeSet;
+  | MountComponentChangeSet;
 
 export function component(change: ComponentChangeSet): void {
   switch (change[Props.Action]) {
@@ -47,8 +42,6 @@ export function component(change: ComponentChangeSet): void {
     case Action.Mount: {
       return mount(change[Props.Payload]);
     }
-    case Action.Unmount:
-      return unmount(change[Props.Payload]);
   }
 }
 
@@ -61,17 +54,12 @@ function mount({ vComponent }: MountComponentPayload): void {
   vComponent[VNodeProps.HOOKS]?.[VHook.MOUNT]?.forEach((hook) => {
     const onUnmount = hook();
     if (typeof onUnmount === "function" && vComponent[VNodeProps.HOOKS]) {
-      if (Array.isArray(vComponent[VNodeProps.HOOKS][VHook.UNMOUNT])) {
-        vComponent[VNodeProps.HOOKS][VHook.UNMOUNT].push(onUnmount);
+      if (Array.isArray(vComponent[VNodeProps.HOOKS][VHook.DESTROY])) {
+        vComponent[VNodeProps.HOOKS][VHook.DESTROY].push(onUnmount);
         return;
       }
-      vComponent[VNodeProps.HOOKS][VHook.UNMOUNT] = [onUnmount];
+      vComponent[VNodeProps.HOOKS][VHook.DESTROY] = [onUnmount];
     }
   });
-}
-
-function unmount({ vComponent }: UnmountComponentPayload): void {
-  vComponent[VNodeProps.HOOKS]?.[VHook.UNMOUNT]?.forEach((hook) => {
-    hook();
-  });
+  vComponent[VNodeProps.MODE] = VMode.Mounted;
 }
