@@ -1,6 +1,6 @@
 {
   "name": "@huuma/ui",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "exports": {
     ".": "./src/mod.ts",
     "./v-node": "./src/v-node/mod.ts",
@@ -8,6 +8,7 @@
     "./browser": "./src/platform/browser/mod.ts",
     "./server": "./src/platform/server/mod.ts",
     "./server/pack": "./src/platform/server/pack/mod.ts",
+    "./server/pack/list": "./src/platform/server/pack/list/mod.ts",
     "./signal": "./src/signal/mod.ts",
     "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
     "./hooks/signal": "./src/hooks/signal.ts",
