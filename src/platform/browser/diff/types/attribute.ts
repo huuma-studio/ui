@@ -18,7 +18,7 @@ export interface CreateAttributePayload {
 export interface UpdateAttributePayload {
   vNode: VElement<Node>;
   name: string;
-  value: string | boolean;
+  value: string | boolean | { __html: string };
 }
 
 export interface DeleteAttributePayload {
@@ -98,7 +98,8 @@ export function compareAttributes(
   for (const prop in vNode[VNodeProps.PROPS]) {
     if (
       typeof vNode[VNodeProps.PROPS][prop] !== "string" &&
-      typeof vNode[VNodeProps.PROPS][prop] !== "boolean"
+      typeof vNode[VNodeProps.PROPS][prop] !== "boolean" &&
+      prop !== "dangerouslySetInnerHTML"
     ) {
       continue;
     }
@@ -106,6 +107,21 @@ export function compareAttributes(
     // Attribute does not exist on previous vnode
     if (!previousProps[prop]) {
       changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
+      continue;
+    }
+
+    // Compare dangerously set inner html
+    if (prop === "dangerouslySetInnerHTML" && previousProps[prop]) {
+      const previousInnerHTML = previousProps[prop]?.__html;
+      const innerHTML = vNode[VNodeProps.PROPS][prop]?.__html;
+
+      if (previousInnerHTML !== innerHTML) {
+        changes.push(
+          ...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode),
+        );
+        delete previousProps[prop];
+      }
+      continue;
     }
 
     // Update attribute if value has changed
@@ -158,6 +174,19 @@ export function setAttribute(
         [Props.Payload]: {
           vNode,
           name: key,
+        },
+      },
+    ];
+  }
+  if (key === "dangerouslySetInnerHTML") {
+    return [
+      {
+        [Props.Action]: Action.Create,
+        [Props.Type]: Type.Attribute,
+        [Props.Payload]: {
+          vNode,
+          name: key,
+          value: value as { __html: string },
         },
       },
     ];
