@@ -24,9 +24,7 @@ export function setSubscriber<T, S>(
   callback: () => T,
   subscriber: Subscriber<S>,
 ): T {
-  subscriberScopes.push(
-    <SubscriberScope<unknown>> { subscriber, signals: [] },
-  );
+  subscriberScopes.push(<SubscriberScope<unknown>>{ subscriber, signals: [] });
   const value = callback();
   subscriberScopes.pop();
   return value;
@@ -50,7 +48,7 @@ export class WritableSignal<T> extends Signal<T> {
   get(): T {
     if (subscriberScopes.length) {
       this.subscribe(
-        <SubscriberScope<T>> subscriberScopes[subscriberScopes.length - 1],
+        <SubscriberScope<T>>subscriberScopes[subscriberScopes.length - 1],
       );
     }
     return this.#value;
@@ -83,9 +81,7 @@ export class WritableSignal<T> extends Signal<T> {
       signal: this,
       cleanup: () => {
         scope.signals = scope.signals.filter((signal) => signal !== this);
-        this.#scopes = this.#scopes.filter(
-          (existing) => existing !== scope,
-        );
+        this.#scopes = this.#scopes.filter((existing) => existing !== scope);
       },
     };
   }
@@ -111,20 +107,17 @@ export class ComputedSignal<T> extends Signal<T> {
   constructor(callbackFn: () => T) {
     super();
 
-    const value = setSubscriber(
-      () => callbackFn(),
-      {
-        update: () => {
-          const value = callbackFn();
-          if (value !== this.#value) {
-            this.#set(value);
-          }
-        },
-        cleanupCallback: (cleanup) => {
-          this.#cleanups.push(cleanup);
-        },
+    const value = setSubscriber(() => callbackFn(), {
+      update: () => {
+        const value = callbackFn();
+        if (value !== this.#value) {
+          this.#set(value);
+        }
       },
-    );
+      cleanupCallback: (cleanup) => {
+        this.#cleanups.push(cleanup);
+      },
+    });
     this.#value = value;
   }
 
@@ -135,7 +128,7 @@ export class ComputedSignal<T> extends Signal<T> {
   get(): T {
     if (subscriberScopes.length) {
       this.subscribe(
-        <SubscriberScope<T>> subscriberScopes[subscriberScopes.length - 1],
+        <SubscriberScope<T>>subscriberScopes[subscriberScopes.length - 1],
       );
     }
     return this.#value;
@@ -162,9 +155,7 @@ export class ComputedSignal<T> extends Signal<T> {
     return {
       signal: this,
       cleanup: () => {
-        this.#scopes = this.#scopes.filter(
-          (existing) => existing !== scope,
-        );
+        this.#scopes = this.#scopes.filter((existing) => existing !== scope);
         scope.signals = scope.signals.filter((signal) => signal !== this);
       },
     };
@@ -191,19 +182,14 @@ export function computed<T>(callback: () => T): ComputedSignal<T> {
   return new ComputedSignal(callback);
 }
 
-export function effect(
-  callback: () => void,
-): () => void {
+export function effect(callback: () => void): () => void {
   const cleanups: Cleanup[] = [];
-  setSubscriber(
-    () => callback(),
-    {
-      update: callback,
-      cleanupCallback: (cleanup) => {
-        cleanups.push(cleanup);
-      },
+  setSubscriber(() => callback(), {
+    update: callback,
+    cleanupCallback: (cleanup) => {
+      cleanups.push(cleanup);
     },
-  );
+  });
   return () => {
     cleanups.forEach((cleanup) => {
       cleanup.cleanup();

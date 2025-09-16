@@ -143,7 +143,7 @@ export class UIApp<
     island: JSX.Component,
     script: {
       path: string;
-      contents: Uint8Array;
+      contents: Uint8Array<ArrayBuffer>;
       imports?: string[];
     },
   ): void {
@@ -156,12 +156,12 @@ export class UIApp<
 
   addScript(
     path: string,
-    content: Uint8Array,
+    content: Uint8Array<ArrayBuffer>,
     options?: ScriptWithImports,
   ): void;
   addScript(
     path: string,
-    content: Uint8Array,
+    content: Uint8Array<ArrayBuffer>,
     options?: {
       isEntryPoint: boolean;
       head?: boolean;
@@ -169,21 +169,21 @@ export class UIApp<
   ): void;
   addScript(
     path: string,
-    content: Uint8Array,
+    content: Uint8Array<ArrayBuffer>,
     options?: {
       isIsland: boolean;
     } & ScriptWithImports,
   ): void;
   addScript(
     path: string,
-    content: Uint8Array,
+    content: Uint8Array<ArrayBuffer>,
     options?: {
       isRuntime: boolean;
     } & ScriptWithImports,
   ): void;
   addScript(
     path: string,
-    content: Uint8Array,
+    content: Uint8Array<ArrayBuffer>,
     options?: {
       isEntryPoint?: boolean;
       isIsland?: boolean;

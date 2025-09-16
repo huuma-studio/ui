@@ -126,7 +126,7 @@ export async function packRemoteFunctions<T extends AppContext>(
   return app;
 }
 
-function readScript(path: string): Promise<Uint8Array> {
+function readScript(path: string): Promise<Uint8Array<ArrayBuffer>> {
   return Deno.readFile(join(
     Deno.cwd(),
     path,
