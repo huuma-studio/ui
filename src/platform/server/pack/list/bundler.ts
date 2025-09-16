@@ -46,6 +46,7 @@ interface OutputFile extends esbuild.OutputFile {
     kind: esbuild.ImportKind | "file-loader";
     external?: boolean;
   }[];
+  contents: Uint8Array<ArrayBuffer>;
 }
 
 export class Bundler {
@@ -96,6 +97,7 @@ export class Bundler {
           entryPoint.isRuntime,
         imports: metaInfo?.imports ?? [],
         ...file,
+        contents: new Uint8Array(file.contents),
       });
     });
 
