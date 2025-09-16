@@ -2,6 +2,7 @@ import {
   isVComponent,
   isVElement,
   isVFragment,
+  isVSignal,
   isVText,
   type VComponent,
   type VElement,
@@ -29,7 +30,7 @@ import type {
   ReplaceElementChangeSet,
 } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
-import type { ReplaceTextChangeSet } from "./types/text.ts";
+import type { LinkTextChangeSet, ReplaceTextChangeSet } from "./types/text.ts";
 
 export function hydrate(
   vNode: VNode<Node>,
@@ -176,9 +177,27 @@ function text(
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   const changeSet: ChangeSet<unknown>[] = [];
-  vText[VNodeProps.NODE_REF] = node;
+  const text = vText[VNodeProps.TEXT];
 
-  if (!(node instanceof Text) || node.textContent !== vText[VNodeProps.TEXT]) {
+  if (
+    node instanceof Text &&
+    (node.textContent === text ||
+      (isVSignal(text) && node.textContent === text.get()))
+  ) {
+    changeSet.push(
+      <LinkTextChangeSet> {
+        [Props.Type]: Type.Text,
+        [Props.Action]: Action.Link,
+        [Props.Payload]: {
+          vText,
+          node: node,
+          attachmentRef,
+        },
+      },
+    );
+  } else {
+    // Attach node without moving the
+    vText[VNodeProps.NODE_REF] = node;
     changeSet.push(
       <ReplaceTextChangeSet> {
         [Props.Type]: Type.Text,
