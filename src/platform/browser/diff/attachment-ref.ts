@@ -36,10 +36,11 @@ export function parentFromAttachmentRef(attachmentRef: AttachmentRef): Node {
 }
 
 export function createRootAttachmentRef(node?: Node | null): AttachmentRef {
-  const attachmentRef = node?.previousSibling
+  const previousSibling = skipCommentNodes(node?.previousSibling);
+  const attachmentRef = previousSibling
     ? <SiblingAttachmentRef> {
       type: AttachmentType.Sibling,
-      node: node.previousSibling,
+      node: previousSibling,
     }
     : node?.parentNode
     ? <ParentAttachmentRef> {
@@ -55,6 +56,13 @@ export function createRootAttachmentRef(node?: Node | null): AttachmentRef {
   }
 
   return attachmentRef;
+}
+
+function skipCommentNodes(node?: Node | null): Node | undefined | null {
+  if (node?.nodeType === Node.COMMENT_NODE) {
+    return skipCommentNodes(node.previousSibling);
+  }
+  return node;
 }
 
 export function copyAttachmentRefTo(
