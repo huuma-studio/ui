@@ -70,7 +70,7 @@ export class Bundler {
       splitting: true,
       outdir: ".",
       minify: isProd,
-      platform: "neutral",
+      platform: "browser",
       metafile: true,
       write: false,
       jsx: "automatic",
