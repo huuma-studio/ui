@@ -22,23 +22,37 @@ type Island = {
 export const IS_BROWSER: boolean = !!globalThis.window;
 
 export function launch(islands: Island[], transferState: TransferState) {
+  let hydrationDone = false;
+  const queuedUpdates: (() => void)[] = [];
   setVNodeUpdater<Node>((component, vComponent, globalOptions) => {
     return {
       update: () => {
-        const snapshotVNode = snapshot(vComponent);
-        const updatedVNode = update(component, vComponent, globalOptions);
+        const runUpdate = () => {
+          const snapshotVNode = snapshot(vComponent);
+          const updatedVNode = update(component, vComponent, globalOptions);
 
-        if (!updatedVNode) {
-          return;
+          if (!updatedVNode) {
+            return;
+          }
+
+          const changeSet = diff({
+            vNode: updatedVNode,
+            previousVNode: snapshotVNode,
+            attachmentRef: attachmentRefFrom(vComponent),
+          });
+
+          dispatch(changeSet);
+        };
+
+        if (hydrationDone) {
+          runUpdate();
+        } else {
+          // TODO: Remove after validation.
+          console.warn(
+            "Dom update requested before hydration has finished. Queue it!",
+          );
+          queuedUpdates.push(runUpdate);
         }
-
-        const changeSet = diff({
-          vNode: updatedVNode,
-          previousVNode: snapshotVNode,
-          attachmentRef: attachmentRefFrom(vComponent),
-        });
-
-        dispatch(changeSet);
       },
       cleanupCallback: (cleanup: Cleanup) => {
         vComponent[VNodeProps.CLEANUP].push(cleanup);
@@ -86,6 +100,10 @@ export function launch(islands: Island[], transferState: TransferState) {
       }
     }
     removeIslandComments();
+    hydrationDone = true;
+    for (const update of queuedUpdates) {
+      update();
+    }
   }
 }
 
