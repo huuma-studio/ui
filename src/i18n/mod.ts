@@ -47,7 +47,7 @@ export function setupI18n<T extends AppContext>(
           .join(""),
         root.origin,
       ),
-      HttpStatus.TEMORARY_REDIRECTED,
+      HttpStatus.MOVED_PERMANENTLY,
     );
   });
 
