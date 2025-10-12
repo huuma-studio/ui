@@ -59,7 +59,11 @@ export class Bundler {
     await initialize();
 
     const result = await esbuild.build({
-      plugins: [remoteRemotePlugin, denoPlugin({ preserveJsx: true })],
+      plugins: [
+        noServerImportsClientSide,
+        remoteRemotePlugin,
+        denoPlugin({ preserveJsx: true }),
+      ],
       entryPoints: Object.entries(entryPoints).reduce((acc, [key, value]) => {
         acc[key] = value.path;
         return acc;
@@ -182,8 +186,8 @@ const remoteRemotePlugin: esbuild.Plugin = {
   },
 };
 
-const _noServerImports: esbuild.Plugin = {
-  name: "no-server-file-imports",
+const noServerImportsClientSide: esbuild.Plugin = {
+  name: "no-server-imports-client-side",
   setup(build) {
     build.onResolve({ filter: /\.server\.(ts|tsx)$/ }, () => {
       throw new Error(
