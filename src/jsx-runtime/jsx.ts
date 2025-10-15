@@ -27,13 +27,11 @@ export namespace JSX {
     | Element[] // ComponentNode<0> and Element[] are handled as fragment
     | TemplateNode;
 
-  export type IntrinsicElements =
-    & {
-      [K in keyof HTMLElementTagNameMap]: Attributes;
-    }
-    & {
-      [K in keyof SVGElementTagNameMap]: Attributes;
-    };
+  export type IntrinsicElements = {
+    [K in keyof HTMLElementTagNameMap]: Attributes;
+  } & {
+    [K in keyof SVGElementTagNameMap]: Attributes;
+  };
 
   export type Attributes = {
     [key: string]: unknown;
@@ -74,19 +72,21 @@ export function jsx(
   const eventRefs: JSX.EventRef[] = [];
   props ??= {};
 
-  for (const prop in props) {
-    if (isEventName(prop)) {
-      eventRefs.push({
-        name: eventName(prop),
-        listener: <() => void> props[prop],
-      });
-      delete props[prop];
+  if (typeof type === "string") {
+    for (const prop in props) {
+      if (isEventName(prop)) {
+        eventRefs.push({
+          name: eventName(prop),
+          listener: <() => void>props[prop],
+        });
+        delete props[prop];
+      }
     }
   }
 
   if (!Array.isArray(props.children)) {
     props.children =
-      (typeof props.children !== "boolean" && props.children != null)
+      typeof props.children !== "boolean" && props.children != null
         ? [props.children]
         : undefined;
   }
