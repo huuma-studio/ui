@@ -49,42 +49,47 @@ export type AttributeChangeSet =
 export function attribute(change: AttributeChangeSet) {
   switch (change[Props.Action]) {
     case Action.Create:
-      return createOrUpdate(<CreateAttributePayload> change[Props.Payload]);
+      return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
     case Action.Update:
-      return createOrUpdate(<CreateAttributePayload> change[Props.Payload]);
+      return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
     case Action.Delete:
-      return remove(<DeleteAttributePayload> change[Props.Payload]);
+      return remove(<DeleteAttributePayload>change[Props.Payload]);
   }
 }
 
 function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
   if (name === "checked" && typeof value === "boolean") {
-    (<HTMLFormElement> vNode[VNodeProps.NODE_REF])[name] = value;
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = value;
     return;
   }
-  if (name === "value") {
-    (<HTMLFormElement> vNode[VNodeProps.NODE_REF])[name] = `${value}`;
+  if (name === "value" && value != null) {
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] =
+      value == null ? `${value}` : "";
     return;
   }
   if (
-    name === "dangerouslySetInnerHTML" && typeof value === "object" &&
+    name === "dangerouslySetInnerHTML" &&
+    typeof value === "object" &&
     value.__html
   ) {
-    (<HTMLElement> vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
+    (<HTMLElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
     return;
   }
-  (<HTMLElement> vNode[VNodeProps.NODE_REF]).setAttribute(name, `${value}`);
+  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(
+    name,
+    value == null ? `${value}` : "",
+  );
 }
 
 function remove({ name, vNode }: DeleteAttributePayload): void {
   if (name === "checked") {
-    (<HTMLFormElement> vNode[VNodeProps.NODE_REF])[name] = false;
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = false;
   }
   if (name === "value") {
-    (<HTMLFormElement> vNode[VNodeProps.NODE_REF]).value = "";
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = "";
   }
-  (<HTMLElement> (
-    (<HasVNodeRef<Node>> vNode)[VNodeProps.NODE_REF]
+  (<HTMLElement>(
+    (<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]
   )).removeAttribute(name);
 }
 
