@@ -64,7 +64,7 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
   }
   if (name === "value" && value != null) {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] =
-      value == null ? `${value}` : "";
+      value != null ? `${value}` : "";
     return;
   }
   if (
@@ -77,7 +77,7 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
   }
   (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(
     name,
-    value == null ? `${value}` : "",
+    value != null ? `${value}` : "",
   );
 }
 
