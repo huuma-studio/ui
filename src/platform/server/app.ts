@@ -28,16 +28,14 @@ export type Metadata = {
   headers?: Record<string, string>;
 };
 
-export type MetadataGenerator<T> = (
-  ctx: {
-    request: Request;
-    params: Record<string, string | undefined>;
-    searchParams: SearchParams;
-    auth: unknown;
-    data: T;
-    transferState?: TransferState;
-  },
-) => Metadata | Promise<Metadata>;
+export type MetadataGenerator<T> = (ctx: {
+  request: Request;
+  params: Record<string, string | undefined>;
+  searchParams: SearchParams;
+  auth: unknown;
+  data: T;
+  transferState?: TransferState;
+}) => Metadata | Promise<Metadata>;
 
 export type PageLike<T> = (
   props: PageLikeProps<T>,
@@ -125,6 +123,7 @@ export class UIApp<
   #scripts: Script[] = [];
   #stylesheets: Stylesheet[] = [];
   #transferState: TransferState = {};
+  #entryPoints?: [string, string][];
 
   constructor(root: RootPage<D>, options?: AppOptions<T>) {
     super(options);
@@ -137,6 +136,17 @@ export class UIApp<
 
   addPage(path: string, props: PageProps<D>): Route<T> {
     return this.get(path, this.#pageHandler({ root: this.#root, ...props }));
+  }
+
+  addEntryPoint(name: string, path: string): void {
+    if (!this.#entryPoints) {
+      this.#entryPoints = [];
+    }
+    this.#entryPoints.push([name, path]);
+  }
+
+  getEntryPoints(): [string, string][] {
+    return this.#entryPoints ? [...this.#entryPoints] : [];
   }
 
   addIsland(
@@ -409,15 +419,7 @@ export class UIApp<
     auth: unknown;
     request: Request;
   }): JSX.Element {
-    const {
-      page,
-      layouts,
-      params,
-      searchParams,
-      data,
-      auth,
-      request,
-    } = props;
+    const { page, layouts, params, searchParams, data, auth, request } = props;
     return (layouts?.length ? [...layouts] : []).reduce<JSX.Element>(
       (accumulator, currentLayout) => {
         return jsx(<JSX.Component> currentLayout, {

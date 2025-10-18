@@ -52,6 +52,13 @@ export async function list<T extends AppContext>(
     },
   };
 
+  for (const [name, path] of app.getEntryPoints()) {
+    entryPoints[name] = {
+      path,
+      isEntryPoint: true,
+    };
+  }
+
   if (options?.enableLiveReload !== false) {
     enableLiveReload(app);
   }
