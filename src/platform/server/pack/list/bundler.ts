@@ -81,6 +81,7 @@ export class Bundler {
       jsxImportSource: "@huuma/ui",
       absWorkingDir: Deno.cwd(),
       target: ["chrome99", "firefox99", "safari15"],
+      define: createDefine(),
     });
 
     const files = new Map<string, OutputFile>();
@@ -111,6 +112,17 @@ export class Bundler {
   stop() {
     esbuild.stop();
   }
+}
+
+function createDefine() {
+  const define: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(Deno.env.toObject())) {
+    if (key.startsWith("PUBLIC_")) {
+      define[`Deno.env.get("${key}")`] = JSON.stringify(value);
+    }
+  }
+  return define;
 }
 
 const remoteRemotePlugin: esbuild.Plugin = {
