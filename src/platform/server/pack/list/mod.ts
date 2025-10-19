@@ -187,8 +187,6 @@ export async function enableLiveReload<T extends AppContext>(
     },
   });
 
-  await bundler.stop();
-
   const file = result.files.get("_live-reload.js");
 
   if (file) {
