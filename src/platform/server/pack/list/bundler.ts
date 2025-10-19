@@ -25,18 +25,6 @@ export type EntryPoints = Record<
   EntryPoint
 >;
 
-let isInitialized: boolean | Promise<void> = false;
-
-async function initialize() {
-  if (isInitialized === false) {
-    isInitialized = esbuild.initialize({});
-    await isInitialized;
-    isInitialized = true;
-  } else if (isInitialized instanceof Promise) {
-    await isInitialized;
-  }
-}
-
 interface OutputFile extends esbuild.OutputFile {
   isEntryPoint: boolean;
   isIsland: boolean;
@@ -53,11 +41,12 @@ export class Bundler {
   constructor() {}
 
   async bundle(
-    entryPoints: EntryPoints,
-    isProd = true,
+    { entryPoints, isProd = true, shims }: {
+      entryPoints: EntryPoints;
+      isProd?: boolean;
+      shims?: string[];
+    },
   ): Promise<{ hash: string; files: Map<string, OutputFile> }> {
-    await initialize();
-
     const result = await esbuild.build({
       plugins: [
         noServerImportsClientSide,
@@ -81,7 +70,7 @@ export class Bundler {
       jsxImportSource: "@huuma/ui",
       absWorkingDir: Deno.cwd(),
       target: ["chrome99", "firefox99", "safari15"],
-      define: createDefine(),
+      inject: [...shims ? shims : []],
     });
 
     const files = new Map<string, OutputFile>();
@@ -109,20 +98,9 @@ export class Bundler {
     return { hash: await generateHash(hash), files };
   }
 
-  stop() {
-    esbuild.stop();
+  stop(): Promise<void> {
+    return esbuild.stop();
   }
-}
-
-function createDefine() {
-  const define: Record<string, string> = {};
-
-  for (const [key, value] of Object.entries(Deno.env.toObject())) {
-    if (key.startsWith("PUBLIC_")) {
-      define[`Deno.env.get("${key}")`] = JSON.stringify(value);
-    }
-  }
-  return define;
 }
 
 const remoteRemotePlugin: esbuild.Plugin = {

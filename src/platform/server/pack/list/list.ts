@@ -26,7 +26,7 @@ interface Pack {
 }
 
 type CreateListOptions = {
-  packDirectory: string;
+  huumaDirectory: string;
   pagesList: Omit<Pack, "islands" | "scripts" | "remoteFunctions">;
   islandsList: FileImport[];
   scriptsList: List["scripts"];
@@ -34,7 +34,7 @@ type CreateListOptions = {
 };
 
 export async function createList(
-  { pagesList, islandsList, scriptsList, remoteFunctionsList, packDirectory }:
+  { pagesList, islandsList, scriptsList, remoteFunctionsList, huumaDirectory }:
     CreateListOptions,
 ): Promise<List> {
   return (
@@ -51,7 +51,7 @@ export async function createList(
             scripts: scriptsList,
             remoteFunctions: remoteFunctionsList,
           },
-          packDirectory,
+          huumaDirectory,
         ),
       )
     )

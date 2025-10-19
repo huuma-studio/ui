@@ -4,7 +4,13 @@ import type { AppContext } from "@huuma/route";
 import { parse } from "@std/path/parse";
 import { join } from "@std/path/join";
 
-import { type List, pack, packDirectory, scriptsDirectory } from "../mod.ts";
+import {
+  huumaDirectory,
+  type List,
+  pack,
+  scriptsDirectory,
+  shimsDirectory,
+} from "../mod.ts";
 import type { EntryPoints } from "./bundler.ts";
 import { Bundler } from "./bundler.ts";
 import type { UIApp } from "../../mod.ts";
@@ -26,7 +32,7 @@ export async function prepare<T extends AppContext>(
   await list(app, { isProd: true });
   log(
     "BUNDLE",
-    '".pack" folder succesfully created.',
+    `"${huumaDirectory}" folder succesfully created.`,
     "PARCEL",
   );
 }
@@ -72,10 +78,16 @@ export async function list<T extends AppContext>(
     };
   }
 
-  const bundler = new Bundler();
-  const result = await bundler.bundle(entryPoints, options?.isProd);
+  await createDirectory(huumaDirectory);
 
-  await createDirectory(packDirectory);
+  const bundler = new Bundler();
+  const result = await bundler.bundle({
+    entryPoints,
+    isProd: options?.isProd,
+    shims: [await shimPublicEnvVars()],
+  });
+
+  await deleteDirectory(shimsDirectory);
   await deleteDirectory(scriptsDirectory);
   await createDirectory(scriptsDirectory);
 
@@ -96,7 +108,7 @@ export async function list<T extends AppContext>(
       islandsList: islands,
       scriptsList: scripts,
       remoteFunctionsList: remoteFunctions,
-      packDirectory,
+      huumaDirectory,
     });
 
     await pack(
@@ -115,7 +127,7 @@ export async function list<T extends AppContext>(
     }
     throw e;
   } finally {
-    bundler.stop();
+    await bundler.stop();
   }
 }
 
@@ -141,16 +153,41 @@ export async function deleteDirectory(path: string) {
   }
 }
 
+export async function shimPublicEnvVars(): Promise<string> {
+  const filePath = `./${shimsDirectory}/deno-env-shim.js`;
+  const envVars = Object.entries(Deno.env.toObject());
+  const define: Record<string, string> = {};
+
+  envVars.forEach(([key, value]) => {
+    if (key.startsWith("PUBLIC_")) {
+      define[key] = value;
+    }
+  });
+
+  await createDirectory(`${shimsDirectory}`);
+  await Deno.writeTextFile(
+    `./${huumaDirectory}/shims/deno-env-shim.js`,
+    `export const Deno = {env: { get:(key) => (${
+      JSON.stringify(define)
+    })[key]}}`,
+  );
+  return filePath;
+}
+
 export async function enableLiveReload<T extends AppContext>(
   app: UIApp<T>,
 ): Promise<UIApp<T>> {
   const bundler = new Bundler();
   const result = await bundler.bundle({
-    "_live-reload": {
-      path: new URL("../../../browser/live-reload.ts", import.meta.url).href,
-      isEntryPoint: true,
+    entryPoints: {
+      "_live-reload": {
+        path: new URL("../../../browser/live-reload.ts", import.meta.url).href,
+        isEntryPoint: true,
+      },
     },
   });
+
+  await bundler.stop();
 
   const file = result.files.get("_live-reload.js");
 
