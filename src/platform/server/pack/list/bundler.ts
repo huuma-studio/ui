@@ -37,6 +37,18 @@ interface OutputFile extends esbuild.OutputFile {
   contents: Uint8Array<ArrayBuffer>;
 }
 
+let isInitialized: boolean | Promise<void> = false;
+
+async function initialize() {
+  if (isInitialized === false) {
+    isInitialized = esbuild.initialize({});
+    await isInitialized;
+    isInitialized = true;
+  } else if (isInitialized instanceof Promise) {
+    await isInitialized;
+  }
+}
+
 export class Bundler {
   constructor() {}
 
@@ -47,6 +59,8 @@ export class Bundler {
       shims?: string[];
     },
   ): Promise<{ hash: string; files: Map<string, OutputFile> }> {
+    await initialize();
+
     const result = await esbuild.build({
       plugins: [
         noServerImportsClientSide,
