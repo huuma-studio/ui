@@ -33,7 +33,7 @@ export async function prepare<T extends AppContext>(
   log(
     "BUNDLE",
     `"${huumaDirectory}" folder succesfully created.`,
-    "PARCEL",
+    "Huuma/Task",
   );
 }
 
