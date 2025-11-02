@@ -92,8 +92,7 @@ export class Bundler {
 
     result.outputFiles?.forEach((file) => {
       const metaInfo = result.metafile?.outputs[parse(file.path).base];
-
-      hash = hash.concat(hash, file.hash);
+      hash = hash.concat(file.hash);
       const entryPoint: EntryPoint | undefined =
         entryPoints[parse(file.path).name];
 

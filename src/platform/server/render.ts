@@ -1,6 +1,6 @@
 import { escape } from "@std/html/entities";
 
-import { create as syncCreate } from "../../v-node/sync.ts";
+import { create as createSync } from "../../v-node/sync.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
 import { create } from "../../v-node/async.ts";
 import {
@@ -40,11 +40,11 @@ export async function renderToString(
   return stringify(await create(node, globalOptions));
 }
 
-export function syncRenderToString(
+export function renderToStringSync(
   node: JSX.Element,
   globalOptions?: VGlobalOptions,
 ): string {
-  return stringify(syncCreate<unknown>(node, globalOptions));
+  return stringify(createSync<unknown>(node, globalOptions));
 }
 
 function stringify<T>(vNode: VNode<T>): string {

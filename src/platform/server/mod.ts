@@ -1,5 +1,5 @@
 export { type Stylesheet, Stylesheets } from "./stylesheet.ts";
-export { renderToString, vNodeToString } from "./render.ts";
+export { renderToString, renderToStringSync, vNodeToString } from "./render.ts";
 export { Launch, Scripts } from "./scripts.ts";
 export { Meta } from "./meta.ts";
 export {
