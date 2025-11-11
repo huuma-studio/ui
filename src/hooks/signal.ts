@@ -1,116 +1,20 @@
 import {
   computed,
-  type ComputedSignal,
   effect,
   type Signal,
   signal,
   type WritableSignal,
 } from "../signal/mod.ts";
-import {
-  type HasVMode,
-  type HasVOptions,
-  type VBase,
-  VHook,
-  VMode,
-  VNodeProps,
-} from "../v-node/mod.ts";
+import { VHook } from "../v-node/mod.ts";
 import { $hook } from "./lifecycle.ts";
-import { $scope } from "./scope.ts";
-
-type VNodeWithSignal<T> =
-  & VBase
-  & HasVMode
-  & HasVOptions
-  & {
-    [VNodeProps.OPTIONS]: {
-      $?: Signal<T>[];
-    };
-  };
-
-interface SignalScope<T> {
-  vNode: VNodeWithSignal<T>;
-  signal: Signal<T>;
-}
-
-const signalCache: SignalScope<unknown>[] = [];
+import { refFromScope } from "./ref/ref.ts";
 
 export function $signal<T>(value: T): WritableSignal<T> {
-  return <WritableSignal<T>> signalFromScope<T>(value, signal);
+  return <WritableSignal<T>> refFromScope<T>(value, signal);
 }
 
 export function $computed<T>(value: () => T): Signal<T> {
-  return signalFromScope<T>(value, computed);
-}
-
-function signalFromScope<T>(
-  value: T,
-  signalCreator: (value: T) => WritableSignal<T>,
-): WritableSignal<T>;
-function signalFromScope<T>(
-  value: () => T,
-  signalCreator: (value: () => T) => ComputedSignal<T>,
-): ComputedSignal<T>;
-function signalFromScope<T>(
-  value: T | (() => T),
-  signalCreator: ((value: T) => Signal<T>) | ((value: () => T) => Signal<T>),
-): Signal<T> {
-  const scope = $scope();
-
-  if (!scope) {
-    return createSignal(value, signalCreator);
-  }
-
-  const vNode = <VNodeWithSignal<T>> scope;
-
-  // If signal is left in the current VNode return it.
-  if (signalCache.length) {
-    if (signalCache[signalCache.length - 1].vNode === vNode) {
-      const current = <SignalScope<T>> signalCache.shift();
-      vNode[VNodeProps.OPTIONS]?.$?.push(current.signal);
-      return current.signal;
-    }
-    // If VNode is different reset the signals cache and simply continue.
-    signalCache.length = 0;
-  }
-
-  // If VNode is created and has signals return its signals
-  if (
-    vNode[VNodeProps.MODE] !== VMode.NotCreated &&
-    vNode[VNodeProps.OPTIONS]?.$?.length
-  ) {
-    signalCache.push(
-      ...(<SignalScope<unknown>[]> vNode[VNodeProps.OPTIONS].$.map((
-        signal,
-      ) => ({
-        vNode: vNode,
-        signal,
-      }))),
-    );
-
-    vNode[VNodeProps.OPTIONS].$ = [];
-    const scope: SignalScope<T> = <SignalScope<T>> signalCache.shift();
-    vNode[VNodeProps.OPTIONS].$.push(scope.signal);
-    return scope.signal;
-  }
-
-  const signal = createSignal(value, signalCreator);
-  vNode[VNodeProps.OPTIONS].$?.length
-    ? vNode[VNodeProps.OPTIONS].$.push(signal)
-    : (vNode[VNodeProps.OPTIONS].$ = [signal]);
-  return signal;
-}
-
-function createSignal<T>(
-  value: T | (() => T),
-  signalCreator: ((value: T) => Signal<T>) | ((value: () => T) => Signal<T>),
-) {
-  if (typeof value === "function" && signalCreator === computed) {
-    return (<typeof computed> signalCreator)(value as () => T);
-  }
-  if (signalCreator === signal) {
-    return (<typeof signal> signalCreator)(value as T);
-  }
-  throw new Error("Invalid signal creator");
+  return refFromScope<T>(value, computed);
 }
 
 export function $effect(fn: () => void): void {
