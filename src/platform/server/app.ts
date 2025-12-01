@@ -110,8 +110,14 @@ interface ScriptWithImports {
   imports?: string[];
 }
 
-export function createUIApp<D>(root: RootPage<D>): UIApp<D> {
-  return new UIApp<D>(root);
+export function createUIApp<
+  D,
+  T extends AppContext = { State: { data: D; transferState: TransferState } },
+>(
+  root: RootPage<D>,
+  options?: AppOptions<T>,
+): UIApp<D, T> {
+  return new UIApp<D, T>(root, options);
 }
 
 export class UIApp<
