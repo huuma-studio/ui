@@ -114,7 +114,7 @@ function element(
   let skipChildren = false;
 
   // Replace dom node with effective vnode type
-  if (node.nodeName.toLowerCase() !== vElement[VNodeProps.TAG]) {
+  if (node.nodeName.toLowerCase() !== vElement[VNodeProps.TAG].toLowerCase()) {
     changes.push(
       <ReplaceElementChangeSet> {
         [Props.Type]: Type.Element,
@@ -151,7 +151,7 @@ function element(
     );
   }
 
-  const nodes = !skipChildren ? [...node.childNodes] : undefined;
+  const nodes = skipChildren ? undefined : [...node.childNodes];
 
   const childrenAttachmentRef: ParentAttachmentRef = {
     type: AttachmentType.Parent,
