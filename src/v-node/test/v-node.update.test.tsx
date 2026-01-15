@@ -40,6 +40,7 @@ Deno.test(update.name, async (t) => {
       type: VType.ELEMENT,
       [VNodeProps.TAG]: "div",
       [VNodeProps.KEY]: undefined,
+      [VNodeProps.BIND]: undefined,
       [VNodeProps.PROPS]: { children: ["Hello Univers"] },
       [VNodeProps.CHILDREN]: [{
         type: VType.TEXT,
@@ -72,6 +73,7 @@ Deno.test(update.name, async (t) => {
     assertEquals(updatedVComponent, {
       [VNodeProps.AST]: {
         [VNodeProps.KEY]: undefined,
+        [VNodeProps.BIND]: undefined,
         [VNodeProps.EVENT_REFS]: [],
         [VNodeProps.CHILDREN]: [
           {

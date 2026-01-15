@@ -1,6 +1,8 @@
-import { eventName, isEventName } from "./event.ts";
 import { escape } from "@std/html/entities";
+
+import { eventName, isEventName } from "./event.ts";
 import type { Signal } from "../signal/mod.ts";
+import { Ref } from "../ref/mod.ts";
 
 // deno-lint-ignore no-namespace
 export namespace JSX {
@@ -12,6 +14,7 @@ export namespace JSX {
     type: T; // Element = string, Component = Component, Fragment = 0;
     eventRefs: EventRef[];
     props: ComponentProps;
+    bind?: Ref<null | unknown>;
     key?: string | number;
   };
 
@@ -27,16 +30,18 @@ export namespace JSX {
     | Element[] // ComponentNode<0> and Element[] are handled as fragment
     | TemplateNode;
 
-  export type IntrinsicElements = {
-    [K in keyof HTMLElementTagNameMap]: Attributes;
-  } & {
-    [K in keyof SVGElementTagNameMap]: Attributes;
-  };
+  export type IntrinsicElements =
+    & {
+      [K in keyof HTMLElementTagNameMap]: Attributes;
+    }
+    & {
+      [K in keyof SVGElementTagNameMap]: Attributes;
+    };
 
   export type Attributes = {
     [key: string]: unknown;
-    children?: Element;
     key?: unknown;
+    bind?: Ref<unknown | null>;
     dangerouslySetInnerHTML?: { __html: string };
   };
 
@@ -71,13 +76,17 @@ export function jsx(
 ): JSX.Element {
   const eventRefs: JSX.EventRef[] = [];
   props ??= {};
+  let bind: Ref<null> | undefined;
 
   if (typeof type === "string") {
     for (const prop in props) {
-      if (isEventName(prop)) {
+      if (prop === "bind" && props[prop] instanceof Ref) {
+        bind = props[prop];
+        delete props[prop];
+      } else if (isEventName(prop)) {
         eventRefs.push({
           name: eventName(prop),
-          listener: <() => void>props[prop],
+          listener: <() => void> props[prop],
         });
         delete props[prop];
       }
@@ -94,6 +103,7 @@ export function jsx(
   return {
     type: type === Fragment ? 0 : type,
     props,
+    bind,
     eventRefs,
     key,
   };

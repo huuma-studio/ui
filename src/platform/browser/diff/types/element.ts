@@ -104,6 +104,9 @@ function create({ vElement, attachmentRef }: CreateElementPayload): void {
     vElement,
     attachmentRef,
   ).node;
+  if (vElement[VNodeProps.BIND]) {
+    vElement[VNodeProps.BIND].set = node;
+  }
   vElement[VNodeProps.NODE_REF] = node;
 }
 
@@ -168,7 +171,11 @@ function replace(
 
   parentNode.replaceChild(newNode, node);
 
-  vElement[VNodeProps.NODE_REF] = node;
+  vElement[VNodeProps.NODE_REF] = newNode;
+  if (vElement[VNodeProps.BIND]) {
+    vElement[VNodeProps.BIND].set = newNode;
+  }
+
   moveAttachmentRef(attachmentRef, newNode);
 }
 

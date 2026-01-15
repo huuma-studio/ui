@@ -1,4 +1,5 @@
 import type { JSX } from "../jsx-runtime/mod.ts";
+import type { Ref } from "../ref/mod.ts";
 import type { Cleanup } from "../signal/mod.ts";
 
 export enum VMode {
@@ -35,6 +36,7 @@ export enum VNodeProps {
   DEPTH = 13,
   KEY = 14,
   SKIP_ESCAPING = 15,
+  BIND = 16,
   OPTIONS = "_",
 }
 export type VSignal = JSX.SignalLike;
@@ -110,6 +112,7 @@ export interface VElement<T>
   [VNodeProps.TAG]: string;
   [VNodeProps.PROPS]: JSX.ComponentProps;
   [VNodeProps.EVENT_REFS]: JSX.EventRef[];
+  [VNodeProps.BIND]?: Ref<T | null>;
 }
 
 export interface VComponent<T>

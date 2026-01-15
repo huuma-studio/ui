@@ -1,3 +1,4 @@
+import { type Ref, ref } from "../../ref/mod.ts";
 import { $scope } from "../scope.ts";
 import {
   type HasVMode,
@@ -27,25 +28,6 @@ type VNodeWithRef<T> =
 interface RefScope<T> {
   vNode: VNodeWithRef<T>;
   ref: Ref<T> | Signal<T>;
-}
-
-export class Ref<T> {
-  #value: T;
-  constructor(value: T) {
-    this.#value = value;
-  }
-
-  get get(): T {
-    return this.#value;
-  }
-
-  set set(value: T) {
-    this.#value = value;
-  }
-}
-
-export function ref<T>(value: T): Ref<T> {
-  return new Ref(value);
 }
 
 const refCache: RefScope<unknown>[] = [];
@@ -133,5 +115,5 @@ function createRef<T>(
   if (refCreator === signal) {
     return (<typeof signal> refCreator)(value as T);
   }
-  throw new Error("Invalid signal creator");
+  throw new Error("Invalid ref creator");
 }

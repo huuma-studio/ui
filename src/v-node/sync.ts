@@ -1,6 +1,7 @@
-import { scopedFn } from "../hooks/scope.ts";
-import type { JSX } from "../jsx-runtime/mod.ts";
 import { setSubscriber, type Subscriber } from "../signal/mod.ts";
+import type { JSX } from "../jsx-runtime/mod.ts";
+import { scopedFn } from "../hooks/scope.ts";
+import type { Ref } from "../ref/mod.ts";
 import {
   childrenFrom,
   cleanup,
@@ -144,12 +145,13 @@ export function vElement<T>(
   element: JSX.ComponentNode<string>,
   globalOptions: VGlobalOptions,
 ): VElement<T> {
-  const { type, eventRefs, props, key } = element;
+  const { type, eventRefs, props, key, bind } = element;
   const vElement: VElement<T> = {
     type: VType.ELEMENT,
     [VNodeProps.TAG]: type,
     [VNodeProps.KEY]: key,
     [VNodeProps.PROPS]: props,
+    [VNodeProps.BIND]: bind as Ref<T | null> | undefined,
     [VNodeProps.EVENT_REFS]: eventRefs,
     [VNodeProps.CHILDREN]: [],
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },

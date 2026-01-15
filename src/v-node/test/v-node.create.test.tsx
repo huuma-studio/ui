@@ -59,6 +59,7 @@ Deno.test(create.name, async (t) => {
       type: VType.ELEMENT,
       [VNodeProps.TAG]: "div",
       [VNodeProps.KEY]: undefined,
+      [VNodeProps.BIND]: undefined,
       [VNodeProps.PROPS]: {
         children: [text1],
         class: "nice",
@@ -94,6 +95,7 @@ Deno.test(create.name, async (t) => {
         type: VType.ELEMENT,
         [VNodeProps.TAG]: "div",
         [VNodeProps.KEY]: undefined,
+        [VNodeProps.BIND]: undefined,
         [VNodeProps.EVENT_REFS]: [],
         [VNodeProps.CHILDREN]: [
           {
