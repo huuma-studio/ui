@@ -5,7 +5,13 @@ import type { AppContext } from "@huuma/route";
 import { join } from "@std/path/join";
 import { parse } from "@std/path/parse";
 
-import type { Metadata, MetadataGenerator, PageLike, UIApp } from "../app.ts";
+import type {
+  Metadata,
+  MetadataGenerator,
+  PageLike,
+  Resolver,
+  UIApp,
+} from "../app.ts";
 import { generateHash } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
@@ -15,11 +21,20 @@ export function packPages<T>(
   app: UIApp<T>,
 ) {
   for (const route in pages) {
+    const resolvers: Resolver<unknown>[] = [];
     const page: PageLike<unknown> = pages[route].page.default;
     const metadata: Metadata | MetadataGenerator<unknown> | undefined =
       pages[route].page.metadata;
+
+    if (typeof pages[route].page.resolver === "function") {
+      resolvers.push(pages[route].page.resolver);
+    }
+
     const layouts: PageLike<unknown>[] = pages[route].layouts.map(
       (layout) => {
+        if (typeof layout.resolver === "function") {
+          resolvers.push(layout.resolver);
+        }
         return layout.default;
       },
     );
@@ -37,6 +52,7 @@ export function packPages<T>(
       middleware,
       statusCode: path.statusCode,
       metadata,
+      resolvers,
     });
   }
   return app;

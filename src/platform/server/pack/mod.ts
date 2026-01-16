@@ -2,7 +2,13 @@ import type { Middleware } from "@huuma/route/middleware";
 import type { AppContext } from "@huuma/route";
 import { join } from "@std/path/join";
 
-import type { Metadata, MetadataGenerator, PageLike, UIApp } from "../app.ts";
+import type {
+  Metadata,
+  MetadataGenerator,
+  PageLike,
+  Resolver,
+  UIApp,
+} from "../app.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
 
 import {
@@ -21,6 +27,7 @@ export type PageRoute = {
 type Renderable = {
   default: PageLike<unknown>;
   metadata?: Metadata | MetadataGenerator<unknown>;
+  resolver?: Resolver<unknown>;
 };
 
 export interface List {

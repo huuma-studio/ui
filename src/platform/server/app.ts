@@ -1,5 +1,9 @@
 import { DEFAULT_STYLES_PATH, type Stylesheet } from "./stylesheet.ts";
-import type { Handler, SearchParams } from "@huuma/route/http/request";
+import type {
+  Handler,
+  RequestContext,
+  SearchParams,
+} from "@huuma/route/http/request";
 import { App, type AppContext, type AppOptions } from "@huuma/route";
 import { type Island, markIslands } from "../../islands/islands.ts";
 import { handle, type Middleware } from "@huuma/route/middleware";
@@ -37,6 +41,10 @@ export type MetadataGenerator<T> = (ctx: {
   transferState?: TransferState;
 }) => Metadata | Promise<Metadata>;
 
+export type Resolver<T> = (
+  ctx: RequestContext,
+) => Record<string, T> | Promise<Record<string, T>>;
+
 export type PageLike<T> = (
   props: PageLikeProps<T>,
 ) => JSX.Element | Promise<JSX.Element>;
@@ -53,6 +61,7 @@ export interface PageLikeProps<T = undefined> extends JSX.ComponentProps {
 export interface PageProps<T> {
   page: PageLike<T>;
   layouts: PageLike<T>[];
+  resolvers: Resolver<unknown>[];
   middleware: Middleware[];
   statusCode: number;
   metadata?: Metadata | MetadataGenerator<T>;
@@ -95,6 +104,7 @@ export interface RenderProps<T> {
   request: Request;
   auth?: unknown;
   metadata?: Metadata;
+  resolved?: Record<string, unknown>;
 }
 
 export interface Script {
@@ -285,6 +295,12 @@ export class UIApp<
           })
           : props.metadata;
 
+        const resolved = (await Promise.all(
+          props.resolvers.map((resolver) => resolver(ctx)),
+        )).reduce((acc, value) => {
+          return { ...acc, ...value };
+        }, {});
+
         return new Response(
           await this.#render({
             root: this.#root,
@@ -298,6 +314,7 @@ export class UIApp<
             auth,
             request,
             metadata,
+            resolved,
           }),
           {
             status: props.statusCode,
@@ -324,6 +341,7 @@ export class UIApp<
     data,
     nonce,
     metadata,
+    resolved,
   }: RenderProps<D>): Promise<string> {
     const islands: Island[] = [];
 
@@ -335,6 +353,7 @@ export class UIApp<
       data,
       auth,
       request,
+      resolved,
     });
 
     const url = new URL(request.url);
@@ -424,8 +443,18 @@ export class UIApp<
     data: D | undefined;
     auth: unknown;
     request: Request;
+    resolved?: Record<string, unknown>;
   }): JSX.Element {
-    const { page, layouts, params, searchParams, data, auth, request } = props;
+    const {
+      page,
+      layouts,
+      params,
+      searchParams,
+      data,
+      auth,
+      request,
+      resolved,
+    } = props;
     return (layouts?.length ? [...layouts] : []).reduce<JSX.Element>(
       (accumulator, currentLayout) => {
         return jsx(<JSX.Component> currentLayout, {
@@ -434,6 +463,7 @@ export class UIApp<
           request,
           auth,
           data,
+          resolved,
           children: [accumulator],
         });
       },
@@ -443,6 +473,7 @@ export class UIApp<
         request,
         auth,
         data,
+        resolved,
       }),
     );
   }
