@@ -39,7 +39,7 @@ export type MetadataGenerator<T> = (ctx: {
   auth: unknown;
   data: T;
   transferState?: TransferState;
-}) => Metadata | Promise<Metadata>;
+}, resolved: Record<string, unknown>) => Metadata | Promise<Metadata>;
 
 export type Resolver<T> = (
   ctx: RequestContext,
@@ -284,6 +284,12 @@ export class UIApp<
         const data = ctx.get("data") ?? ({} as D);
         const auth = ctx.auth;
 
+        const resolved = (await Promise.all(
+          props.resolvers.map((resolver) => resolver(ctx)),
+        )).reduce((acc, value) => {
+          return { ...acc, ...value };
+        }, {});
+
         const metadata = typeof props.metadata === "function"
           ? await props.metadata({
             request,
@@ -292,14 +298,8 @@ export class UIApp<
             transferState,
             data,
             auth,
-          })
+          }, resolved)
           : props.metadata;
-
-        const resolved = (await Promise.all(
-          props.resolvers.map((resolver) => resolver(ctx)),
-        )).reduce((acc, value) => {
-          return { ...acc, ...value };
-        }, {});
 
         return new Response(
           await this.#render({
