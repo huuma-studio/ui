@@ -113,6 +113,10 @@ function create({ vElement, attachmentRef }: CreateElementPayload): void {
 function link({ vElement, node, attachmentRef }: LinkElementPayload): void {
   vElement[VNodeProps.NODE_REF] = node;
 
+  if (vElement[VNodeProps.BIND]) {
+    vElement[VNodeProps.BIND].set = node;
+  }
+
   if (
     attachmentRef.type === AttachmentType.Parent &&
     node.previousSibling !== null &&

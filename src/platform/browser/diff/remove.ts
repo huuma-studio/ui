@@ -14,10 +14,7 @@ export function remove(
   vNode: VNode<Node>,
 ): ChangeSet<unknown>[] {
   if (isVComponent(vNode)) {
-    const changeSet = [
-      ...remove(vNode[VNodeProps.AST]),
-    ];
-    return changeSet;
+    return [...remove(vNode[VNodeProps.AST])];
   }
 
   if (isVFragment(vNode)) {

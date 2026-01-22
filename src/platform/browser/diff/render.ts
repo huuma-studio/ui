@@ -67,6 +67,7 @@ function component(
       },
     },
   ];
+  changeSet.push(...render(vComponent[VNodeProps.AST], attachmentRef));
   if (vComponent[VNodeProps.MODE] === VMode.Created) {
     changeSet.push(
       <MountComponentChangeSet> {
@@ -78,7 +79,6 @@ function component(
       },
     );
   }
-  changeSet.push(...render(vComponent[VNodeProps.AST], attachmentRef));
   return changeSet;
 }
 

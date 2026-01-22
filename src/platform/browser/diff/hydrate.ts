@@ -80,6 +80,7 @@ function component(
         attachmentRef,
       },
     },
+    ...hydrate(vComponent[VNodeProps.AST], nodes, attachmentRef),
     <MountComponentChangeSet> {
       [Props.Type]: Type.Component,
       [Props.Action]: Action.Mount,
@@ -87,7 +88,6 @@ function component(
         vComponent,
       },
     },
-    ...hydrate(vComponent[VNodeProps.AST], nodes, attachmentRef),
   ];
 }
 
