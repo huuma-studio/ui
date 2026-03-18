@@ -32,14 +32,15 @@ export type Metadata = {
   headers?: Record<string, string>;
 };
 
-export type MetadataGenerator<T> = (ctx: {
+export type MetadataGenerator<R = undefined, T = undefined> = (ctx: {
   request: Request;
   params: Record<string, string | undefined>;
   searchParams: SearchParams;
   auth: unknown;
   data: T;
   transferState?: TransferState;
-}, resolved: Record<string, unknown>) => Metadata | Promise<Metadata>;
+  resolved: R;
+}) => Metadata | Promise<Metadata>;
 
 export type Resolver<T> = (
   ctx: RequestContext,
@@ -49,12 +50,14 @@ export type PageLike<T> = (
   props: PageLikeProps<T>,
 ) => JSX.Element | Promise<JSX.Element>;
 
-export interface PageLikeProps<T = undefined> extends JSX.ComponentProps {
+export interface PageLikeProps<R = undefined, T = undefined>
+  extends JSX.ComponentProps {
   params: Record<string, string>;
   searchParams: Record<string, string>;
   request: Request;
   auth: unknown;
   data: T;
+  resolved: R;
   transferState?: TransferState;
 }
 
@@ -298,7 +301,9 @@ export class UIApp<
             transferState,
             data,
             auth,
-          }, resolved)
+            // deno-lint-ignore no-explicit-any
+            resolved: resolved as any,
+          })
           : props.metadata;
 
         return new Response(
@@ -382,6 +387,7 @@ export class UIApp<
         stylesheets: this.#stylesheets,
         islands,
         transferState,
+        resolved,
       } as RootPageProps<D>),
       { transferState, url },
     )}`;
