@@ -223,7 +223,7 @@ export function updateChildren(
     );
     return changeSet;
   }
-  removePreviousVNode;
+
   const vChildren: VNode<Node>[] = [
     ...(vNode[VNodeProps.CHILDREN] ?? []),
   ];
@@ -233,7 +233,7 @@ export function updateChildren(
 
   for (const vChild of vChildren) {
     // check if we have a previous vNode with a related key
-    const previousVNode = removePreviousVNode(vNode, previousVChildren);
+    const previousVNode = removePreviousVNode(vChild, previousVChildren);
 
     // if we have a previous vNode we add it otherwise the diffing creates a new one.
     changeSet.push(...diff({ vNode: vChild, previousVNode, attachmentRef }));
