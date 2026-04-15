@@ -1,6 +1,6 @@
 import { Fragment, type JSX, jsx } from "../../jsx-runtime/mod.ts";
-import type { Props } from "@huuma/ui";
-import type { Metadata } from "@huuma/ui/server";
+import type { Props } from "../../mod.ts";
+import type { Metadata } from "./metadata.ts";
 
 export interface MetaProps extends Props {
   metadata?: Metadata;
