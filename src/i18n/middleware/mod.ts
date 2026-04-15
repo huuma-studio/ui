@@ -1,3 +1,4 @@
+import { HttpStatus } from "@huuma/route/http/http-status";
 import type { Middleware } from "@huuma/route/middleware";
 
 import {
@@ -7,7 +8,6 @@ import {
   LanguageNotSupportedException,
   NoLanguageSpecifiedException,
 } from "../mod.ts";
-import { HttpStatus } from "@huuma/route/http/http-status";
 
 export function useI18n(
   config: Required<I18nConfig>,

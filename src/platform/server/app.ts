@@ -1,46 +1,27 @@
-import { DEFAULT_STYLES_PATH, type Stylesheet } from "./stylesheet.ts";
+import { handle, type Middleware } from "@huuma/route/middleware";
+import { isProd } from "@huuma/route/utils/environment";
+import type { Route } from "@huuma/route/http/route";
+import { App, type AppOptions } from "@huuma/route";
+import { info } from "@huuma/route/utils/logger";
+import { parse } from "@std/path/parse";
 import type {
   Handler,
   RequestContext,
   SearchParams,
 } from "@huuma/route/http/request";
-import { App, type AppContext, type AppOptions } from "@huuma/route";
+
 import { type Island, markIslands } from "../../islands/islands.ts";
-import { handle, type Middleware } from "@huuma/route/middleware";
-import { renderToString, vNodeToString } from "./render.ts";
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
-import { isProd } from "@huuma/route/utils/environment";
-import type { Route } from "@huuma/route/http/route";
-import { info } from "@huuma/route/utils/logger";
 import { create } from "../../v-node/async.ts";
-import { parse } from "@std/path/parse";
 
-export type TransferStateItem =
-  | TransferState
-  | string
-  | number
-  | boolean
-  | null;
-
-export interface TransferState {
-  [key: string]: TransferStateItem;
-}
-
-export type Metadata = {
-  title?: string;
-  description: string;
-  headers?: Record<string, string>;
-};
-
-export type MetadataGenerator<R = undefined, T = undefined> = (ctx: {
-  request: Request;
-  params: Record<string, string | undefined>;
-  searchParams: SearchParams;
-  auth: unknown;
-  data: T;
-  transferState?: TransferState;
-  resolved: R;
-}) => Metadata | Promise<Metadata>;
+import type { TransferState, TransferStateItem } from "./transfer-state.ts";
+import {
+  type ContentSecurityPolicy,
+  generateCSP,
+} from "./content-security-policy.ts";
+import { DEFAULT_STYLES_PATH, type Stylesheet } from "./stylesheet.ts";
+import type { Metadata, MetadataGenerator } from "./metadata.ts";
+import { renderToString, vNodeToString } from "./render.ts";
 
 export type Resolver<T> = (
   ctx: RequestContext,
@@ -68,6 +49,7 @@ export interface PageProps<T> {
   middleware: Middleware[];
   statusCode: number;
   metadata?: Metadata | MetadataGenerator<T>;
+  contentSecurityPolicy?: ContentSecurityPolicy;
 }
 
 type PageHandlerProps<T> = PageProps<T> & {
@@ -75,7 +57,7 @@ type PageHandlerProps<T> = PageProps<T> & {
 };
 
 export interface PageScripts {
-  nonce: string;
+  nonce?: string;
   head: { entryPoints: Script[] };
   body: {
     runtime?: Script;
@@ -103,7 +85,7 @@ export interface RenderProps<T> {
   searchParams: SearchParams;
   data: T;
   transferState: TransferState;
-  nonce: string;
+  nonce?: string;
   request: Request;
   auth?: unknown;
   metadata?: Metadata;
@@ -123,29 +105,34 @@ interface ScriptWithImports {
   imports?: string[];
 }
 
-export function createUIApp<
-  D,
-  T extends AppContext = { State: { data: D; transferState: TransferState } },
->(
-  root: RootPage<D>,
-  options?: AppOptions<T>,
-): UIApp<D, T> {
-  return new UIApp<D, T>(root, options);
+export type UIAppContext<D = unknown> = {
+  State: { data: D; transferState: TransferState };
+};
+
+interface UIAppOption<T extends UIAppContext> extends AppOptions<T> {
+  contentSecurityPolicy?: ContentSecurityPolicy;
 }
 
-export class UIApp<
-  D,
-  T extends AppContext = { State: { data: D; transferState: TransferState } },
-> extends App<T> {
+export function createUIApp<T extends UIAppContext<D>, D = unknown>(
+  root: RootPage<D>,
+  options?: UIAppOption<T>,
+): UIApp<T, D> {
+  return new UIApp<T, D>(root, options);
+}
+
+export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
   #root: RootPage<D>;
   #islands: { path: string; island: JSX.Component }[] = [];
   #scripts: Script[] = [];
   #stylesheets: Stylesheet[] = [];
   #transferState: TransferState = {};
   #entryPoints?: [string, string][];
+  #contentSecurityPolicy?: ContentSecurityPolicy;
 
-  constructor(root: RootPage<D>, options?: AppOptions<T>) {
-    super(options);
+  constructor(root: RootPage<D>, options?: UIAppOption<T>) {
+    const { contentSecurityPolicy, ..._options } = options ?? {};
+    super(_options);
+    this.#contentSecurityPolicy = contentSecurityPolicy;
     this.#root = root;
   }
 
@@ -274,7 +261,10 @@ export class UIApp<
       // TODO: Fix type
       // deno-lint-ignore no-explicit-any
       ctx.set<any>("transferState", {});
-      const nonce = crypto.randomUUID();
+
+      const { nonce, contentSecurityPolicy } = generateCSP(
+        props?.contentSecurityPolicy || this.#contentSecurityPolicy,
+      );
 
       return handle(ctx, props.middleware, async (ctx) => {
         const request = ctx.request;
@@ -287,9 +277,9 @@ export class UIApp<
         const data = ctx.get("data") ?? ({} as D);
         const auth = ctx.auth;
 
-        const resolved = (await Promise.all(
-          props.resolvers.map((resolver) => resolver(ctx)),
-        )).reduce((acc, value) => {
+        const resolved = (
+          await Promise.all(props.resolvers.map((resolver) => resolver(ctx)))
+        ).reduce((acc, value) => {
           return { ...acc, ...value };
         }, {});
 
@@ -325,8 +315,9 @@ export class UIApp<
             status: props.statusCode,
             headers: {
               "Content-Type": "text/html",
-              "Content-Security-Policy":
-                `script-src 'none'; script-src-elem 'nonce-${nonce}';`,
+              ...(contentSecurityPolicy
+                ? { "Content-Security-Policy": contentSecurityPolicy }
+                : {}),
               ...(isProd() ? metadata?.headers : {}),
             },
           },
@@ -396,7 +387,7 @@ export class UIApp<
   #splitScripts(
     scripts: Script[],
     islands: Island[],
-    nonce: string,
+    nonce?: string,
   ): PageScripts | undefined {
     if (!scripts.length && !islands.length) {
       return undefined;

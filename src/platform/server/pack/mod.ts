@@ -1,14 +1,9 @@
 import type { Middleware } from "@huuma/route/middleware";
-import type { AppContext } from "@huuma/route";
 import { join } from "@std/path/join";
 
-import type {
-  Metadata,
-  MetadataGenerator,
-  PageLike,
-  Resolver,
-  UIApp,
-} from "../app.ts";
+import type { ContentSecurityPolicy } from "../content-security-policy.ts";
+import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
+import type { Metadata, MetadataGenerator } from "../metadata.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
 
 import {
@@ -28,6 +23,7 @@ type Renderable = {
   default: PageLike<unknown>;
   metadata?: Metadata | MetadataGenerator<unknown>;
   resolver?: Resolver<unknown>;
+  contentSecurityPolicy?: ContentSecurityPolicy;
 };
 
 export interface List {
@@ -63,7 +59,7 @@ export const shimsDirectory: string = join(huumaDirectory, "shims");
  * @param {List} list - Object containing pages, islands, and scripts to add to the application
  * @returns {Promise<UIApp<T>>} A promise that resolves with the configured Huuma UIApp instance
  */
-export async function pack<T extends AppContext>(
+export async function pack<T extends UIAppContext>(
   app: UIApp<T>,
   list: List,
 ): Promise<UIApp<T>> {

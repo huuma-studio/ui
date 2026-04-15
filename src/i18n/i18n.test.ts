@@ -1,6 +1,6 @@
-import { t } from "@huuma/ui/i18n";
 import { assertEquals } from "@std/assert/equals";
 import { assertThrows } from "@std/assert/throws";
+import { t } from "@huuma/ui/i18n";
 
 Deno.test(t.name, async ({ step }) => {
   await step("should return expected text", () => {

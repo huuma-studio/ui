@@ -1,9 +1,10 @@
 import { info, log } from "@huuma/route/utils/logger";
 import { parseArgs } from "@std/cli/parse-args";
-import type { AppContext } from "@huuma/route";
 import { parse } from "@std/path/parse";
 import { join } from "@std/path/join";
 
+import type { UIAppContext } from "../../app.ts";
+import type { UIApp } from "../../mod.ts";
 import {
   huumaDirectory,
   type List,
@@ -11,9 +12,9 @@ import {
   scriptsDirectory,
   shimsDirectory,
 } from "../mod.ts";
+
 import type { EntryPoints } from "./bundler.ts";
 import { Bundler } from "./bundler.ts";
-import type { UIApp } from "../../mod.ts";
 import {
   createList,
   listIslands,
@@ -21,7 +22,7 @@ import {
   listRemoteFunctions,
 } from "./list.ts";
 
-export async function prepare<T extends AppContext>(
+export async function prepare<T extends UIAppContext>(
   app: UIApp<T>,
 ): Promise<UIApp<T> | undefined> {
   if (!parseArgs(Deno.args).bundle) {
@@ -37,7 +38,7 @@ export async function prepare<T extends AppContext>(
   );
 }
 
-export async function list<T extends AppContext>(
+export async function list<T extends UIAppContext>(
   app: UIApp<T>,
   options?: {
     enableLiveReload?: boolean;
@@ -81,7 +82,7 @@ export async function list<T extends AppContext>(
   await createDirectory(huumaDirectory);
 
   const bundler = new Bundler();
-  const result = await bundler.bundle({
+  const { files, hash } = await bundler.bundle({
     entryPoints,
     isProd: options?.isProd,
     shims: [await shimPublicEnvVars()],
@@ -92,9 +93,9 @@ export async function list<T extends AppContext>(
   await createDirectory(scriptsDirectory);
 
   // Write bundled scripts
-  for (const [name, outputFile] of result.files) {
+  for (const [name, outputFile] of files) {
     await Deno.writeFile(join(scriptsDirectory, name), outputFile.contents);
-    scripts.push([result.hash, name, {
+    scripts.push([hash, name, {
       isEntryPoint: outputFile.isEntryPoint,
       isIsland: outputFile.isIsland,
       isRuntime: outputFile.isRuntime,
@@ -174,7 +175,7 @@ export async function shimPublicEnvVars(): Promise<string> {
   return filePath;
 }
 
-export async function enableLiveReload<T extends AppContext>(
+export async function enableLiveReload<T extends UIAppContext>(
   app: UIApp<T>,
 ): Promise<UIApp<T>> {
   const bundler = new Bundler();

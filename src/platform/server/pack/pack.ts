@@ -1,36 +1,31 @@
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
 import { array, object, string, unknown } from "@huuma/validate";
 import { info } from "@huuma/route/utils/logger";
-import type { AppContext } from "@huuma/route";
-import { join } from "@std/path/join";
 import { parse } from "@std/path/parse";
+import { join } from "@std/path/join";
 
-import type {
-  Metadata,
-  MetadataGenerator,
-  PageLike,
-  Resolver,
-  UIApp,
-} from "../app.ts";
+import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
+
 import { generateHash } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 
-export function packPages<T>(
+export function packPages<T extends UIAppContext>(
   pages: List["pages"],
   app: UIApp<T>,
 ) {
   for (const route in pages) {
+    const _route = pages[route];
     const resolvers: Resolver<unknown>[] = [];
-    const page: PageLike<unknown> = pages[route].page.default;
-    const metadata: Metadata | MetadataGenerator<unknown> | undefined =
-      pages[route].page.metadata;
+    const page: PageLike<unknown> = _route.page.default;
+    const metadata = _route.page.metadata;
+    const contentSecurityPolicy = _route.page.contentSecurityPolicy;
 
-    if (typeof pages[route].page.resolver === "function") {
-      resolvers.push(pages[route].page.resolver);
+    if (typeof _route.page.resolver === "function") {
+      resolvers.push(_route.page.resolver);
     }
 
-    const layouts: PageLike<unknown>[] = pages[route].layouts.map(
+    const layouts: PageLike<unknown>[] = _route.layouts.map(
       (layout) => {
         if (typeof layout.resolver === "function") {
           resolvers.push(layout.resolver);
@@ -39,7 +34,7 @@ export function packPages<T>(
       },
     );
 
-    const middleware = pages[route].middleware
+    const middleware = _route.middleware
       .map((module) => {
         return module.default;
       })
@@ -52,13 +47,14 @@ export function packPages<T>(
       middleware,
       statusCode: path.statusCode,
       metadata,
+      contentSecurityPolicy,
       resolvers,
     });
   }
   return app;
 }
 
-export async function packIslands<T>(
+export async function packIslands<T extends UIAppContext>(
   islands: List["islands"],
   scripts: List["scripts"],
   scriptsDirectory: string,
@@ -88,7 +84,7 @@ export async function packIslands<T>(
   return app;
 }
 
-export async function packScripts<T extends AppContext>(
+export async function packScripts<T extends UIAppContext>(
   scripts: List["scripts"],
   scriptsDirectory: string,
   app: UIApp<T>,
@@ -108,7 +104,9 @@ export async function packScripts<T extends AppContext>(
   return app;
 }
 
-export async function packRemoteFunctions<T extends AppContext>(
+export async function packRemoteFunctions<
+  T extends UIAppContext,
+>(
   _remoteFunctions: List["remoteFunctions"],
   app: UIApp<T>,
 ): Promise<UIApp<T>> {

@@ -1,11 +1,11 @@
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
 import { HttpStatus } from "@huuma/route/http/http-status";
-import type { AppContext } from "@huuma/route";
 
-import { $scope } from "../hooks/scope.ts";
 import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
-import { VNodeProps } from "../v-node/mod.ts";
+import type { UIAppContext } from "../platform/server/app.ts";
 import type { UIApp } from "../platform/server/mod.ts";
+import { VNodeProps } from "../v-node/mod.ts";
+import { $scope } from "../hooks/scope.ts";
 
 export interface I18nConfig {
   defaultLanguage?: string;
@@ -31,7 +31,7 @@ export type I18nTransferState = {
 const defaultPattern = /^\/([a-z]{2})?(?:\/|$)/i;
 const defaultLanguage = "en";
 
-export function setupI18n<T extends AppContext>(
+export function setupI18n<T extends UIAppContext>(
   app: UIApp<T>,
   config: I18nConfig,
 ): Required<I18nConfig> {
