@@ -9,4 +9,5 @@ export {
   type PageLike,
   type PageLikeProps,
   UIApp,
+  type UIAppContext,
 } from "./app.ts";
