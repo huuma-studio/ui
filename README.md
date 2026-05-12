@@ -33,10 +33,11 @@ huuma project
 ```
 
 This will create a project with the following structure:
+
 ```
 your-project-name/
 ├── assets/            # Static assets
-├── pages/             # Page components
+├── app/             # Page components
 │   ├── page.tsx       # Main page component
 │   └── root.tsx       # Root layout component
 ├── src/               # Application source code
@@ -57,7 +58,7 @@ deno task dev
 The default page.tsx will look something like:
 
 ```tsx
-// pages/page.tsx
+// app/page.tsx
 export default function HomePage() {
   return (
     <>
@@ -72,7 +73,7 @@ export default function HomePage() {
 ### 3. Add Interactivity with Islands
 
 ```tsx
-// pages/counter.client.tsx (the .client.tsx suffix marks this as an island component)
+// app/counter.client.tsx (the .client.tsx suffix marks this as an island component)
 import { $signal } from "@huuma/ui/hooks/signal";
 
 export default function Counter() {
@@ -113,7 +114,7 @@ export async function createUser(data: { name: string; email: string }) {
 ### Using Remote server functions in Forms
 
 ```tsx
-// pages/create-user.client.tsx
+// app/create-user.client.tsx
 import { createUser } from "../src/user.remote.ts";
 import { $signal } from "@huuma/ui/hooks/signal";
 
@@ -225,16 +226,16 @@ const i18nConfig = setupI18n(app, {
     en: {
       greeting: "Hello, {{name}}!",
       buttons: {
-        submit: "Submit"
-      }
+        submit: "Submit",
+      },
     },
     de: {
       greeting: "Hallo, {{name}}!",
       buttons: {
-        submit: "Absenden"
-      }
-    }
-  }
+        submit: "Absenden",
+      },
+    },
+  },
 });
 
 // Use translations in components
@@ -291,7 +292,7 @@ const app = createUIApp(({ children, scripts, islands, transferState }) => {
 ### Nested Layouts
 
 ```tsx
-// pages/blog/layout.tsx
+// app/blog/layout.tsx
 export default function BlogLayout({ children }) {
   return (
     <div className="blog-layout">
@@ -301,7 +302,7 @@ export default function BlogLayout({ children }) {
   );
 }
 
-// pages/blog/page.tsx
+// app/blog/page.tsx
 export default function BlogPage() {
   return <article>Blog Content</article>;
 }
@@ -331,7 +332,7 @@ A typical Huuma UI project structure:
 ```
 my-app/
 ├── assets/           # Static assets
-├── pages/            # Page components
+├── app/            # Page components
 │   ├── layout.tsx    # Layout components
 │   ├── page.tsx      # Page components
 │   └── counter.client.tsx  # Island components (with .client.tsx suffix)

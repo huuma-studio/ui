@@ -22,15 +22,19 @@ import {
   listRemoteFunctions,
 } from "./list.ts";
 
+export interface PrepareOptions {
+  routesPath?: string;
+}
 export async function prepare<T extends UIAppContext>(
   app: UIApp<T>,
+  { routesPath }: PrepareOptions = {},
 ): Promise<UIApp<T> | undefined> {
   if (!parseArgs(Deno.args).bundle) {
     await list(app, { isProd: false });
     return app;
   }
 
-  await list(app, { isProd: true });
+  await list(app, { isProd: true, routesPath });
   log(
     "BUNDLE",
     `"${huumaDirectory}" folder succesfully created.`,
@@ -43,11 +47,12 @@ export async function list<T extends UIAppContext>(
   options?: {
     enableLiveReload?: boolean;
     isProd?: boolean;
+    routesPath?: string;
   },
 ): Promise<UIApp<T>> {
-  const pagesPath = "pages";
+  const routesPath = options?.routesPath ?? "app";
 
-  const pages = await listPages(pagesPath);
+  const pages = await listPages(routesPath);
   const islands = await listIslands("./");
   const remoteFunctions = await listRemoteFunctions("./");
   const scripts: List["scripts"] = [];
@@ -122,7 +127,7 @@ export async function list<T extends UIAppContext>(
     if (e instanceof Deno.errors.NotFound) {
       info(
         "PACK",
-        `Could not find '${pagesPath}' directory while packaging the application. Please ensure it exists.`,
+        `Could not find '${routesPath}' directory while packaging the application. Please ensure it exists.`,
         "Huuma UI",
       );
     }
