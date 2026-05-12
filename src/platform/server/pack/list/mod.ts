@@ -21,6 +21,7 @@ import {
   listPages,
   listRemoteFunctions,
 } from "./list.ts";
+import { generateHash } from "./utils.ts";
 
 export interface PrepareOptions {
   routesPath?: string;
@@ -76,7 +77,11 @@ export async function list<T extends UIAppContext>(
   }
 
   for (const island of islands) {
-    entryPoints[parse(island.fileName).name] = {
+    entryPoints[
+      `${await generateHash(join(island.filePath, island.fileName))}-${
+        parse(island.fileName).name
+      }`
+    ] = {
       path: new URL(
         join("file://", Deno.cwd(), island.filePath, island.fileName),
       ).href,

@@ -62,15 +62,17 @@ export async function packIslands<T extends UIAppContext>(
 ) {
   if (islands) {
     for (const [islandPath, island] of Object.entries(islands)) {
+      const islandHash = await generateHash(islandPath);
+      console.log(islandHash);
       const script = scripts.find((s) =>
-        parse(s[1]).name === parse(islandPath).name
+        parse(s[1]).name === `${islandHash}-${parse(islandPath).name}`
       );
       if (script) {
         app.addIsland(island.default, {
           path: join(
             "_huuma",
             script[0],
-            `${await generateHash(islandPath)}-${script[1]}`,
+            script[1],
           ),
           contents: await readScript(
             join(scriptsDirectory, script[1]),
