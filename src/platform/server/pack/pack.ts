@@ -67,7 +67,11 @@ export async function packIslands<T extends UIAppContext>(
       );
       if (script) {
         app.addIsland(island.default, {
-          path: join("_huuma", script[0], script[1]),
+          path: join(
+            "_huuma",
+            script[0],
+            `${await generateHash(islandPath)}-${script[1]}`,
+          ),
           contents: await readScript(
             join(scriptsDirectory, script[1]),
           ),
