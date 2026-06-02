@@ -1,24 +1,20 @@
 import * as esbuild from "@esbuild";
 import { denoPlugin } from "@deno/esbuild-plugin";
 import { parse } from "@std/path/parse";
+import { relative } from "@std/path/relative";
 import { EOL } from "@std/fs/eol";
-import { generateHash } from "./utils.ts";
+import { generateHash, toCanonicalPath } from "./utils.ts";
 
 export type EntryPoint =
-  | {
+  & {
     path: string;
-    isEntryPoint: boolean;
+    imports?: string[];
   }
-  | {
-    path: string;
-    isIsland: boolean;
-  }
-  | {
-    path: string;
-    isRuntime: boolean;
-  } & {
-    imports?: [];
-  };
+  & (
+    | { isEntryPoint: boolean }
+    | { isIsland: boolean }
+    | { isRuntime: boolean }
+  );
 
 export type EntryPoints = Record<
   string,
@@ -37,16 +33,17 @@ interface OutputFile extends esbuild.OutputFile {
   contents: Uint8Array<ArrayBuffer>;
 }
 
-let isInitialized: boolean | Promise<void> = false;
+let initPromise: Promise<void> | null = null;
 
 async function initialize() {
-  if (isInitialized === false) {
-    isInitialized = esbuild.initialize({});
-    await isInitialized;
-    isInitialized = true;
-  } else if (isInitialized instanceof Promise) {
-    await isInitialized;
+  if (!initPromise) {
+    initPromise = esbuild.initialize({}).catch((err) => {
+      // Allow a retry on the next call if initialization fails.
+      initPromise = null;
+      throw err;
+    });
   }
+  await initPromise;
 }
 
 export class Bundler {
@@ -63,8 +60,8 @@ export class Bundler {
 
     const result = await esbuild.build({
       plugins: [
-        noServerImportsClientSide,
-        remoteRemotePlugin,
+        noServerImportsClientSidePlugin,
+        remoteFunctionsPlugin,
         denoPlugin({ preserveJsx: true }),
       ],
       entryPoints: Object.entries(entryPoints).reduce((acc, [key, value]) => {
@@ -84,7 +81,7 @@ export class Bundler {
       jsxImportSource: "@huuma/ui",
       absWorkingDir: Deno.cwd(),
       target: ["chrome99", "firefox99", "safari15"],
-      inject: [...shims ? shims : []],
+      inject: shims ?? [],
     });
 
     const files = new Map<string, OutputFile>();
@@ -97,11 +94,12 @@ export class Bundler {
         entryPoints[parse(file.path).name];
 
       files.set(parse(file.path).base, {
-        isEntryPoint: entryPoint && "isEntryPoint" in entryPoint &&
-          entryPoint.isEntryPoint,
-        isIsland: entryPoint && "isIsland" in entryPoint && entryPoint.isIsland,
-        isRuntime: entryPoint && "isRuntime" in entryPoint &&
-          entryPoint.isRuntime,
+        isEntryPoint: (entryPoint && "isEntryPoint" in entryPoint &&
+          entryPoint.isEntryPoint) ?? false,
+        isIsland: (entryPoint && "isIsland" in entryPoint &&
+          entryPoint.isIsland) ?? false,
+        isRuntime: (entryPoint && "isRuntime" in entryPoint &&
+          entryPoint.isRuntime) ?? false,
         imports: metaInfo?.imports ?? [],
         ...file,
         contents: new Uint8Array(file.contents),
@@ -111,75 +109,75 @@ export class Bundler {
     return { hash: await generateHash(hash), files };
   }
 
-  stop(): Promise<void> {
-    return esbuild.stop();
+  async stop(): Promise<void> {
+    await esbuild.stop();
+    initPromise = null;
   }
 }
 
-const remoteRemotePlugin: esbuild.Plugin = {
+const remoteFunctionsPlugin: esbuild.Plugin = {
   name: "huuma-remote-function-plugin",
   setup(build) {
     build.onLoad({ filter: /\.remote\.ts$/ }, async (args) => {
       // Look into the file in scope and find the names of all exported functions
       const fileContent = await Deno.readTextFile(args.path);
 
-      const exportedFunctions = [];
+      const exportedFunctions = new Set<string>();
+      let hasDefaultExport = false;
 
       // Pattern 1: export [async] function name() {...}
       const namedExportRegex = /export\s+(async\s+)?function\s+(\w+)/g;
       let match: RegExpExecArray | null;
       while ((match = namedExportRegex.exec(fileContent)) !== null) {
-        exportedFunctions.push(match[2]);
+        exportedFunctions.add(match[2]);
       }
 
-      // Pattern 2: export default [async] function name() {...}
-      const defaultNamedExportRegex =
-        /export\s+default\s+(async\s+)?function\s+(\w+)/g;
-      while ((match = defaultNamedExportRegex.exec(fileContent)) !== null) {
-        exportedFunctions.push(match[2]);
-      }
-
-      // Pattern 3: export const name = function() {...} or export const name = () => {...}
+      // Pattern 2: export const name = function() {...} or export const name = () => {...}
       const constFunctionExportRegex =
         /export\s+const\s+(\w+)\s*=\s*(async\s+)?(\(?.*?\)?\s*=>|function\b)/g;
       while ((match = constFunctionExportRegex.exec(fileContent)) !== null) {
-        exportedFunctions.push(match[1]);
+        exportedFunctions.add(match[1]);
+      }
+
+      // Pattern 3: export default ... (named function, anonymous function,
+      // arrow function, or identifier re-export). On the server side the
+      // default export is always reachable via the "default" key of the
+      // namespace import, so we only need to know that one exists.
+      const defaultExportRegex = /export\s+default\b/;
+      if (defaultExportRegex.test(fileContent)) {
+        hasDefaultExport = true;
       }
 
       const fileName = parse(args.path).name;
-      const fileHash = await generateHash(args.path.replace(Deno.cwd(), ""));
+      const fileHash = await generateHash(
+        toCanonicalPath(relative(Deno.cwd(), args.path)),
+      );
+      const endpoint = `/_huuma/remote/${fileHash}/${fileName}`;
+
+      const buildFetch = (remoteFunction: string) =>
+        `fetch(${JSON.stringify(endpoint)}, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            args,
+            remoteFunction: ${JSON.stringify(remoteFunction)},
+          }),
+        }).then(res=>res.json())`;
 
       // Create exports for each function found
-      const exportContents = `
-        ${
-        exportedFunctions.map((fn) => {
-          if (fn === "default") {
-            return `export default async function ${fn}(...args){
-            return fetch("/_huuma/${fileHash}/${fileName}", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-              },
-              body: JSON.stringify({
-                args,
-                remoteFunction: "${fn}",
-              }),
-            }).then(res=>res.json());};`;
-          }
-          return `export async function ${fn}(...args){
-          return fetch("/_huuma/remote/${fileHash}/${fileName}", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              args,
-              remoteFunction: "${fn}",
-            }),
-          }).then(res=>res.json());};`;
-        }).join(EOL)
-      }
-      `;
+      const namedExports = [...exportedFunctions].map((fn) =>
+        `export async function ${fn}(...args){ return ${buildFetch(fn)}; }`
+      );
+
+      const defaultExport = hasDefaultExport
+        ? [
+          `export default async function(...args){ return ${
+            buildFetch("default")
+          }; }`,
+        ]
+        : [];
+
+      const exportContents = [...namedExports, ...defaultExport].join(EOL);
 
       return {
         contents: exportContents,
@@ -189,8 +187,8 @@ const remoteRemotePlugin: esbuild.Plugin = {
   },
 };
 
-const noServerImportsClientSide: esbuild.Plugin = {
-  name: "no-server-imports-client-side",
+const noServerImportsClientSidePlugin: esbuild.Plugin = {
+  name: "huuma-no-server-imports-client-side-plugin",
   setup(build) {
     build.onResolve({ filter: /\.server\.(ts|tsx)$/ }, () => {
       throw new Error(

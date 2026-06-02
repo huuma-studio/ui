@@ -6,7 +6,7 @@ import { join } from "@std/path/join";
 
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 
-import { generateHash } from "./list/utils.ts";
+import { generateHash, toCanonicalPath } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 
@@ -63,7 +63,6 @@ export async function packIslands<T extends UIAppContext>(
   if (islands) {
     for (const [islandPath, island] of Object.entries(islands)) {
       const islandHash = await generateHash(islandPath);
-      console.log(islandHash);
       const script = scripts.find((s) =>
         parse(s[1]).name === `${islandHash}-${parse(islandPath).name}`
       );
@@ -123,7 +122,7 @@ export async function packRemoteFunctions<
   if (_remoteFunctions) {
     for (const [key, remoteFunctions] of Object.entries(_remoteFunctions)) {
       const fileName = parse(key).name;
-      const fileHash = await generateHash(`/${key}`);
+      const fileHash = await generateHash(toCanonicalPath(key));
       app.post(`/_huuma/remote/${fileHash}/${fileName}`, async ({ body }) => {
         const { remoteFunction, args } = remoteFunctionsSchema.parse(body);
         if (

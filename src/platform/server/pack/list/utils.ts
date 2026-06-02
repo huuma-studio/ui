@@ -6,3 +6,13 @@ export async function generateHash(value: string): Promise<string> {
     "",
   ).slice(0, 8);
 }
+
+/**
+ * Normalize a path (absolute or relative) to a canonical, cross-platform
+ * route segment: forward slashes only, with a single leading slash.
+ * Used as a stable hash input so client- and server-generated hashes
+ * agree on Windows and POSIX alike.
+ */
+export function toCanonicalPath(path: string): string {
+  return "/" + path.replaceAll("\\", "/").replace(/^\/+/, "");
+}
