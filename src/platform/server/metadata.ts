@@ -3,7 +3,7 @@ import type { TransferState } from "./transfer-state.ts";
 
 export type Metadata = {
   title?: string;
-  description: string;
+  description?: string;
   headers?: Record<string, string>;
 };
 
