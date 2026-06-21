@@ -162,7 +162,21 @@ const remoteFunctionsPlugin: esbuild.Plugin = {
             args,
             remoteFunction: ${JSON.stringify(remoteFunction)},
           }),
-        }).then(res=>res.json())`;
+        }).then(async (res) => {
+          if (res.status === 204) return undefined;
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            const err = new Error(
+              body?.message ??
+                ("Remote function " + ${
+          JSON.stringify(remoteFunction)
+        } + " failed (HTTP " + res.status + ")"),
+            );
+            err.name = body?.name ?? "RemoteFunctionError";
+            throw err;
+          }
+          return res.json();
+        })`;
 
       // Create exports for each function found
       const namedExports = [...exportedFunctions].map((fn) =>
