@@ -198,7 +198,7 @@ export async function executeRemoteFunction(
   // We still log so these failures are debuggable server-side, mirroring
   // the `console.error(error)` that `handleException` would have done.
   // Body shape is provisional pending the Round 1 wire-format decision.
-  let serialized: string;
+  let serialized: string | undefined;
   try {
     serialized = JSON.stringify(res);
   } catch (err) {
