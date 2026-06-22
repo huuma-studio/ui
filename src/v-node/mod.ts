@@ -250,12 +250,6 @@ export function cleanup(vNode: VNode<unknown>) {
     cleanup(vNode[VNodeProps.AST]);
   }
 
-  if (isVFragment(vNode)) {
-    for (const vChild of vNode[VNodeProps.CHILDREN] ?? []) {
-      cleanup(vChild);
-    }
-  }
-
   if (isVElement(vNode) || isVFragment(vNode)) {
     for (const child of vNode[VNodeProps.CHILDREN] ?? []) {
       cleanup(child);
@@ -320,7 +314,7 @@ export function keyFromVNode<T>(vNode: VNode<T>): string | number | undefined {
   return vNode[VNodeProps.KEY];
 }
 
-// TODO: Move to a the appropiate location (maybe @huuma/validate)
+// TODO: Move to the appropriate location (maybe @huuma/validate)
 // deno-lint-ignore no-explicit-any
 export function isArray(value: any): value is any[] {
   return Array.isArray(value);
