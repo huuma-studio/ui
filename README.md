@@ -160,6 +160,37 @@ export default function CreateUserForm() {
 }
 ```
 
+### Return values and error handling
+
+Remote function return values are normalized before being sent to the client:
+
+- A `void` / `undefined` return produces a `204 No Content` response and resolves to `undefined` on the client. The void/null distinction is preserved — an explicit `null` return resolves to `null`.
+- Any JSON-serializable value is sent as a `200` with the JSON body.
+- A return value that JSON cannot represent (`function`, `Symbol`, `BigInt`, or a circular reference) produces a `500` with an error body of `{ name: "RemoteFunctionSerializationError", message: "..." }`.
+
+On the client, the generated stub checks the HTTP status:
+
+- `2xx` resolves with the deserialized JSON body.
+- `204` resolves `undefined`.
+- Non-`2xx` responses reject the promise with a reconstructed `Error` whose `name` and `message` come from the server's JSON error body (falling back to `"Remote function \"<name>\" failed (HTTP <status>)"` if the body is not JSON). Inspect `error.name` to distinguish `RemoteFunctionSerializationError` (a programmer error in the return value) from errors thrown by the remote function itself.
+
+```tsx
+const handleSubmit = async (event: Event) => {
+  event.preventDefault();
+  try {
+    const result = await createUser(data);
+    // result is the deserialized JSON return value, or undefined for void returns
+  } catch (error) {
+    // error.name may be "RemoteFunctionSerializationError", the name of an
+    // error thrown inside the remote function, or "RemoteFunctionError"
+    // (fallback when the server's error body was not JSON).
+    console.error(error.name, error.message);
+  }
+};
+```
+
+Note: request-body schema validation failures and unknown-function-name errors still go through the framework's global error handler and may not yet produce a structured `{ name, message }` body. Network-level fetch failures surface as `TypeError: Failed to fetch`.
+
 ## Signals and Reactivity
 
 Huuma UI uses a signal-based reactivity system for efficient UI updates:

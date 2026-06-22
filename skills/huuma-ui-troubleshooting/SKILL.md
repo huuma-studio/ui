@@ -39,11 +39,16 @@ Use this skill when the agent (or user) hits a Huuma UI lint violation or runtim
 - **Fix:** Add `<Scripts />` and `<Launch />` to the body in `root.tsx`.
 - **How to verify:** the README "Server Setup with Layouts" section shows the required shell.
 
-### Remote function call throws a JSON parse error
+### Remote function call rejects with a reconstructed `Error`
 
-- **Cause:** The generated client stub does not check `res.ok`, and non-2xx responses (or `undefined` returns with empty bodies) break `res.json()`.
-- **Fix:** On the server, avoid returning `undefined` from a remote function; return `null` or a wrapped object instead. On the client, wrap calls in `try/catch` and handle non-OK responses.
-- **How to verify:** see the README 'Remote server functions' section for the documented limitation.
+- **Cause:** The server returned a non-`2xx` response. The client stub checks `res.ok` and throws an `Error` with `name`/`message` reconstructed from the server's JSON error body. Common sources: the remote function threw, the return value was not JSON-serializable (`BigInt`, `function`, `Symbol`, circular reference → `500` with `name: "RemoteFunctionSerializationError"`), the function name was not found (`NotFoundException`), or the request body failed `@huuma/validate` schema validation.
+- **Fix:** Wrap calls in `try/catch`. Read `error.message` for the human-readable cause. Read `error.name` to spot `"RemoteFunctionSerializationError"` (a programmer error — fix the return value). Note: errors thrown inside the remote function currently arrive as `name: "RemoteFunctionError"` (the fallback), not the original thrown class name, because the framework's global `handleException` emits `{ status, message, error? }` with no `name`. See `huuma-ui-remote-functions` for the full return-value and error table.
+- **Note:** `NotFoundException` and `@huuma/validate` schema failures also go through `handleException` and arrive as `"RemoteFunctionError"` on the client.
+
+### Remote function resolves to `undefined` unexpectedly
+
+- **Cause:** The remote function returned `void` / `undefined`. The server responds `204 No Content` and the client stub resolves `undefined` (not `null`). This is intentional behavior, not a parse error.
+- **Fix:** If the client expects a value, return `null` or a concrete object from the remote function. Do not rely on `undefined` to mean "no result" if the client treats `null` and `undefined` differently.
 
 ### TypeError: `.get` is not a function on a ref, or signal accessed without parentheses
 
