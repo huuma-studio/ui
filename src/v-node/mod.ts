@@ -250,12 +250,6 @@ export function cleanup(vNode: VNode<unknown>) {
     cleanup(vNode[VNodeProps.AST]);
   }
 
-  if (isVFragment(vNode)) {
-    for (const vChild of vNode[VNodeProps.CHILDREN] ?? []) {
-      cleanup(vChild);
-    }
-  }
-
   if (isVElement(vNode) || isVFragment(vNode)) {
     for (const child of vNode[VNodeProps.CHILDREN] ?? []) {
       cleanup(child);

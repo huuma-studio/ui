@@ -126,7 +126,7 @@ async function vFragment<T>(
 
   let children: VNode<T>[];
   if (isTemplateNode(fragment)) {
-    const nodes = [...fragment.nodes];
+    const nodes = [...(fragment.nodes ?? [])];
     children = (await Promise.all(fragment.templates.map((template) => {
       const resolve = async () => {
         return [
