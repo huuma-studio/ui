@@ -4,7 +4,7 @@ import { walk } from "@std/fs/walk";
 import { EOL } from "@std/fs/eol";
 import type { List } from "../mod.ts";
 
-interface FileImport {
+export interface FileImport {
   name: string;
   filePath: string;
   fileName: string;
@@ -278,13 +278,33 @@ function fileExports(files: FileImport[]): string {
   ).join(EOL);
 }
 
-function sortPages(imports: FileImport[], basePath?: string): FileImport[] {
+/**
+ * @internal Not part of the public `@huuma/ui` API. Exported only for
+ * unit-testing; `list/mod.ts` does not re-export it and `list.ts` is not an
+ * entry point in `deno.json`'s exports map.
+ *
+ * Sorts pages so the root page (filePath === basePath) is registered first
+ * and the `!404` catch-all is registered last. The router resolves
+ * first-match-wins, so registration order determines which route wins
+ * when patterns overlap (e.g. `/` vs `/*`).
+ */
+export function sortPages(
+  imports: FileImport[],
+  basePath?: string,
+): FileImport[] {
   return imports.sort((a, b) => {
     const al = a.filePath.toLowerCase();
     const bl = b.filePath.toLowerCase();
 
-    if (typeof basePath !== "undefined" && al === basePath) {
-      return -1;
+    // The root page (filePath === basePath) must always sort first so it is
+    // registered before the `!404` catch-all (`/*`). The comparator must be
+    // antisymmetric: checking only `a` (the previous form) left the result
+    // dependent on the initial array order from `walk()`, which is
+    // filesystem-dependent — so the root page "randomly" ended up after the
+    // catch-all and `/` returned 404.
+    if (typeof basePath !== "undefined") {
+      if (al === basePath) return -1;
+      if (bl === basePath) return 1;
     }
 
     if (al > bl) {
