@@ -28,7 +28,10 @@
       "root.tsx",
       ".github/*",
       ".idea/*",
-      ".nova/*"
+      ".nova/*",
+      "skills/",
+      "docs/",
+      "improvements.md"
     ]
   },
   "imports": {
@@ -44,7 +47,8 @@
     "@esbuild": "npm:esbuild@0.27.2"
   },
   "tasks": {
-    "check": "deno check src/**/*.tsx src/**/*.ts"
+    "check": "deno check src/**/*.tsx src/**/*.ts",
+    "test": "deno test --allow-read src/"
   },
   "compilerOptions": {
     "jsx": "react-jsx",
