@@ -12,6 +12,24 @@ let unloading = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let activeConnection: WebSocket | undefined;
 
+// Firefox closes open WebSockets as soon as a navigation *starts* — before
+// `pagehide` fires — so the `close` handler would still see `unloading ===
+// false`, schedule a reconnect, and cancel the in-flight navigation with
+// `location.reload()` (endless reload loop). `beforeunload` is the one event
+// Firefox fires before tearing the socket down, so flip the flag here too.
+// Trade-off: registering a `beforeunload` listener can make the page
+// ineligible for the back/forward cache (notably in Firefox). That only costs
+// some navigation speed during development, since this script is dev-only.
+// If it does enter bfcache anyway (e.g. Chrome), the `pageshow` handler
+// resets the flag.
+globalThis.addEventListener("beforeunload", () => {
+  unloading = true;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
+  }
+});
+
 globalThis.addEventListener("pagehide", (event) => {
   // `pagehide` also fires when the page enters the back/forward cache. We only
   // treat it as a true teardown when the page is not being persisted — otherwise
@@ -36,6 +54,9 @@ globalThis.addEventListener("pagehide", (event) => {
 // still have a live OPEN socket.
 globalThis.addEventListener("pageshow", (event) => {
   if (!event.persisted) return;
+  // `beforeunload` fired on the way into the bfcache and set `unloading`; the
+  // page is live again now, so clear it or live reload would stay disabled.
+  unloading = false;
   // A reconnect timer scheduled before bfcache is paused by the browser and
   // resumes on restore. Cancel it so it can't race the fresh socket we're
   // about to create (a reconnect-attempt socket that opens first would call
@@ -93,7 +114,12 @@ function manageWebSocket(isReconnectAttempt = false) {
 
     if (isReconnectAttempt) {
       console.log("Reconnection successful. Reloading page.");
-      globalThis.location.reload();
+      // Defer the reload one tick and re-check `unloading`: a navigation may
+      // have started between the handshake completing and this callback
+      // running, and reloading then would cancel the user's navigation.
+      setTimeout(() => {
+        if (!unloading) globalThis.location.reload();
+      }, 0);
       return;
     }
   });
