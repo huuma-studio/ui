@@ -3,25 +3,17 @@ let slowdown = 1;
 const maxSlowdown = 100;
 const baseDelayMs = 100;
 
-// Once the page is being unloaded (user navigates, closes the tab, etc.) the
-// WebSocket closing is expected and not a signal that the dev server is gone.
-// We must not schedule reconnects or trigger reloads in that case — doing so
-// spins up stray connections during teardown and, on a successful reconnect,
-// calls `location.reload()`, which is the error observed on navigation.
+// While the page is being torn down, a closing socket is expected — a
+// reconnect then would end in a stray `location.reload()`.
 let unloading = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let activeConnection: WebSocket | undefined;
 
-// Firefox closes open WebSockets as soon as a navigation *starts* — before
-// `pagehide` fires — so the `close` handler would still see `unloading ===
-// false`, schedule a reconnect, and cancel the in-flight navigation with
-// `location.reload()` (endless reload loop). `beforeunload` is the one event
-// Firefox fires before tearing the socket down, so flip the flag here too.
-// Trade-off: registering a `beforeunload` listener can make the page
-// ineligible for the back/forward cache (notably in Firefox). That only costs
-// some navigation speed during development, since this script is dev-only.
-// If it does enter bfcache anyway (e.g. Chrome), the `pageshow` handler
-// resets the flag.
+// Firefox kills open sockets when a navigation *starts*, before `pagehide`
+// fires — set the flag here too, or `close` schedules a reconnect whose
+// reload cancels the navigation (endless reload loop). Trade-off: a
+// `beforeunload` listener can make the page bfcache-ineligible, acceptable
+// for a dev-only script.
 globalThis.addEventListener("beforeunload", () => {
   unloading = true;
   if (reconnectTimer) {
@@ -31,9 +23,7 @@ globalThis.addEventListener("beforeunload", () => {
 });
 
 globalThis.addEventListener("pagehide", (event) => {
-  // `pagehide` also fires when the page enters the back/forward cache. We only
-  // treat it as a true teardown when the page is not being persisted — otherwise
-  // we'd permanently disable live reload after a back/forward navigation.
+  // Persisted means bfcache, not teardown — keep live reload armed.
   if (event.persisted) return;
 
   unloading = true;
@@ -41,26 +31,20 @@ globalThis.addEventListener("pagehide", (event) => {
     clearTimeout(reconnectTimer);
     reconnectTimer = undefined;
   }
-  // Close cleanly to avoid spurious close/error callbacks firing mid-teardown.
   try {
     activeConnection?.close();
   } catch {
-    // Socket may already be closing/closed; safe to ignore.
+    // Already closing/closed.
   }
 });
 
-// If the page was restored from the back/forward cache, the socket may have
-// been killed by the browser while the page was frozen. Reconnect if we don't
-// still have a live OPEN socket.
+// Restored from bfcache: the browser may have killed the socket while the
+// page was frozen.
 globalThis.addEventListener("pageshow", (event) => {
   if (!event.persisted) return;
-  // `beforeunload` fired on the way into the bfcache and set `unloading`; the
-  // page is live again now, so clear it or live reload would stay disabled.
+  // `beforeunload` set the flag on the way into the cache; the page is live again.
   unloading = false;
-  // A reconnect timer scheduled before bfcache is paused by the browser and
-  // resumes on restore. Cancel it so it can't race the fresh socket we're
-  // about to create (a reconnect-attempt socket that opens first would call
-  // `location.reload()`).
+  // A pre-bfcache reconnect timer resumes on restore and could reload — cancel it.
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = undefined;
@@ -71,8 +55,40 @@ globalThis.addEventListener("pageshow", (event) => {
   }
 });
 
+// A cancelled navigation (e.g. the user stays at an "unsaved changes?"
+// prompt) sets `unloading` but never fires `pagehide`/`pageshow` to reset it.
+// Focus, visibility, or any interaction proves the page survived.
+function recoverFromCancelledNavigation() {
+  if (!unloading) return;
+  unloading = false;
+  // Don't trust the leftover socket: Firefox may have killed it with
+  // `readyState` still reading OPEN, and its late `close` would schedule a
+  // reload-ing reconnect. Detach it (its pending events fail the
+  // `activeConnection` guards) and start a fresh initial connection, which
+  // never reloads.
+  const staleConnection = activeConnection;
+  activeConnection = undefined;
+  try {
+    staleConnection?.close();
+  } catch {
+    // Already closing/closed.
+  }
+  manageWebSocket(false);
+}
+
+globalThis.addEventListener("focus", recoverFromCancelledNavigation);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    recoverFromCancelledNavigation();
+  }
+});
+// The beforeunload prompt may not blur the window, so focus/visibility never
+// fire — any interaction is an equally valid survival signal.
+globalThis.addEventListener("pointerdown", recoverFromCancelledNavigation);
+globalThis.addEventListener("keydown", recoverFromCancelledNavigation);
+
 function manageWebSocket(isReconnectAttempt = false) {
-  // Don't spin up a new connection once the page is on its way out.
+  // No new connections during teardown.
   if (unloading) return;
 
   const wsProtocol = globalThis.location.protocol === "https:" ? "wss:" : "ws:";
@@ -93,14 +109,10 @@ function manageWebSocket(isReconnectAttempt = false) {
   let hasOpened = false;
 
   connection.addEventListener("open", () => {
-    // The handshake may have completed and this task may already be queued on
-    // the event loop by the time `pagehide` fires and closes the socket. A
-    // queued `open` callback is not cancelled by `close()`, so guard here too —
-    // otherwise we'd call `location.reload()` mid-teardown.
+    // `close()` doesn't cancel an already-queued `open` — don't reload
+    // mid-teardown.
     if (unloading) return;
-    // A newer connection may have already taken over (e.g. a bfcache restore
-    // spun up a fresh socket while this reconnect was in-flight). This `open`
-    // is stale — don't reload from it.
+    // A newer connection took over while this one was in flight — stale.
     if (activeConnection !== connection) return;
 
     hasOpened = true;
@@ -114,20 +126,20 @@ function manageWebSocket(isReconnectAttempt = false) {
 
     if (isReconnectAttempt) {
       console.log("Reconnection successful. Reloading page.");
-      // Defer the reload one tick and re-check `unloading`: a navigation may
-      // have started between the handshake completing and this callback
-      // running, and reloading then would cancel the user's navigation.
+      // Defer and re-check: a navigation may have started since the
+      // handshake, or a recovery/bfcache restore may have replaced this
+      // socket — reloading then would be spurious.
       setTimeout(() => {
-        if (!unloading) globalThis.location.reload();
+        if (!unloading && activeConnection === connection) {
+          globalThis.location.reload();
+        }
       }, 0);
       return;
     }
   });
 
   connection.addEventListener("close", (event) => {
-    // If a newer connection has already taken over (e.g. a bfcache restore spun
-    // up a fresh socket), this close event is stale — don't clear the active
-    // reference or schedule a competing reconnect.
+    // Stale close from a replaced connection — ignore.
     if (activeConnection !== connection) return;
     activeConnection = undefined;
 
@@ -141,8 +153,7 @@ function manageWebSocket(isReconnectAttempt = false) {
       );
     }
 
-    // The page is being torn down. A reconnect here would either fail or, worse,
-    // succeed and force an unexpected `location.reload()`.
+    // Teardown in progress — a successful reconnect would force a reload.
     if (unloading) return;
 
     attempts++;
