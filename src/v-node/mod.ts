@@ -250,6 +250,23 @@ export function flushCleanups(vNode: HasVCleanup) {
   vNode[VNodeProps.CLEANUP] = [];
 }
 
+/*
+ * Drains the DOM-text subscriptions of a whole subtree. Texts only:
+ * component re-render subscriptions are drained per update pass by
+ * cleanup().
+ */
+export function flushSubtreeCleanups(vNode: VNode<unknown>) {
+  if (isVText(vNode)) {
+    flushCleanups(vNode);
+  }
+  if (isVComponent(vNode)) {
+    flushSubtreeCleanups(vNode[VNodeProps.AST]);
+  }
+  if (isVElement(vNode) || isVFragment(vNode)) {
+    vNode[VNodeProps.CHILDREN]?.forEach((child) => flushSubtreeCleanups(child));
+  }
+}
+
 export function cleanup(vNode: VNode<unknown>) {
   if (isVComponent(vNode)) {
     flushCleanups(vNode);

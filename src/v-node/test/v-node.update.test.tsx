@@ -289,7 +289,7 @@ Deno.test(update.name, async (t) => {
   );
 
   await t.step(
-    "clean up signal subscriptions of a destroyed subtree",
+    "keep subtree signal subscriptions until the diff commit",
     () => {
       const sig = signal("A");
 
@@ -305,19 +305,21 @@ Deno.test(update.name, async (t) => {
       // Simulate the browser diff wiring a DOM Text node to the signal.
       const domWrites: unknown[] = [];
       setSubscriber(
-        () => (vText[VNodeProps.TEXT] as JSX.SignalLike).get(),
+        () => sig.get(),
         {
           update: (value) => domWrites.push(value),
           cleanupCallback: (cleanup) => vText[VNodeProps.CLEANUP].push(cleanup),
         },
       );
 
-      // Re-render with the subtree removed - destroying the text must
-      // drop its subscription.
+      // Re-render with the subtree removed - destroy() must not drop the
+      // subscription: the diff layer's Delete handlers drain it at the
+      // commit point, so an aborted pass leaves the still-visible text
+      // fully bound.
       update(<Root />, vNode, {});
 
-      sig.set("stale");
-      assertEquals(domWrites, []);
+      sig.set("still-live");
+      assertEquals(domWrites, ["still-live"]);
     },
   );
 

@@ -1,4 +1,8 @@
-import { type VElement, VNodeProps } from "../../../../v-node/mod.ts";
+import {
+  flushSubtreeCleanups,
+  type VElement,
+  VNodeProps,
+} from "../../../../v-node/mod.ts";
 import {
   type AttachmentRef,
   AttachmentType,
@@ -194,8 +198,14 @@ function update({ vElement, node, attachmentRef }: UpdateElementPayload): void {
 }
 
 function remove({ vElement }: DeleteElementPayload): void {
-  (<HTMLElement> vElement[VNodeProps.NODE_REF]).remove();
+  // Optional call: an update pass aborted mid-walk can expose vNodes
+  // whose changesets never dispatched, leaving NODE_REF unset.
+  (<HTMLElement | undefined> vElement[VNodeProps.NODE_REF])?.remove();
   vElement[VNodeProps.NODE_REF] = undefined;
+  // The Delete changeset stops at this element - drain the signal
+  // subscriptions of every text nested below it, or they keep writing
+  // into the detached subtree.
+  flushSubtreeCleanups(vElement);
 }
 
 function createElement(

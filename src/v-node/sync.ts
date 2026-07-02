@@ -5,7 +5,6 @@ import type { Ref } from "../ref/mod.ts";
 import {
   childrenFrom,
   cleanup,
-  flushCleanups,
   isArray,
   isComponentNode,
   isElementNode,
@@ -17,7 +16,6 @@ import {
   isVElement,
   isVFragment,
   isVSignal,
-  isVText,
   keyFromNode,
   keyFromVNode,
   type VComponent,
@@ -445,11 +443,9 @@ function destroy<T>(vNode: VNode<T>) {
     }
     destroy(vNode[VNodeProps.AST]);
   }
-  if (isVText(vNode)) {
-    // Signal-driven texts hold live subscriptions wired by the browser
-    // diff - a destroyed text must stop receiving writes.
-    flushCleanups(vNode);
-  }
+  // DOM-text subscriptions are deliberately NOT drained here: the diff
+  // layer's Delete/Replace handlers own them and drain at the commit
+  // point, so an aborted pass leaves still-visible texts fully bound.
   if (isVElement(vNode) || isVFragment(vNode)) {
     vNode[VNodeProps.CHILDREN]?.forEach((vChild) => destroy(vChild));
   }
