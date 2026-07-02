@@ -1,6 +1,6 @@
 import type { JSX } from "../jsx-runtime/mod.ts";
 import type { Ref } from "../ref/mod.ts";
-import type { Cleanup } from "../signal/mod.ts";
+import { type Cleanup, Signal } from "../signal/mod.ts";
 
 export enum VMode {
   NotCreated,
@@ -238,7 +238,7 @@ export function isVText<T>(vNode: undefined | null | VBase): vNode is VText<T> {
 }
 
 export function isVSignal(node: JSX.Element): node is VSignal {
-  return (node && typeof node === "object" && "get" in node) || false;
+  return node instanceof Signal;
 }
 
 export function cleanup(vNode: VNode<unknown>) {

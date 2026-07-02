@@ -101,11 +101,8 @@ export function text(change: TextChangeSet): void {
 function create({ vText }: CreateTextPayload): void {
   let node: Text;
 
-  if (
-    typeof vText[VNodeProps.TEXT] === "object" &&
-    "get" in vText[VNodeProps.TEXT]
-  ) {
-    const signal = vText[VNodeProps.TEXT];
+  if (isSignal(vText)) {
+    const signal = <VSignal> vText[VNodeProps.TEXT];
     node = setSubscriber(() => {
       return new Text(`${signal.get()}`);
     }, {
@@ -148,10 +145,7 @@ function link({ vText, node, attachmentRef }: LinkTextPayload): void {
 function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
   let node: Text;
 
-  if (
-    typeof vText[VNodeProps.TEXT] === "object" &&
-    "get" in vText[VNodeProps.TEXT]
-  ) {
+  if (isSignal(vText)) {
     const signal = <VSignal> vText[VNodeProps.TEXT];
     node = setSubscriber(() => {
       return new Text(`${signal.get()}`);

@@ -1,4 +1,5 @@
 import {
+  isVSignal,
   keyFromVNode,
   type VComponent,
   type VElement,
@@ -288,10 +289,6 @@ function removePreviousVNode(
   return previousVNodes.splice(existingIndex, 1)[0];
 }
 
-export function isSignal(vNode: VText<Node>) {
-  return (
-    !!vNode &&
-    typeof vNode[VNodeProps.TEXT] === "object" &&
-    "get" in vNode[VNodeProps.TEXT]
-  );
+export function isSignal(vNode: VText<Node>): boolean {
+  return !!vNode && isVSignal(vNode[VNodeProps.TEXT]);
 }
