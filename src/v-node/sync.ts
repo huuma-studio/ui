@@ -292,14 +292,14 @@ function vFragment<T>(
 
   const children: VNode<T>[] = [];
   if (isTemplateNode(fragment)) {
-    fragment.templates.forEach((template, i) => {
-      children.push(
-        vText(template, { skipEscaping: true }),
+    children.push(
+      ...fragment.templates.flatMap((template, i) => [
+        vText<T>(template, { skipEscaping: true }),
         // Optional access: isTemplateNode only requires `templates`, so
         // untyped callers can pass a TemplateNode without `nodes`.
-        create(fragment.nodes?.[i], globalOptions),
-      );
-    });
+        create<T>(fragment.nodes?.[i], globalOptions),
+      ]),
+    );
   } else {
     const _nodes = childrenFrom(fragment);
     const nodes = isArray(_nodes) ? _nodes : [_nodes];
