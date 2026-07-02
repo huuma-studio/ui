@@ -52,13 +52,13 @@ function link({ vComponent, attachmentRef }: LinkComponentPayload): void {
 function mount({ vComponent }: MountComponentPayload): void {
   // Run lifecycle "onMount" hooks associated with this element.
   vComponent[VNodeProps.HOOKS]?.[VHook.MOUNT]?.forEach((hook) => {
-    const onUnmount = hook();
-    if (typeof onUnmount === "function" && vComponent[VNodeProps.HOOKS]) {
+    const onDestroy = hook();
+    if (typeof onDestroy === "function" && vComponent[VNodeProps.HOOKS]) {
       if (Array.isArray(vComponent[VNodeProps.HOOKS][VHook.DESTROY])) {
-        vComponent[VNodeProps.HOOKS][VHook.DESTROY].push(onUnmount);
+        vComponent[VNodeProps.HOOKS][VHook.DESTROY].push(onDestroy);
         return;
       }
-      vComponent[VNodeProps.HOOKS][VHook.DESTROY] = [onUnmount];
+      vComponent[VNodeProps.HOOKS][VHook.DESTROY] = [onDestroy];
     }
   });
   vComponent[VNodeProps.MODE] = VMode.Mounted;
