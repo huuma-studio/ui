@@ -148,7 +148,18 @@ function updateVText<T>(
   node: string | number | JSX.SignalLike,
   vText: VText<T>,
 ): VText<T> {
-  vText[VNodeProps.TEXT] = isVSignal(node) ? node : `${node}`;
+  const previousText = vText[VNodeProps.TEXT];
+  const text = isVSignal(node) ? node : `${node}`;
+
+  // The previous signal no longer owns this text - drop its subscriptions.
+  if (isVSignal(previousText) && previousText !== text) {
+    for (const cleanup of vText[VNodeProps.CLEANUP]) {
+      cleanup.cleanup();
+    }
+    vText[VNodeProps.CLEANUP] = [];
+  }
+
+  vText[VNodeProps.TEXT] = text;
   return vText;
 }
 

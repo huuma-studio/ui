@@ -1,9 +1,15 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
-import { type VComponent, VNodeProps, VType } from "../mod.ts";
+import {
+  type VComponent,
+  type VElement,
+  VNodeProps,
+  type VText,
+  VType,
+} from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
 import { $destroy } from "../../hooks/lifecycle.ts";
 import { $signal } from "../../hooks/signal.ts";
-import { WritableSignal } from "../../signal/mod.ts";
+import { setSubscriber, signal, WritableSignal } from "../../signal/mod.ts";
 import { create, update, vElement } from "../sync.ts";
 
 Deno.test(update.name, async (t) => {
@@ -177,6 +183,44 @@ Deno.test(update.name, async (t) => {
       update(<ElementRoot swap />, elementVNode, {});
 
       assertEquals(destroyed, ["Old"]);
+    },
+  );
+
+  await t.step(
+    "clean up the stale signal subscription of an updated VText",
+    () => {
+      const sigA = signal("A");
+      const sigB = signal("B");
+
+      const Root = ({ swap }: { swap?: boolean }) => (
+        <div>{swap ? sigB : sigA}</div>
+      );
+
+      const vNode = create(<Root />);
+      const vText = ((vNode as VComponent<unknown>)[VNodeProps.AST] as VElement<
+        unknown
+      >)[VNodeProps.CHILDREN]?.[0] as VText<unknown>;
+      assert(vText[VNodeProps.TEXT] === sigA);
+
+      // Simulate the browser diff wiring a DOM Text node to the signal.
+      const domWrites: unknown[] = [];
+      setSubscriber(
+        () => (vText[VNodeProps.TEXT] as JSX.SignalLike).get(),
+        {
+          update: (value) => domWrites.push(value),
+          cleanupCallback: (cleanup) =>
+            vText[VNodeProps.CLEANUP].push(cleanup),
+        },
+      );
+
+      // Re-render with the other signal - the vText is updated in place.
+      update(<Root swap />, vNode, {});
+      assert(vText[VNodeProps.TEXT] === sigB);
+
+      // The subscription to the replaced signal must be gone:
+      // sigA no longer owns the text and must not write to it.
+      sigA.set("stale");
+      assertEquals(domWrites, []);
     },
   );
 });

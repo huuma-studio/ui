@@ -17,7 +17,11 @@ import { compareAttributes } from "./types/attribute.ts";
 import type { LinkComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet } from "./types/element.ts";
 import type { EventChangeSet } from "./types/event.ts";
-import type { LinkTextChangeSet, UpdateTextChangeSet } from "./types/text.ts";
+import type {
+  LinkTextChangeSet,
+  ReplaceTextChangeSet,
+  UpdateTextChangeSet,
+} from "./types/text.ts";
 
 export function update(
   vNode: VNode<Node>,
@@ -136,6 +140,29 @@ function updateText(
   previousVNode: VText<Node>,
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
+  /*
+   * The signal identity changed - replace the text node so the new
+   * signal gets subscribed. Patching the textContent is not enough:
+   * the subscription of the previous signal was cleaned up during the
+   * vNode update and nothing else would bind the new signal.
+   */
+  if (
+    vText[VNodeProps.TEXT] !== previousVNode[VNodeProps.TEXT] &&
+    (isSignal(vText) || isSignal(previousVNode))
+  ) {
+    vText[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
+    return [
+      <ReplaceTextChangeSet> {
+        [Props.Type]: Type.Text,
+        [Props.Action]: Action.Replace,
+        [Props.Payload]: {
+          vText,
+          attachmentRef,
+        },
+      },
+    ];
+  }
+
   const changeSets: ChangeSet<unknown>[] = [];
 
   changeSets.push(
