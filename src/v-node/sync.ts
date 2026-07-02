@@ -277,12 +277,12 @@ function vFragment<T>(
 
   const children: VNode<T>[] = [];
   if (isTemplateNode(fragment)) {
-    for (const template of fragment.templates) {
+    fragment.templates.forEach((template, i) => {
       children.push(
         vText(template, { skipEscaping: true }),
-        create(fragment.nodes?.shift(), globalOptions),
+        create(fragment.nodes[i], globalOptions),
       );
-    }
+    });
   } else {
     const _nodes = childrenFrom(fragment);
     const nodes = isArray(_nodes) ? _nodes : [_nodes];
