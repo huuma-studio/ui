@@ -242,6 +242,82 @@ Deno.test(update.name, async (t) => {
       assertEquals(destroyed, ["Old"]);
     },
   );
+
+  await t.step(
+    "run destroy hooks only once when an update pass aborts",
+    () => {
+      const destroyed: string[] = [];
+
+      const Tracked = () => {
+        $destroy(() => destroyed.push("Tracked"));
+        return <div>tracked</div>;
+      };
+      const Throwing = (): JSX.Element => {
+        throw new Error("render failed");
+      };
+      const Stable = () => <span>stable</span>;
+
+      const Root = ({ fail }: { fail?: boolean }) => (
+        <div>
+          {fail ? false : <Tracked />}
+          {fail ? <Throwing /> : <Stable />}
+        </div>
+      );
+
+      const vNode = create(<Root />);
+
+      // Tracked is destroyed, then the sibling's render aborts the pass
+      // before the parent's children are reassigned.
+      assertThrows(
+        () => update(<Root fail />, vNode, {}),
+        Error,
+        "render failed",
+      );
+      assertEquals(destroyed, ["Tracked"]);
+
+      // The retry walks the stale children again - Tracked's hooks must
+      // not re-fire.
+      assertThrows(
+        () => update(<Root fail />, vNode, {}),
+        Error,
+        "render failed",
+      );
+      assertEquals(destroyed, ["Tracked"]);
+    },
+  );
+
+  await t.step(
+    "clean up signal subscriptions of a destroyed subtree",
+    () => {
+      const sig = signal("A");
+
+      const Root = ({ show }: { show?: boolean }) =>
+        show ? <div>{sig}</div> : null;
+
+      const vNode = create(<Root show />);
+      const vText = ((vNode as VComponent<unknown>)[VNodeProps.AST] as VElement<
+        unknown
+      >)[VNodeProps.CHILDREN]?.[0] as VText<unknown>;
+      assert(vText[VNodeProps.TEXT] === sig);
+
+      // Simulate the browser diff wiring a DOM Text node to the signal.
+      const domWrites: unknown[] = [];
+      setSubscriber(
+        () => (vText[VNodeProps.TEXT] as JSX.SignalLike).get(),
+        {
+          update: (value) => domWrites.push(value),
+          cleanupCallback: (cleanup) => vText[VNodeProps.CLEANUP].push(cleanup),
+        },
+      );
+
+      // Re-render with the subtree removed - destroying the text must
+      // drop its subscription.
+      update(<Root />, vNode, {});
+
+      sig.set("stale");
+      assertEquals(domWrites, []);
+    },
+  );
 });
 
 const A = () => {

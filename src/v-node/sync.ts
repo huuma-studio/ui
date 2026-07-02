@@ -5,6 +5,7 @@ import type { Ref } from "../ref/mod.ts";
 import {
   childrenFrom,
   cleanup,
+  flushCleanups,
   isArray,
   isComponentNode,
   isElementNode,
@@ -16,6 +17,7 @@ import {
   isVElement,
   isVFragment,
   isVSignal,
+  isVText,
   keyFromNode,
   keyFromVNode,
   type VComponent,
@@ -158,10 +160,7 @@ function updateVText<T>(
 
   // The previous signal no longer owns this text - drop its subscriptions.
   if (isVSignal(previousText) && previousText !== text) {
-    for (const cleanup of vText[VNodeProps.CLEANUP]) {
-      cleanup.cleanup();
-    }
-    vText[VNodeProps.CLEANUP] = [];
+    flushCleanups(vText);
   }
 
   vText[VNodeProps.TEXT] = text;
@@ -437,7 +436,18 @@ function destroy<T>(vNode: VNode<T>) {
     vNode[VNodeProps.HOOKS]?.[VHook.DESTROY]?.forEach((hook) => {
       hook();
     });
+    if (vNode[VNodeProps.HOOKS]) {
+      // Destroy hooks run at most once: an update pass aborted by a
+      // throwing render leaves this vNode in the parent's stale CHILDREN
+      // array, and the next pass destroys it again.
+      vNode[VNodeProps.HOOKS][VHook.DESTROY] = undefined;
+    }
     destroy(vNode[VNodeProps.AST]);
+  }
+  if (isVText(vNode)) {
+    // Signal-driven texts hold live subscriptions wired by the browser
+    // diff - a destroyed text must stop receiving writes.
+    flushCleanups(vNode);
   }
   if (isVElement(vNode) || isVFragment(vNode)) {
     vNode[VNodeProps.CHILDREN]?.forEach((vChild) => destroy(vChild));

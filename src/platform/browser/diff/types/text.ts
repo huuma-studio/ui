@@ -1,5 +1,6 @@
 import { setSubscriber } from "../../../../signal/mod.ts";
 import {
+  flushCleanups,
   VNodeProps,
   type VSignal,
   type VText,
@@ -181,7 +182,7 @@ function update({ vText }: UpdateTextPayload): void {
 
 function remove({ vText }: DeleteTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
-  vText[VNodeProps.CLEANUP].forEach((cleanup) => cleanup.cleanup());
+  flushCleanups(vText);
   if (node) {
     node.parentNode?.removeChild(node);
   }

@@ -241,12 +241,18 @@ export function isVSignal(node: JSX.Element): node is VSignal {
   return node instanceof Signal;
 }
 
+export function flushCleanups(vNode: HasVCleanup) {
+  for (const cleanup of vNode[VNodeProps.CLEANUP]) {
+    cleanup.cleanup();
+  }
+  // Flushing implies resetting: a stale entry would double-run on the
+  // next flush.
+  vNode[VNodeProps.CLEANUP] = [];
+}
+
 export function cleanup(vNode: VNode<unknown>) {
   if (isVComponent(vNode)) {
-    for (const c of vNode[VNodeProps.CLEANUP]) {
-      c.cleanup();
-    }
-    vNode[VNodeProps.CLEANUP] = [];
+    flushCleanups(vNode);
     cleanup(vNode[VNodeProps.AST]);
   }
 
