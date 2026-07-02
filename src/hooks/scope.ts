@@ -7,10 +7,13 @@ export function scopedFn<T>(
   scope: Scope,
   fn: () => T,
 ): T {
+  const previousScope = _scope;
   _scope = scope;
-  const res = fn();
-  _scope = undefined;
-  return res;
+  try {
+    return fn();
+  } finally {
+    _scope = previousScope;
+  }
 }
 
 export function $scope(): Scope {
