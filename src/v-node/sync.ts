@@ -181,7 +181,7 @@ export function vElement<T>(
 
   vElement[VNodeProps.CHILDREN] = isArray(props.children)
     ? props.children?.map((child) => create(child, globalOptions))
-    : [create(props.children)];
+    : [create(props.children, globalOptions)];
 
   return vElement;
 }
