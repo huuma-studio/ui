@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { type VComponent, VNodeProps, VType } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
+import { $destroy } from "../../hooks/lifecycle.ts";
 import { $signal } from "../../hooks/signal.ts";
 import { WritableSignal } from "../../signal/mod.ts";
 import { create, update, vElement } from "../sync.ts";
@@ -133,6 +134,51 @@ Deno.test(update.name, async (t) => {
       [VNodeProps.CLEANUP]: [],
     });
   });
+
+  await t.step(
+    "run destroy hooks of a VComponent replaced by another component",
+    () => {
+      const destroyed: string[] = [];
+
+      const Old = () => {
+        $destroy(() => destroyed.push("Old"));
+        return <div>Old</div>;
+      };
+      const OldChild = () => {
+        $destroy(() => destroyed.push("OldChild"));
+        return <span>OldChild</span>;
+      };
+      const OldParent = () => {
+        $destroy(() => destroyed.push("OldParent"));
+        return (
+          <div>
+            <OldChild />
+          </div>
+        );
+      };
+      const New = () => <div>New</div>;
+
+      const Root = ({ swap }: { swap?: boolean }) =>
+        swap ? <New /> : <OldParent />;
+
+      const vNode = create(<Root />);
+      update(<Root swap />, vNode, {});
+
+      // Nested components are destroyed too.
+      assertEquals(destroyed.sort(), ["OldChild", "OldParent"]);
+
+      destroyed.length = 0;
+
+      // Same for a component replaced by an element.
+      const ElementRoot = ({ swap }: { swap?: boolean }) =>
+        swap ? <div>element</div> : <Old />;
+
+      const elementVNode = create(<ElementRoot />);
+      update(<ElementRoot swap />, elementVNode, {});
+
+      assertEquals(destroyed, ["Old"]);
+    },
+  );
 });
 
 const A = () => {

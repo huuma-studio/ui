@@ -94,6 +94,7 @@ export function update<T>(
   }
 
   if (isEmptyNode(node) || typeof node === "undefined") {
+    destroy(vNode);
     return null;
   }
 
@@ -101,6 +102,7 @@ export function update<T>(
     if (vNode?.type === VType.TEXT) {
       return updateVText(node, vNode);
     }
+    destroy(vNode);
     return vText(node);
   }
 
@@ -115,6 +117,7 @@ export function update<T>(
         globalOptions,
       );
     }
+    destroy(vNode);
     return vElement(node, globalOptions);
   }
 
@@ -125,6 +128,7 @@ export function update<T>(
     ) {
       return updateVComponent(node, vNode, globalOptions);
     }
+    destroy(vNode);
     return vComponent(node, globalOptions);
   }
 
@@ -135,6 +139,7 @@ export function update<T>(
     ) {
       return updateVFragment(node, vNode, globalOptions);
     }
+    destroy(vNode);
     return vFragment(node, globalOptions);
   }
 }
