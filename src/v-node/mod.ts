@@ -300,7 +300,7 @@ export function keyFromNode(
     | JSX.Element[]
     | JSX.Element,
 ): string | number | undefined {
-  if (isArray(node) || isTemplateNode(node) && !node) return undefined;
+  if (isArray(node) || isTemplateNode(node)) return undefined;
 
   if (isFragmentNode(node) || isComponentNode(node) || isElementNode(node)) {
     return node.key;
