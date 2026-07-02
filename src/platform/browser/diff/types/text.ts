@@ -142,13 +142,19 @@ function link({ vText, node, attachmentRef }: LinkTextPayload): void {
   moveAttachmentRef(attachmentRef, node);
 }
 
+/*
+ * Replaces the text BINDING, not the DOM node: attachment anchors stored
+ * elsewhere (component self-update refs, island roots) point at this node
+ * and would silently break if its identity changed.
+ */
 function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
-  let node: Text;
+  const node = vText[VNodeProps.NODE_REF];
+  if (!node) return;
 
   if (isSignal(vText)) {
     const signal = vText[VNodeProps.TEXT];
-    node = setSubscriber(() => {
-      return new Text(`${signal.get()}`);
+    setSubscriber(() => {
+      node.textContent = `${signal.get()}`;
     }, {
       update: (value: string | number) => {
         node.textContent = `${value}`;
@@ -158,14 +164,9 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
       },
     });
   } else {
-    node = new Text(`${vText[VNodeProps.TEXT]}`);
+    node.textContent = `${vText[VNodeProps.TEXT]}`;
   }
 
-  vText[VNodeProps.NODE_REF]?.parentNode?.replaceChild(
-    node,
-    vText[VNodeProps.NODE_REF],
-  );
-  vText[VNodeProps.NODE_REF] = node;
   moveAttachmentRef(attachmentRef, node);
 }
 

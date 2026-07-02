@@ -142,10 +142,11 @@ function updateText(
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   /*
-   * The signal identity changed - replace the text node so the new
-   * signal gets subscribed. Patching the textContent is not enough:
-   * the subscription of the previous signal was cleaned up during the
-   * vNode update and nothing else would bind the new signal.
+   * The text binding changed (signal identity, or signal<->string) -
+   * emit a Replace so the existing text node gets rebound. Patching the
+   * textContent is not enough: the subscription of the previous signal
+   * was cleaned up during the vNode update and nothing else would bind
+   * the new signal.
    */
   if (
     vText[VNodeProps.TEXT] !== previousVNode[VNodeProps.TEXT] &&

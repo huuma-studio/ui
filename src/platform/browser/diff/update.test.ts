@@ -38,7 +38,7 @@ Deno.test("update text changesets", async (t) => {
     assertEquals(changeSets.length, 1);
     assertEquals(changeSets[0][Props.Type], Type.Text);
     assertEquals(changeSets[0][Props.Action], Action.Replace);
-    // The replace handler needs the existing DOM node to swap it out.
+    // The replace handler needs the existing DOM node to rebind it.
     assert(vNode[VNodeProps.NODE_REF] === node);
   });
 
