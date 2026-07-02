@@ -1,6 +1,7 @@
 import { assertEquals } from "@std/assert/equals";
 import { create } from "../sync.ts";
-import { VNodeProps, VType } from "../mod.ts";
+import { create as createAsync } from "../async.ts";
+import { type VNode, VNodeProps, VType } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
 
 Deno.test("should create vFragment", () => {
@@ -60,3 +61,41 @@ Deno.test("should not consume TemplateNode nodes on create", () => {
   assertEquals(templateNode.nodes, ["Hello"]);
   assertEquals(create(templateNode), vFragmentFromTemplate);
 });
+
+// isTemplateNode only requires `templates`, so untyped callers can pass
+// a TemplateNode without `nodes`.
+const templateNodeWithoutNodes = { templates: ["<hr/>"] } as JSX.TemplateNode;
+
+const expectedVFragmentWithoutNodes: VNode<unknown> = {
+  type: VType.FRAGMENT,
+  [VNodeProps.KEY]: undefined,
+  [VNodeProps.CHILDREN]: [
+    {
+      type: VType.TEXT,
+      [VNodeProps.TEXT]: "<hr/>",
+      [VNodeProps.SKIP_ESCAPING]: true,
+      [VNodeProps.CLEANUP]: [],
+    },
+    null,
+  ],
+  [VNodeProps.OPTIONS]: {
+    _GLOBAL: {},
+  },
+};
+
+Deno.test("should create vFragment from a TemplateNode without nodes", () => {
+  assertEquals(
+    create(templateNodeWithoutNodes),
+    expectedVFragmentWithoutNodes,
+  );
+});
+
+Deno.test(
+  "should create async vFragment from a TemplateNode without nodes",
+  async () => {
+    assertEquals(
+      await createAsync(templateNodeWithoutNodes, {}),
+      expectedVFragmentWithoutNodes,
+    );
+  },
+);

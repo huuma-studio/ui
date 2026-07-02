@@ -129,7 +129,9 @@ async function vFragment<T>(
     children = (await Promise.all(
       fragment.templates.map(async (template, i) => [
         vText<T>(template, { skipEscaping: true }),
-        await create<T>(fragment.nodes[i], globalOptions),
+        // Optional access: isTemplateNode only requires `templates`, so
+        // untyped callers can pass a TemplateNode without `nodes`.
+        await create<T>(fragment.nodes?.[i], globalOptions),
       ]),
     )).flat(1);
   } else {

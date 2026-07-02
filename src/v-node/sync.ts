@@ -296,7 +296,9 @@ function vFragment<T>(
     fragment.templates.forEach((template, i) => {
       children.push(
         vText(template, { skipEscaping: true }),
-        create(fragment.nodes[i], globalOptions),
+        // Optional access: isTemplateNode only requires `templates`, so
+        // untyped callers can pass a TemplateNode without `nodes`.
+        create(fragment.nodes?.[i], globalOptions),
       );
     });
   } else {
