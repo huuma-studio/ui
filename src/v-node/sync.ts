@@ -142,6 +142,11 @@ export function update<T>(
     destroy(vNode);
     return vFragment(node, globalOptions);
   }
+
+  // A node matching no branch (e.g. NaN, a function, a foreign object)
+  // still replaces the previous subtree - tear it down like every other
+  // replacement branch.
+  destroy(vNode);
 }
 
 function updateVText<T>(

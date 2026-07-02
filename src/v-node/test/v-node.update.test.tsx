@@ -208,8 +208,7 @@ Deno.test(update.name, async (t) => {
         () => (vText[VNodeProps.TEXT] as JSX.SignalLike).get(),
         {
           update: (value) => domWrites.push(value),
-          cleanupCallback: (cleanup) =>
-            vText[VNodeProps.CLEANUP].push(cleanup),
+          cleanupCallback: (cleanup) => vText[VNodeProps.CLEANUP].push(cleanup),
         },
       );
 
@@ -221,6 +220,26 @@ Deno.test(update.name, async (t) => {
       // sigA no longer owns the text and must not write to it.
       sigA.set("stale");
       assertEquals(domWrites, []);
+    },
+  );
+
+  await t.step(
+    "run destroy hooks when replaced by an unrecognized node",
+    () => {
+      const destroyed: string[] = [];
+
+      const Old = () => {
+        $destroy(() => destroyed.push("Old"));
+        return <div>Old</div>;
+      };
+
+      const vNode = create(<Old />);
+      // NaN matches no node predicate (isTextNode requires a finite
+      // number) and reaches update()'s fall-through tail.
+      const updated = update(NaN, vNode, {});
+
+      assertEquals(updated, undefined);
+      assertEquals(destroyed, ["Old"]);
     },
   );
 });
