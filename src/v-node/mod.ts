@@ -1,6 +1,6 @@
 import type { JSX } from "../jsx-runtime/mod.ts";
 import type { Ref } from "../ref/mod.ts";
-import type { Cleanup } from "../signal/mod.ts";
+import { type Cleanup, Signal } from "../signal/mod.ts";
 
 export enum VMode {
   NotCreated,
@@ -238,15 +238,38 @@ export function isVText<T>(vNode: undefined | null | VBase): vNode is VText<T> {
 }
 
 export function isVSignal(node: JSX.Element): node is VSignal {
-  return (node && typeof node === "object" && "get" in node) || false;
+  return node instanceof Signal;
+}
+
+export function flushCleanups(vNode: HasVCleanup) {
+  for (const cleanup of vNode[VNodeProps.CLEANUP]) {
+    cleanup.cleanup();
+  }
+  // Flushing implies resetting: a stale entry would double-run on the
+  // next flush.
+  vNode[VNodeProps.CLEANUP] = [];
+}
+
+/*
+ * Drains the DOM-text subscriptions of a whole subtree. Texts only:
+ * component re-render subscriptions are drained per update pass by
+ * cleanup().
+ */
+export function flushSubtreeCleanups(vNode: VNode<unknown>) {
+  if (isVText(vNode)) {
+    flushCleanups(vNode);
+  }
+  if (isVComponent(vNode)) {
+    flushSubtreeCleanups(vNode[VNodeProps.AST]);
+  }
+  if (isVElement(vNode) || isVFragment(vNode)) {
+    vNode[VNodeProps.CHILDREN]?.forEach((child) => flushSubtreeCleanups(child));
+  }
 }
 
 export function cleanup(vNode: VNode<unknown>) {
   if (isVComponent(vNode)) {
-    for (const c of vNode[VNodeProps.CLEANUP]) {
-      c.cleanup();
-    }
-    vNode[VNodeProps.CLEANUP] = [];
+    flushCleanups(vNode);
     cleanup(vNode[VNodeProps.AST]);
   }
 
@@ -300,7 +323,7 @@ export function keyFromNode(
     | JSX.Element[]
     | JSX.Element,
 ): string | number | undefined {
-  if (isArray(node) || isTemplateNode(node) && !node) return undefined;
+  if (isArray(node) || isTemplateNode(node)) return undefined;
 
   if (isFragmentNode(node) || isComponentNode(node) || isElementNode(node)) {
     return node.key;

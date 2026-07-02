@@ -24,10 +24,14 @@ export function setSubscriber<T, S>(
   callback: () => T,
   subscriber: Subscriber<S>,
 ): T {
-  subscriberScopes.push(<SubscriberScope<unknown>>{ subscriber, signals: [] });
-  const value = callback();
-  subscriberScopes.pop();
-  return value;
+  subscriberScopes.push(<SubscriberScope<unknown>> { subscriber, signals: [] });
+  try {
+    return callback();
+  } finally {
+    // The scope must not survive a throwing callback: every later
+    // signal.get() would subscribe this stale scope.
+    subscriberScopes.pop();
+  }
 }
 
 export abstract class Signal<T> {
@@ -48,7 +52,7 @@ export class WritableSignal<T> extends Signal<T> {
   get(): T {
     if (subscriberScopes.length) {
       this.subscribe(
-        <SubscriberScope<T>>subscriberScopes[subscriberScopes.length - 1],
+        <SubscriberScope<T>> subscriberScopes[subscriberScopes.length - 1],
       );
     }
     return this.#value;
@@ -128,7 +132,7 @@ export class ComputedSignal<T> extends Signal<T> {
   get(): T {
     if (subscriberScopes.length) {
       this.subscribe(
-        <SubscriberScope<T>>subscriberScopes[subscriberScopes.length - 1],
+        <SubscriberScope<T>> subscriberScopes[subscriberScopes.length - 1],
       );
     }
     return this.#value;

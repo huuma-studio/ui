@@ -1,7 +1,7 @@
 import { setSubscriber } from "../../../../signal/mod.ts";
 import {
+  flushCleanups,
   VNodeProps,
-  type VSignal,
   type VText,
 } from "../../../../v-node/mod.ts";
 import {
@@ -98,13 +98,10 @@ export function text(change: TextChangeSet): void {
   }
 }
 
-function create({ vText }: CreateTextPayload): void {
+function createBoundNode(vText: VText<Node>): Text {
   let node: Text;
 
-  if (
-    typeof vText[VNodeProps.TEXT] === "object" &&
-    "get" in vText[VNodeProps.TEXT]
-  ) {
+  if (isSignal(vText)) {
     const signal = vText[VNodeProps.TEXT];
     node = setSubscriber(() => {
       return new Text(`${signal.get()}`);
@@ -120,7 +117,11 @@ function create({ vText }: CreateTextPayload): void {
     node = new Text(`${vText[VNodeProps.TEXT]}`);
   }
 
-  vText[VNodeProps.NODE_REF] = node;
+  return node;
+}
+
+function create({ vText }: CreateTextPayload): void {
+  vText[VNodeProps.NODE_REF] = createBoundNode(vText);
 }
 
 function attach({ vText, attachmentRef }: AttachTextPayload): void {
@@ -145,16 +146,35 @@ function link({ vText, node, attachmentRef }: LinkTextPayload): void {
   moveAttachmentRef(attachmentRef, node);
 }
 
+/*
+ * Replaces the text BINDING, not the DOM node: attachment anchors stored
+ * elsewhere (component self-update refs, island roots) point at this node
+ * and would silently break if its identity changed.
+ */
 function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
-  let node: Text;
+  const node = vText[VNodeProps.NODE_REF];
+  if (!node) return;
 
-  if (
-    typeof vText[VNodeProps.TEXT] === "object" &&
-    "get" in vText[VNodeProps.TEXT]
-  ) {
-    const signal = <VSignal> vText[VNodeProps.TEXT];
-    node = setSubscriber(() => {
-      return new Text(`${signal.get()}`);
+  // Commit point of the binding swap: the previous signal's subscription
+  // is dropped only here, so an update pass that aborts before dispatch
+  // leaves the old binding fully live.
+  flushCleanups(vText);
+
+  // Rebinding in place only works on an actual Text node. Hydration's
+  // divergence path can hand us any node kind - those are structurally
+  // replaced instead.
+  if (node.nodeType !== 3 /* Node.TEXT_NODE */) {
+    const replacement = createBoundNode(vText);
+    node.parentNode?.replaceChild(replacement, node);
+    vText[VNodeProps.NODE_REF] = replacement;
+    moveAttachmentRef(attachmentRef, replacement);
+    return;
+  }
+
+  if (isSignal(vText)) {
+    const signal = vText[VNodeProps.TEXT];
+    setSubscriber(() => {
+      node.textContent = `${signal.get()}`;
     }, {
       update: (value: string | number) => {
         node.textContent = `${value}`;
@@ -164,30 +184,23 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
       },
     });
   } else {
-    node = new Text(`${vText[VNodeProps.TEXT]}`);
+    node.textContent = `${vText[VNodeProps.TEXT]}`;
   }
 
-  vText[VNodeProps.NODE_REF]?.parentNode?.replaceChild(
-    node,
-    vText[VNodeProps.NODE_REF],
-  );
-  vText[VNodeProps.NODE_REF] = node;
   moveAttachmentRef(attachmentRef, node);
 }
 
 function update({ vText }: UpdateTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
   if (!node) return;
-  node.textContent = isSignal(
-      vText,
-    )
-    ? `${(<VSignal> vText[VNodeProps.TEXT]).get()}`
+  node.textContent = isSignal(vText)
+    ? `${vText[VNodeProps.TEXT].get()}`
     : `${vText[VNodeProps.TEXT]}`;
 }
 
 function remove({ vText }: DeleteTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
-  vText[VNodeProps.CLEANUP].forEach((cleanup) => cleanup.cleanup());
+  flushCleanups(vText);
   if (node) {
     node.parentNode?.removeChild(node);
   }

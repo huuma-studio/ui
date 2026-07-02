@@ -79,6 +79,12 @@ export function update<T>(
   globalOptions: VGlobalOptions,
   cleanupVNode = true,
 ): VNode<T> {
+  if (isTemplateNode(node)) {
+    throw new Error(
+      "TemplateNode is not supported in update(). Precompiled JSX (jsx: 'precompile') can only be rendered with create().",
+    );
+  }
+
   /*
    * Root update call should cleanup the vNode.
    * Subsequent nested update calls do not need to cleanup.
@@ -88,6 +94,7 @@ export function update<T>(
   }
 
   if (isEmptyNode(node) || typeof node === "undefined") {
+    destroy(vNode);
     return null;
   }
 
@@ -95,6 +102,7 @@ export function update<T>(
     if (vNode?.type === VType.TEXT) {
       return updateVText(node, vNode);
     }
+    destroy(vNode);
     return vText(node);
   }
 
@@ -109,7 +117,11 @@ export function update<T>(
         globalOptions,
       );
     }
-    return vElement(node, globalOptions);
+    // Create the replacement before destroying the old subtree: a
+    // throwing render must leave the previous tree untouched.
+    const nextVNode = vElement<T>(node, globalOptions);
+    destroy(vNode);
+    return nextVNode;
   }
 
   if (isComponentNode(node)) {
@@ -119,7 +131,9 @@ export function update<T>(
     ) {
       return updateVComponent(node, vNode, globalOptions);
     }
-    return vComponent(node, globalOptions);
+    const nextVNode = vComponent<T>(node, globalOptions);
+    destroy(vNode);
+    return nextVNode;
   }
 
   if (isFragmentNode(node)) {
@@ -129,14 +143,25 @@ export function update<T>(
     ) {
       return updateVFragment(node, vNode, globalOptions);
     }
-    return vFragment(node, globalOptions);
+    const nextVNode = vFragment<T>(node, globalOptions);
+    destroy(vNode);
+    return nextVNode;
   }
+
+  // A node matching no branch (e.g. NaN, a function, a foreign object)
+  // still replaces the previous subtree - tear it down like every other
+  // replacement branch.
+  destroy(vNode);
 }
 
 function updateVText<T>(
   node: string | number | JSX.SignalLike,
   vText: VText<T>,
 ): VText<T> {
+  // A stale signal subscription is deliberately NOT dropped here: the
+  // diff layer's Replace handler drains it at the commit point. Draining
+  // during the vNode walk would leave the text unbound if a later render
+  // in the same pass throws.
   vText[VNodeProps.TEXT] = isVSignal(node) ? node : `${node}`;
   return vText;
 }
@@ -159,7 +184,7 @@ export function vElement<T>(
 
   vElement[VNodeProps.CHILDREN] = isArray(props.children)
     ? props.children?.map((child) => create(child, globalOptions))
-    : [create(props.children)];
+    : [create(props.children, globalOptions)];
 
   return vElement;
 }
@@ -266,12 +291,14 @@ function vFragment<T>(
 
   const children: VNode<T>[] = [];
   if (isTemplateNode(fragment)) {
-    for (const template of fragment.templates) {
-      children.push(
-        vText(template, { skipEscaping: true }),
-        create(fragment.nodes?.shift(), globalOptions),
-      );
-    }
+    children.push(
+      ...fragment.templates.flatMap((template, i) => [
+        vText<T>(template, { skipEscaping: true }),
+        // Optional access: isTemplateNode only requires `templates`, so
+        // untyped callers can pass a TemplateNode without `nodes`.
+        create<T>(fragment.nodes?.[i], globalOptions),
+      ]),
+    );
   } else {
     const _nodes = childrenFrom(fragment);
     const nodes = isArray(_nodes) ? _nodes : [_nodes];
@@ -408,8 +435,17 @@ function destroy<T>(vNode: VNode<T>) {
     vNode[VNodeProps.HOOKS]?.[VHook.DESTROY]?.forEach((hook) => {
       hook();
     });
+    if (vNode[VNodeProps.HOOKS]) {
+      // Destroy hooks run at most once: an update pass aborted by a
+      // throwing render leaves this vNode in the parent's stale CHILDREN
+      // array, and the next pass destroys it again.
+      vNode[VNodeProps.HOOKS][VHook.DESTROY] = undefined;
+    }
     destroy(vNode[VNodeProps.AST]);
   }
+  // DOM-text subscriptions are deliberately NOT drained here: the diff
+  // layer's Delete/Replace handlers own them and drain at the commit
+  // point, so an aborted pass leaves still-visible texts fully bound.
   if (isVElement(vNode) || isVFragment(vNode)) {
     vNode[VNodeProps.CHILDREN]?.forEach((vChild) => destroy(vChild));
   }

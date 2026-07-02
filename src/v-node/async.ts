@@ -126,16 +126,14 @@ async function vFragment<T>(
 
   let children: VNode<T>[];
   if (isTemplateNode(fragment)) {
-    const nodes = [...(fragment.nodes ?? [])];
-    children = (await Promise.all(fragment.templates.map((template) => {
-      const resolve = async () => {
-        return [
-          vText<T>(template, { skipEscaping: true }),
-          await create<T>(nodes?.shift(), globalOptions),
-        ];
-      };
-      return resolve();
-    }))).flat(1);
+    children = (await Promise.all(
+      fragment.templates.map(async (template, i) => [
+        vText<T>(template, { skipEscaping: true }),
+        // Optional access: isTemplateNode only requires `templates`, so
+        // untyped callers can pass a TemplateNode without `nodes`.
+        await create<T>(fragment.nodes?.[i], globalOptions),
+      ]),
+    )).flat(1);
   } else {
     const _nodes = childrenFrom(fragment);
     const nodes = isArray(_nodes) ? _nodes : [_nodes];

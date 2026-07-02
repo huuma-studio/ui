@@ -22,10 +22,11 @@ globalThis.addEventListener("beforeunload", () => {
   }
 });
 
-globalThis.addEventListener("pagehide", (event) => {
-  // Persisted means bfcache, not teardown — keep live reload armed.
-  if (event.persisted) return;
-
+globalThis.addEventListener("pagehide", () => {
+  // Close the socket even when entering the bfcache (persisted): Safari
+  // suspends the page with the socket open and then kills it itself,
+  // logging "WebSocket is closed due to suspension". Closing proactively
+  // avoids that; `pageshow` re-arms live reload on restore.
   unloading = true;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);

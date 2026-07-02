@@ -1,8 +1,15 @@
-import { assert, assertEquals } from "@std/assert";
-import { type VComponent, VNodeProps, VType } from "../mod.ts";
+import { assert, assertEquals, assertThrows } from "@std/assert";
+import {
+  type VComponent,
+  type VElement,
+  VNodeProps,
+  type VText,
+  VType,
+} from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
+import { $destroy } from "../../hooks/lifecycle.ts";
 import { $signal } from "../../hooks/signal.ts";
-import { WritableSignal } from "../../signal/mod.ts";
+import { setSubscriber, signal, WritableSignal } from "../../signal/mod.ts";
 import { create, update, vElement } from "../sync.ts";
 
 Deno.test(update.name, async (t) => {
@@ -111,6 +118,275 @@ Deno.test(update.name, async (t) => {
     });
     assert(vComponent === updatedVComponent);
   });
+
+  await t.step("throw on TemplateNode", () => {
+    const vNode = create("Hello World");
+    const templateNode: JSX.TemplateNode = {
+      templates: ["<div>", "</div>"],
+      nodes: ["Hello Univers"],
+    };
+
+    assertThrows(
+      () => update(templateNode, vNode, {}),
+      Error,
+      "TemplateNode is not supported in update()",
+    );
+
+    // Throws before cleanup - the previous vNode stays untouched.
+    assertEquals(vNode, {
+      type: VType.TEXT,
+      [VNodeProps.TEXT]: "Hello World",
+      [VNodeProps.SKIP_ESCAPING]: false,
+      [VNodeProps.CLEANUP]: [],
+    });
+  });
+
+  await t.step(
+    "run destroy hooks of a VComponent replaced by another component",
+    () => {
+      const destroyed: string[] = [];
+
+      const Old = () => {
+        $destroy(() => destroyed.push("Old"));
+        return <div>Old</div>;
+      };
+      const OldChild = () => {
+        $destroy(() => destroyed.push("OldChild"));
+        return <span>OldChild</span>;
+      };
+      const OldParent = () => {
+        $destroy(() => destroyed.push("OldParent"));
+        return (
+          <div>
+            <OldChild />
+          </div>
+        );
+      };
+      const New = () => <div>New</div>;
+
+      const Root = ({ swap }: { swap?: boolean }) =>
+        swap ? <New /> : <OldParent />;
+
+      const vNode = create(<Root />);
+      update(<Root swap />, vNode, {});
+
+      // Nested components are destroyed too.
+      assertEquals(destroyed.sort(), ["OldChild", "OldParent"]);
+
+      destroyed.length = 0;
+
+      // Same for a component replaced by an element.
+      const ElementRoot = ({ swap }: { swap?: boolean }) =>
+        swap ? <div>element</div> : <Old />;
+
+      const elementVNode = create(<ElementRoot />);
+      update(<ElementRoot swap />, elementVNode, {});
+
+      assertEquals(destroyed, ["Old"]);
+    },
+  );
+
+  await t.step(
+    "keep the stale signal subscription until the diff commit",
+    () => {
+      const sigA = signal("A");
+      const sigB = signal("B");
+
+      const Root = ({ swap }: { swap?: boolean }) => (
+        <div>{swap ? sigB : sigA}</div>
+      );
+
+      const vNode = create(<Root />);
+      const vText = ((vNode as VComponent<unknown>)[VNodeProps.AST] as VElement<
+        unknown
+      >)[VNodeProps.CHILDREN]?.[0] as VText<unknown>;
+      assert(vText[VNodeProps.TEXT] === sigA);
+
+      // Simulate the browser diff wiring a DOM Text node to the signal.
+      const domWrites: unknown[] = [];
+      setSubscriber(
+        () => sigA.get(),
+        {
+          update: (value) => domWrites.push(value),
+          cleanupCallback: (cleanup) => vText[VNodeProps.CLEANUP].push(cleanup),
+        },
+      );
+
+      // Re-render with the other signal - the vText swaps in place, but
+      // the old subscription must survive until the diff layer's Replace
+      // handler commits the swap; draining here would leave the rendered
+      // text bound to no signal at all if a later render in the same
+      // pass throws.
+      update(<Root swap />, vNode, {});
+      assert(vText[VNodeProps.TEXT] === sigB);
+
+      sigA.set("still-live");
+      assertEquals(domWrites, ["still-live"]);
+    },
+  );
+
+  await t.step(
+    "run destroy hooks when replaced by an unrecognized node",
+    () => {
+      const destroyed: string[] = [];
+
+      const Old = () => {
+        $destroy(() => destroyed.push("Old"));
+        return <div>Old</div>;
+      };
+
+      const vNode = create(<Old />);
+      // NaN matches no node predicate (isTextNode requires a finite
+      // number) and reaches update()'s fall-through tail.
+      const updated = update(NaN, vNode, {});
+
+      assertEquals(updated, undefined);
+      assertEquals(destroyed, ["Old"]);
+    },
+  );
+
+  await t.step(
+    "run destroy hooks only once when an update pass aborts",
+    () => {
+      const destroyed: string[] = [];
+
+      const Tracked = () => {
+        $destroy(() => destroyed.push("Tracked"));
+        return <div>tracked</div>;
+      };
+      const Throwing = (): JSX.Element => {
+        throw new Error("render failed");
+      };
+      const Stable = () => <span>stable</span>;
+
+      const Root = ({ fail }: { fail?: boolean }) => (
+        <div>
+          {fail ? false : <Tracked />}
+          {fail ? <Throwing /> : <Stable />}
+        </div>
+      );
+
+      const vNode = create(<Root />);
+
+      // Tracked is destroyed, then the sibling's render aborts the pass
+      // before the parent's children are reassigned.
+      assertThrows(
+        () => update(<Root fail />, vNode, {}),
+        Error,
+        "render failed",
+      );
+      assertEquals(destroyed, ["Tracked"]);
+
+      // The retry walks the stale children again - Tracked's hooks must
+      // not re-fire.
+      assertThrows(
+        () => update(<Root fail />, vNode, {}),
+        Error,
+        "render failed",
+      );
+      assertEquals(destroyed, ["Tracked"]);
+    },
+  );
+
+  await t.step(
+    "keep subtree signal subscriptions until the diff commit",
+    () => {
+      const sig = signal("A");
+
+      const Root = ({ show }: { show?: boolean }) =>
+        show ? <div>{sig}</div> : null;
+
+      const vNode = create(<Root show />);
+      const vText = ((vNode as VComponent<unknown>)[VNodeProps.AST] as VElement<
+        unknown
+      >)[VNodeProps.CHILDREN]?.[0] as VText<unknown>;
+      assert(vText[VNodeProps.TEXT] === sig);
+
+      // Simulate the browser diff wiring a DOM Text node to the signal.
+      const domWrites: unknown[] = [];
+      setSubscriber(
+        () => sig.get(),
+        {
+          update: (value) => domWrites.push(value),
+          cleanupCallback: (cleanup) => vText[VNodeProps.CLEANUP].push(cleanup),
+        },
+      );
+
+      // Re-render with the subtree removed - destroy() must not drop the
+      // subscription: the diff layer's Delete handlers drain it at the
+      // commit point, so an aborted pass leaves the still-visible text
+      // fully bound.
+      update(<Root />, vNode, {});
+
+      sig.set("still-live");
+      assertEquals(domWrites, ["still-live"]);
+    },
+  );
+
+  await t.step(
+    "keep the previous subtree intact when a replacement render throws",
+    () => {
+      const destroyed: string[] = [];
+
+      const Old = () => {
+        $destroy(() => destroyed.push("Old"));
+        return <div>Old</div>;
+      };
+      const Throwing = (): JSX.Element => {
+        throw new Error("render failed");
+      };
+      const Working = () => <span>ok</span>;
+
+      const Root = ({ variant }: { variant?: string }) =>
+        variant === "throwing"
+          ? <Throwing />
+          : variant === "working"
+          ? <Working />
+          : <Old />;
+
+      const vNode = create(<Root />);
+
+      // The replacement is created before the old subtree is destroyed -
+      // its throwing render must leave Old untouched.
+      assertThrows(
+        () => update(<Root variant="throwing" />, vNode, {}),
+        Error,
+        "render failed",
+      );
+      assertEquals(destroyed, []);
+
+      // The old subtree is still live and tears down normally on the
+      // next successful replacement.
+      update(<Root variant="working" />, vNode, {});
+      assertEquals(destroyed, ["Old"]);
+
+      // Same for the element branch: a throwing child of the replacement
+      // element must not tear down the previous element subtree.
+      destroyed.length = 0;
+
+      const ElementRoot = ({ fail }: { fail?: boolean }) =>
+        fail
+          ? (
+            <div>
+              <Throwing />
+            </div>
+          )
+          : (
+            <span>
+              <Old />
+            </span>
+          );
+
+      const elementVNode = create(<ElementRoot />);
+
+      assertThrows(
+        () => update(<ElementRoot fail />, elementVNode, {}),
+        Error,
+        "render failed",
+      );
+      assertEquals(destroyed, []);
+    },
+  );
 });
 
 const A = () => {

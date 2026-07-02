@@ -1,4 +1,5 @@
 import {
+  isVSignal,
   keyFromVNode,
   type VComponent,
   type VElement,
@@ -17,7 +18,11 @@ import { compareAttributes } from "./types/attribute.ts";
 import type { LinkComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet } from "./types/element.ts";
 import type { EventChangeSet } from "./types/event.ts";
-import type { LinkTextChangeSet, UpdateTextChangeSet } from "./types/text.ts";
+import type {
+  LinkTextChangeSet,
+  ReplaceTextChangeSet,
+  UpdateTextChangeSet,
+} from "./types/text.ts";
 
 export function update(
   vNode: VNode<Node>,
@@ -136,6 +141,34 @@ function updateText(
   previousVNode: VText<Node>,
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
+  /*
+   * The committed subscription must match the current binding - the
+   * Cleanup entries record which signal they belong to, so compare
+   * against those instead of the previous snapshot. A snapshot delta
+   * misses two cases: a pass that aborted after the vNode walk already
+   * recorded the new signal (the retry sees no change), and a text whose
+   * hydration linked it without ever subscribing.
+   */
+  const needsRebind = isSignal(vText)
+    ? !vText[VNodeProps.CLEANUP].some(
+      (cleanup) => cleanup.signal === vText[VNodeProps.TEXT],
+    )
+    : vText[VNodeProps.CLEANUP].length > 0;
+
+  if (needsRebind) {
+    vText[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
+    return [
+      <ReplaceTextChangeSet> {
+        [Props.Type]: Type.Text,
+        [Props.Action]: Action.Replace,
+        [Props.Payload]: {
+          vText,
+          attachmentRef,
+        },
+      },
+    ];
+  }
+
   const changeSets: ChangeSet<unknown>[] = [];
 
   changeSets.push(
@@ -151,10 +184,10 @@ function updateText(
   );
 
   const text = isSignal(vText)
-    ? (<VSignal> vText[VNodeProps.TEXT]).get()
+    ? vText[VNodeProps.TEXT].get()
     : vText[VNodeProps.TEXT];
   const previousText = isSignal(previousVNode)
-    ? (<VSignal> previousVNode[VNodeProps.TEXT]).get()
+    ? previousVNode[VNodeProps.TEXT].get()
     : previousVNode[VNodeProps.TEXT];
 
   if (text !== previousText) {
@@ -261,10 +294,8 @@ function removePreviousVNode(
   return previousVNodes.splice(existingIndex, 1)[0];
 }
 
-export function isSignal(vNode: VText<Node>) {
-  return (
-    !!vNode &&
-    typeof vNode[VNodeProps.TEXT] === "object" &&
-    "get" in vNode[VNodeProps.TEXT]
-  );
+export function isSignal(
+  vNode: VText<Node>,
+): vNode is VText<Node> & { [VNodeProps.TEXT]: VSignal } {
+  return !!vNode && isVSignal(vNode[VNodeProps.TEXT]);
 }
