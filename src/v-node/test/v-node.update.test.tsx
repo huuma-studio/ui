@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { type VComponent, VNodeProps, VType } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
 import { $signal } from "../../hooks/signal.ts";
@@ -110,6 +110,28 @@ Deno.test(update.name, async (t) => {
       type: VType.COMPONENT,
     });
     assert(vComponent === updatedVComponent);
+  });
+
+  await t.step("throw on TemplateNode", () => {
+    const vNode = create("Hello World");
+    const templateNode: JSX.TemplateNode = {
+      templates: ["<div>", "</div>"],
+      nodes: ["Hello Univers"],
+    };
+
+    assertThrows(
+      () => update(templateNode, vNode, {}),
+      Error,
+      "TemplateNode is not supported in update()",
+    );
+
+    // Throws before cleanup - the previous vNode stays untouched.
+    assertEquals(vNode, {
+      type: VType.TEXT,
+      [VNodeProps.TEXT]: "Hello World",
+      [VNodeProps.SKIP_ESCAPING]: false,
+      [VNodeProps.CLEANUP]: [],
+    });
   });
 });
 

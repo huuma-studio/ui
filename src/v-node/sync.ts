@@ -79,6 +79,12 @@ export function update<T>(
   globalOptions: VGlobalOptions,
   cleanupVNode = true,
 ): VNode<T> {
+  if (isTemplateNode(node)) {
+    throw new Error(
+      "TemplateNode is not supported in update(). Precompiled JSX (jsx: 'precompile') can only be rendered with create().",
+    );
+  }
+
   /*
    * Root update call should cleanup the vNode.
    * Subsequent nested update calls do not need to cleanup.
