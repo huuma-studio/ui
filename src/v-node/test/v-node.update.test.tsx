@@ -318,6 +318,71 @@ Deno.test(update.name, async (t) => {
       assertEquals(domWrites, []);
     },
   );
+
+  await t.step(
+    "keep the previous subtree intact when a replacement render throws",
+    () => {
+      const destroyed: string[] = [];
+
+      const Old = () => {
+        $destroy(() => destroyed.push("Old"));
+        return <div>Old</div>;
+      };
+      const Throwing = (): JSX.Element => {
+        throw new Error("render failed");
+      };
+      const Working = () => <span>ok</span>;
+
+      const Root = ({ variant }: { variant?: string }) =>
+        variant === "throwing"
+          ? <Throwing />
+          : variant === "working"
+          ? <Working />
+          : <Old />;
+
+      const vNode = create(<Root />);
+
+      // The replacement is created before the old subtree is destroyed -
+      // its throwing render must leave Old untouched.
+      assertThrows(
+        () => update(<Root variant="throwing" />, vNode, {}),
+        Error,
+        "render failed",
+      );
+      assertEquals(destroyed, []);
+
+      // The old subtree is still live and tears down normally on the
+      // next successful replacement.
+      update(<Root variant="working" />, vNode, {});
+      assertEquals(destroyed, ["Old"]);
+
+      // Same for the element branch: a throwing child of the replacement
+      // element must not tear down the previous element subtree.
+      destroyed.length = 0;
+
+      const ElementRoot = ({ fail }: { fail?: boolean }) =>
+        fail
+          ? (
+            <div>
+              <Throwing />
+            </div>
+          )
+          : (
+            <span>
+              <Old />
+            </span>
+          );
+
+      const elementVNode = create(<ElementRoot />);
+
+      assertThrows(
+        () => update(<ElementRoot fail />, elementVNode, {}),
+        Error,
+        "render failed",
+      );
+      assertEquals(destroyed, []);
+    },
+  );
 });
 
 const A = () => {

@@ -119,8 +119,11 @@ export function update<T>(
         globalOptions,
       );
     }
+    // Create the replacement before destroying the old subtree: a
+    // throwing render must leave the previous tree untouched.
+    const nextVNode = vElement<T>(node, globalOptions);
     destroy(vNode);
-    return vElement(node, globalOptions);
+    return nextVNode;
   }
 
   if (isComponentNode(node)) {
@@ -130,8 +133,9 @@ export function update<T>(
     ) {
       return updateVComponent(node, vNode, globalOptions);
     }
+    const nextVNode = vComponent<T>(node, globalOptions);
     destroy(vNode);
-    return vComponent(node, globalOptions);
+    return nextVNode;
   }
 
   if (isFragmentNode(node)) {
@@ -141,8 +145,9 @@ export function update<T>(
     ) {
       return updateVFragment(node, vNode, globalOptions);
     }
+    const nextVNode = vFragment<T>(node, globalOptions);
     destroy(vNode);
-    return vFragment(node, globalOptions);
+    return nextVNode;
   }
 
   // A node matching no branch (e.g. NaN, a function, a foreign object)
