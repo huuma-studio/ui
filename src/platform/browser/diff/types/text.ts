@@ -98,7 +98,7 @@ export function text(change: TextChangeSet): void {
   }
 }
 
-function create({ vText }: CreateTextPayload): void {
+function createBoundNode(vText: VText<Node>): Text {
   let node: Text;
 
   if (isSignal(vText)) {
@@ -117,7 +117,11 @@ function create({ vText }: CreateTextPayload): void {
     node = new Text(`${vText[VNodeProps.TEXT]}`);
   }
 
-  vText[VNodeProps.NODE_REF] = node;
+  return node;
+}
+
+function create({ vText }: CreateTextPayload): void {
+  vText[VNodeProps.NODE_REF] = createBoundNode(vText);
 }
 
 function attach({ vText, attachmentRef }: AttachTextPayload): void {
@@ -155,6 +159,17 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
   // is dropped only here, so an update pass that aborts before dispatch
   // leaves the old binding fully live.
   flushCleanups(vText);
+
+  // Rebinding in place only works on an actual Text node. Hydration's
+  // divergence path can hand us any node kind - those are structurally
+  // replaced instead.
+  if (node.nodeType !== 3 /* Node.TEXT_NODE */) {
+    const replacement = createBoundNode(vText);
+    node.parentNode?.replaceChild(replacement, node);
+    vText[VNodeProps.NODE_REF] = replacement;
+    moveAttachmentRef(attachmentRef, replacement);
+    return;
+  }
 
   if (isSignal(vText)) {
     const signal = vText[VNodeProps.TEXT];

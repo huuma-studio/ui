@@ -20,7 +20,7 @@ Deno.test("text replace changeset", async (t) => {
   await t.step("rebind the existing DOM node to the new signal", () => {
     const sig = signal("B");
     const vNode = vText<Node>(<JSX.SignalLike> <unknown> sig);
-    const node = <Node> <unknown> { textContent: "A" };
+    const node = <Node> <unknown> { nodeType: 3, textContent: "A" };
     // updateText copies the previous vNode's node ref before dispatch.
     vNode[VNodeProps.NODE_REF] = node;
     const attachmentRef: AttachmentRef = {
@@ -50,7 +50,7 @@ Deno.test("text replace changeset", async (t) => {
     const nextSig = signal("new");
 
     const vNode = vText<Node>(<JSX.SignalLike> <unknown> nextSig);
-    const node = <Node> <unknown> { textContent: "old" };
+    const node = <Node> <unknown> { nodeType: 3, textContent: "old" };
     vNode[VNodeProps.NODE_REF] = node;
 
     // Simulate the subscription the browser diff created for the
@@ -80,7 +80,7 @@ Deno.test("text replace changeset", async (t) => {
 
   await t.step("write the plain text on a signal-to-string change", () => {
     const vNode = vText<Node>("static");
-    const node = <Node> <unknown> { textContent: "reactive" };
+    const node = <Node> <unknown> { nodeType: 3, textContent: "reactive" };
     vNode[VNodeProps.NODE_REF] = node;
     const attachmentRef: AttachmentRef = {
       type: AttachmentType.Sibling,
@@ -92,6 +92,59 @@ Deno.test("text replace changeset", async (t) => {
     assert(vNode[VNodeProps.NODE_REF] === node);
     assertEquals(node.textContent, "static");
   });
+
+  await t.step(
+    "structurally replace a non-text node from hydration divergence",
+    () => {
+      const sig = signal("live");
+      const vNode = vText<Node>(<JSX.SignalLike> <unknown> sig);
+
+      const swaps: unknown[][] = [];
+      const parentNode = {
+        replaceChild: (next: unknown, previous: unknown) =>
+          swaps.push([next, previous]),
+      };
+      // Hydration's divergence path paired the vText with an element.
+      const divergent = <Node> <unknown> { nodeType: 1, parentNode };
+      vNode[VNodeProps.NODE_REF] = divergent;
+
+      const attachmentRef: AttachmentRef = {
+        type: AttachmentType.Sibling,
+        node: <Node> {},
+      };
+
+      // createBoundNode needs the DOM Text constructor - stub it.
+      const globals = <Record<string, unknown>> globalThis;
+      const originalText = globals.Text;
+      globals.Text = class {
+        textContent: string;
+        constructor(value: unknown) {
+          this.textContent = `${value}`;
+        }
+      };
+      try {
+        text(replaceChangeSet(vNode, attachmentRef));
+      } finally {
+        if (originalText === undefined) delete globals.Text;
+        else globals.Text = originalText;
+      }
+
+      const replacement = vNode[VNodeProps.NODE_REF];
+      assert(replacement !== divergent);
+      assertEquals(swaps, [[replacement, divergent]]);
+
+      // The subscription drives the replacement node.
+      sig.set("updated");
+      assertEquals(
+        (<{ textContent: string }> <unknown> replacement).textContent,
+        "updated",
+      );
+
+      // Siblings anchor after the replacement.
+      assert(attachmentRef.type === AttachmentType.Sibling);
+      assert(attachmentRef.node === replacement);
+    },
+  );
 
   await t.step("leave the anchor untouched without a linked node", () => {
     const vNode = vText<Node>("orphan");
