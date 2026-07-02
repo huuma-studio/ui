@@ -142,16 +142,20 @@ function updateText(
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   /*
-   * The text binding changed (signal identity, or signal<->string) -
-   * emit a Replace so the existing text node gets rebound. Patching the
-   * textContent is not enough: the subscription of the previous signal
-   * was cleaned up during the vNode update and nothing else would bind
-   * the new signal.
+   * The committed subscription must match the current binding - the
+   * Cleanup entries record which signal they belong to, so compare
+   * against those instead of the previous snapshot. A snapshot delta
+   * misses two cases: a pass that aborted after the vNode walk already
+   * recorded the new signal (the retry sees no change), and a text whose
+   * hydration linked it without ever subscribing.
    */
-  if (
-    vText[VNodeProps.TEXT] !== previousVNode[VNodeProps.TEXT] &&
-    (isSignal(vText) || isSignal(previousVNode))
-  ) {
+  const needsRebind = isSignal(vText)
+    ? !vText[VNodeProps.CLEANUP].some(
+      (cleanup) => cleanup.signal === vText[VNodeProps.TEXT],
+    )
+    : vText[VNodeProps.CLEANUP].length > 0;
+
+  if (needsRebind) {
     vText[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
     return [
       <ReplaceTextChangeSet> {
