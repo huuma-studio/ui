@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import { VNodeProps, vText } from "../../../v-node/mod.ts";
+import { snapshot, VNodeProps, vText } from "../../../v-node/mod.ts";
 import { signal } from "../../../signal/mod.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
 import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
@@ -17,7 +17,8 @@ const asSignal = (value: string): JSX.SignalLike =>
 Deno.test("update text changesets", async (t) => {
   await t.step("keep the binding when the signal is unchanged", () => {
     const vNode = vText<Node>(asSignal("A"));
-    const previousVNode = { ...vNode };
+    // The runtime builds previousVNode with snapshot() (browser mod.ts).
+    const previousVNode = snapshot(vNode);
 
     const changeSets = update(vNode, previousVNode, attachmentRef());
 
