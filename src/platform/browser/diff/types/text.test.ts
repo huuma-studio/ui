@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "@std/assert";
 import { VNodeProps, vText } from "../../../../v-node/mod.ts";
-import { signal } from "../../../../signal/mod.ts";
+import { setSubscriber, signal } from "../../../../signal/mod.ts";
 import type { JSX } from "../../../../jsx-runtime/mod.ts";
 import { type AttachmentRef, AttachmentType } from "../attachment-ref.ts";
 import { Action, Props, Type } from "../dispatch.ts";
@@ -42,6 +42,39 @@ Deno.test("text replace changeset", async (t) => {
     // The new signal owns the node and its cleanup is registered.
     sig.set("C");
     assertEquals(node.textContent, "C");
+    assertEquals(vNode[VNodeProps.CLEANUP].length, 1);
+  });
+
+  await t.step("drop the previous signal's subscription at the commit", () => {
+    const previousSig = signal("old");
+    const nextSig = signal("new");
+
+    const vNode = vText<Node>(<JSX.SignalLike> <unknown> nextSig);
+    const node = <Node> <unknown> { textContent: "old" };
+    vNode[VNodeProps.NODE_REF] = node;
+
+    // Simulate the subscription the browser diff created for the
+    // previous signal - the vNode walk leaves it untouched.
+    const previousWrites: unknown[] = [];
+    setSubscriber(() => previousSig.get(), {
+      update: (value) => previousWrites.push(value),
+      cleanupCallback: (cleanup) => vNode[VNodeProps.CLEANUP].push(cleanup),
+    });
+
+    const attachmentRef: AttachmentRef = {
+      type: AttachmentType.Sibling,
+      node: <Node> {},
+    };
+
+    text(replaceChangeSet(vNode, attachmentRef));
+
+    // The handler is the commit point: the old subscription is gone...
+    previousSig.set("stale");
+    assertEquals(previousWrites, []);
+
+    // ...and the node is owned by the new signal alone.
+    nextSig.set("next");
+    assertEquals(node.textContent, "next");
     assertEquals(vNode[VNodeProps.CLEANUP].length, 1);
   });
 

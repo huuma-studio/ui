@@ -151,6 +151,11 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
   if (!node) return;
 
+  // Commit point of the binding swap: the previous signal's subscription
+  // is dropped only here, so an update pass that aborts before dispatch
+  // leaves the old binding fully live.
+  flushCleanups(vText);
+
   if (isSignal(vText)) {
     const signal = vText[VNodeProps.TEXT];
     setSubscriber(() => {

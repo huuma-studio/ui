@@ -160,15 +160,11 @@ function updateVText<T>(
   node: string | number | JSX.SignalLike,
   vText: VText<T>,
 ): VText<T> {
-  const previousText = vText[VNodeProps.TEXT];
-  const text = isVSignal(node) ? node : `${node}`;
-
-  // The previous signal no longer owns this text - drop its subscriptions.
-  if (isVSignal(previousText) && previousText !== text) {
-    flushCleanups(vText);
-  }
-
-  vText[VNodeProps.TEXT] = text;
+  // A stale signal subscription is deliberately NOT dropped here: the
+  // diff layer's Replace handler drains it at the commit point. Draining
+  // during the vNode walk would leave the text unbound if a later render
+  // in the same pass throws.
+  vText[VNodeProps.TEXT] = isVSignal(node) ? node : `${node}`;
   return vText;
 }
 

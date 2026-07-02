@@ -187,7 +187,7 @@ Deno.test(update.name, async (t) => {
   );
 
   await t.step(
-    "clean up the stale signal subscription of an updated VText",
+    "keep the stale signal subscription until the diff commit",
     () => {
       const sigA = signal("A");
       const sigB = signal("B");
@@ -205,21 +205,23 @@ Deno.test(update.name, async (t) => {
       // Simulate the browser diff wiring a DOM Text node to the signal.
       const domWrites: unknown[] = [];
       setSubscriber(
-        () => (vText[VNodeProps.TEXT] as JSX.SignalLike).get(),
+        () => sigA.get(),
         {
           update: (value) => domWrites.push(value),
           cleanupCallback: (cleanup) => vText[VNodeProps.CLEANUP].push(cleanup),
         },
       );
 
-      // Re-render with the other signal - the vText is updated in place.
+      // Re-render with the other signal - the vText swaps in place, but
+      // the old subscription must survive until the diff layer's Replace
+      // handler commits the swap; draining here would leave the rendered
+      // text bound to no signal at all if a later render in the same
+      // pass throws.
       update(<Root swap />, vNode, {});
       assert(vText[VNodeProps.TEXT] === sigB);
 
-      // The subscription to the replaced signal must be gone:
-      // sigA no longer owns the text and must not write to it.
-      sigA.set("stale");
-      assertEquals(domWrites, []);
+      sigA.set("still-live");
+      assertEquals(domWrites, ["still-live"]);
     },
   );
 
