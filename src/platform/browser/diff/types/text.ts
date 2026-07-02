@@ -2,7 +2,6 @@ import { setSubscriber } from "../../../../signal/mod.ts";
 import {
   flushCleanups,
   VNodeProps,
-  type VSignal,
   type VText,
 } from "../../../../v-node/mod.ts";
 import {
@@ -103,7 +102,7 @@ function create({ vText }: CreateTextPayload): void {
   let node: Text;
 
   if (isSignal(vText)) {
-    const signal = <VSignal> vText[VNodeProps.TEXT];
+    const signal = vText[VNodeProps.TEXT];
     node = setSubscriber(() => {
       return new Text(`${signal.get()}`);
     }, {
@@ -147,7 +146,7 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
   let node: Text;
 
   if (isSignal(vText)) {
-    const signal = <VSignal> vText[VNodeProps.TEXT];
+    const signal = vText[VNodeProps.TEXT];
     node = setSubscriber(() => {
       return new Text(`${signal.get()}`);
     }, {
@@ -173,10 +172,8 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
 function update({ vText }: UpdateTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
   if (!node) return;
-  node.textContent = isSignal(
-      vText,
-    )
-    ? `${(<VSignal> vText[VNodeProps.TEXT]).get()}`
+  node.textContent = isSignal(vText)
+    ? `${vText[VNodeProps.TEXT].get()}`
     : `${vText[VNodeProps.TEXT]}`;
 }
 
