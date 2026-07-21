@@ -123,8 +123,8 @@ export async function packRemoteFunctions<
     for (const [key, remoteFunctions] of Object.entries(_remoteFunctions)) {
       const fileName = parse(key).name;
       const fileHash = await generateHash(toCanonicalPath(key));
-      app.post(`/_huuma/remote/${fileHash}/${fileName}`, async ({ body }) => {
-        const { remoteFunction, args } = remoteFunctionsSchema.parse(body);
+      app.post(`/_huuma/remote/${fileHash}/${fileName}`, async ({ request }) => {
+        const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
         if (
           remoteFunction in remoteFunctions &&
           typeof remoteFunctions[remoteFunction] === "function"
