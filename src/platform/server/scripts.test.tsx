@@ -20,7 +20,11 @@ const BODY = { runtime: RUNTIME, islands: [], entryPoints: [] };
 function makeIsland(props: Record<string, unknown>, id = "island1"): Island {
   // Spread: jsx() mutates the props object it receives (it assigns
   // children), so a fresh copy keeps the caller's expected value pristine.
-  return { id, path: ISLAND_SCRIPT.path, node: jsx(IslandComponent, { ...props }) };
+  return {
+    id,
+    path: ISLAND_SCRIPT.path,
+    node: jsx(IslandComponent, { ...props }),
+  };
 }
 
 // Render Launch to its full <script>...</script> string.
@@ -49,13 +53,21 @@ function scriptSource(html: string): string {
   return html.slice(open + 1, close);
 }
 
-// Read a balanced JSON value beginning at `start`, honoring string
-// literals and escapes. Returns the parsed value.
+// Read a balanced JSON object or array beginning at `start`, honoring
+// string literals and escapes so that braces inside string data do not
+// affect the depth count. Both payloads Launch emits (island props and
+// the transfer state) are objects, so no primitive scanning is needed.
 function parseJsonValue(source: string, start: number): unknown {
   let i = start;
   while (i < source.length && /\s/.test(source[i])) i++;
 
   const valueStart = i;
+  if (source[i] !== "{" && source[i] !== "[") {
+    throw new Error(
+      `expected a JSON object or array at ${start}, got ${source[i]}`,
+    );
+  }
+
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -82,9 +94,6 @@ function parseJsonValue(source: string, start: number): unknown {
       if (depth === 0) {
         return JSON.parse(source.slice(valueStart, i + 1));
       }
-    }
-    if (depth === 0 && /[,;)\]}]/.test(ch)) {
-      return JSON.parse(source.slice(valueStart, i));
     }
   }
   throw new Error(`unterminated JSON value at ${start}`);
@@ -131,15 +140,18 @@ Deno.test("Launch inline script serialization", async (t) => {
     },
   );
 
-  await t.step("escapes </script> in a prop and keeps the payload safe", async () => {
-    const html = await renderLaunch([makeIsland({ danger: "</script>" })]);
-    assertStringIncludes(
-      html,
-      "\\u003C/script>",
-      "expected </script> to be escaped in the serialized props",
-    );
-    assertScriptDataSafe(scriptSource(html));
-  });
+  await t.step(
+    "escapes </script> in a prop and keeps the payload safe",
+    async () => {
+      const html = await renderLaunch([makeIsland({ danger: "</script>" })]);
+      assertStringIncludes(
+        html,
+        "\\u003C/script>",
+        "expected </script> to be escaped in the serialized props",
+      );
+      assertScriptDataSafe(scriptSource(html));
+    },
+  );
 
   await t.step("covers <!-- followed by <script in prop data", async () => {
     const value = { a: "<!--<script>", b: "<!--", c: "<script>" };
@@ -176,7 +188,9 @@ Deno.test("Launch inline script serialization", async (t) => {
   await t.step(
     "leaves normal prop serialization unchanged from previous output",
     async () => {
-      const html = await renderLaunch([makeIsland({ greeting: "Hello World!" })]);
+      const html = await renderLaunch([
+        makeIsland({ greeting: "Hello World!" }),
+      ]);
       const src = scriptSource(html);
       assertStringIncludes(src, `props: {"greeting":"Hello World!"}`);
       assertEquals(parseProps(src), { greeting: "Hello World!" });
@@ -192,12 +206,15 @@ Deno.test("Launch inline script serialization", async (t) => {
     assertScriptDataSafe(scriptSource(html));
   });
 
-  await t.step("covers <!-- followed by <script in transfer state", async () => {
-    const value = { a: "<!--<script>", b: "<!--", c: "<script>" };
-    const html = await renderLaunch([makeIsland({ a: 1 })], value);
-    assertScriptDataSafe(scriptSource(html));
-    assertEquals(parseTransferState(scriptSource(html)), value);
-  });
+  await t.step(
+    "covers <!-- followed by <script in transfer state",
+    async () => {
+      const value = { a: "<!--<script>", b: "<!--", c: "<script>" };
+      const html = await renderLaunch([makeIsland({ a: 1 })], value);
+      assertScriptDataSafe(scriptSource(html));
+      assertEquals(parseTransferState(scriptSource(html)), value);
+    },
+  );
 
   await t.step("covers U+2028 and U+2029 in transfer state", async () => {
     const value = { ls: "\u2028", ps: "\u2029", mix: "x\u2028y\u2029z" };
@@ -208,21 +225,26 @@ Deno.test("Launch inline script serialization", async (t) => {
     assertEquals(parseTransferState(src), value);
   });
 
-  await t.step("round-trips transfer state exactly after JSON.parse", async () => {
-    const value = {
-      close: "</script>",
-      comment: "<!--",
-      open: "<script>",
-      combined: "<!--<script></script>",
-      ls: "\u2028",
-      ps: "\u2029",
-      nested: { deep: "</script>\u2028<!--" },
-      arr: ["</script>", "\u2029", "<!--<script>"],
-      normal: "plain",
-    };
-    const src = scriptSource(await renderLaunch([makeIsland({ a: 1 })], value));
-    assertEquals(parseTransferState(src), value);
-  });
+  await t.step(
+    "round-trips transfer state exactly after JSON.parse",
+    async () => {
+      const value = {
+        close: "</script>",
+        comment: "<!--",
+        open: "<script>",
+        combined: "<!--<script></script>",
+        ls: "\u2028",
+        ps: "\u2029",
+        nested: { deep: "</script>\u2028<!--" },
+        arr: ["</script>", "\u2029", "<!--<script>"],
+        normal: "plain",
+      };
+      const src = scriptSource(
+        await renderLaunch([makeIsland({ a: 1 })], value),
+      );
+      assertEquals(parseTransferState(src), value);
+    },
+  );
 
   await t.step(
     "dangerous props and transfer state together add no literal </script>",
@@ -247,8 +269,8 @@ Deno.test("Launch inline script serialization", async (t) => {
       const html = await renderLaunch([makeIsland({ a: 1 })]);
       const src = scriptSource(html);
       assertStringIncludes(src, "const transferState = {};");
-      assertStringIncludes(src, "import { launch } from \"/runtime.js\";");
-      assertStringIncludes(src, "import $I1 from \"/island.js\";");
+      assertStringIncludes(src, 'import { launch } from "/runtime.js";');
+      assertStringIncludes(src, 'import $I1 from "/island.js";');
       assertStringIncludes(src, "launch([");
       assertStringIncludes(src, "], transferState);");
     },

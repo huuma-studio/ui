@@ -9,8 +9,10 @@
 // Escaping every literal `<` as the JavaScript escape \u003C is
 // sufficient because every sequence that can terminate or change the
 // parser state of script data begins with `<`. U+2028 and U+2029 are
-// also escaped because they are valid JSON but invalid in JavaScript
-// string literals. The parsed value is unchanged; only the bytes the
+// escaped defensively: ES2019 made both legal inside JavaScript string
+// literals, so the module script this feeds is fine either way, but
+// they remain hazardous if the payload is ever re-embedded or consumed
+// by an older parser. The parsed value is unchanged; only the bytes the
 // HTML tokenizer sees change.
 //
 // This must NOT be routed through the HTML entity escaping path: script

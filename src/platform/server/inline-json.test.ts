@@ -3,10 +3,13 @@ import { assertEquals, assertThrows } from "@std/assert";
 import { inlineJSON } from "./inline-json.ts";
 
 Deno.test(inlineJSON.name, async (t) => {
-  await t.step("serializes a normal object exactly as JSON.stringify does", () => {
-    const value = { a: 1, b: "text", c: true, d: null };
-    assertEquals(inlineJSON(value), JSON.stringify(value));
-  });
+  await t.step(
+    "serializes a normal object exactly as JSON.stringify does",
+    () => {
+      const value = { a: 1, b: "text", c: true, d: null };
+      assertEquals(inlineJSON(value), JSON.stringify(value));
+    },
+  );
 
   await t.step("serializes arrays and primitives like JSON.stringify", () => {
     assertEquals(inlineJSON([1, 2, 3]), "[1,2,3]");
@@ -32,7 +35,6 @@ Deno.test(inlineJSON.name, async (t) => {
 
     assertEquals(result.includes("<"), false);
     assertEquals(result.includes("</script>"), false);
-    assertScriptDataSafe(result);
   });
 
   await t.step("escapes U+2028 and U+2029", () => {
@@ -80,14 +82,3 @@ Deno.test(inlineJSON.name, async (t) => {
     assertThrows(() => inlineJSON(BigInt(1)), TypeError);
   });
 });
-
-// A script-data payload is safe when no literal `<` remains: every
-// sequence that can terminate or change the parser state of an inline
-// script element begins with `<`.
-function assertScriptDataSafe(serialized: string): void {
-  assertEquals(
-    serialized.includes("<"),
-    false,
-    `expected no literal "<" in serialized script data: ${serialized}`,
-  );
-}
