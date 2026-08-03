@@ -5,6 +5,7 @@ import type { Island } from "../../islands/islands.ts";
 
 import type { TransferState } from "./transfer-state.ts";
 import type { PageScripts, Script } from "./app.ts";
+import { inlineJSON } from "./inline-json.ts";
 
 interface ScriptsProps extends JSX.ComponentProps {
   scripts?: { entryPoints: Script[] };
@@ -64,14 +65,14 @@ export function Launch(
     const { children: _, ...props } =
       (<JSX.ComponentNode<JSX.Component>> island.node).props;
     _islands.push(
-      `{fn: $I${i}, props: ${JSON.stringify(props)}, islandId: "${island.id}"}`,
+      `{fn: $I${i}, props: ${inlineJSON(props)}, islandId: "${island.id}"}`,
     );
 
     i++;
   }
 
   templates.push(
-    `const transferState = ${JSON.stringify(transferState ?? {})};`,
+    `const transferState = ${inlineJSON(transferState ?? {})};`,
   );
   nodes.push("\n");
 
