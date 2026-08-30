@@ -5,9 +5,13 @@
  * bound value is falsy instead of emitting them verbatim.
  *
  * https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#boolean-attribute
+ * (also includes boolean content attributes defined on elements, such as
+ * allowpaymentrequest, disablepictureinpicture, disableremoteplayback and
+ * webkitdirectory)
  */
 export const BOOLEAN_ATTRIBUTES: Set<string> = new Set([
   "allowfullscreen",
+  "allowpaymentrequest",
   "async",
   "autofocus",
   "autoplay",
@@ -15,6 +19,8 @@ export const BOOLEAN_ATTRIBUTES: Set<string> = new Set([
   "controls",
   "default",
   "defer",
+  "disablepictureinpicture",
+  "disableremoteplayback",
   "disabled",
   "formnovalidate",
   "hidden",
@@ -35,4 +41,5 @@ export const BOOLEAN_ATTRIBUTES: Set<string> = new Set([
   "shadowrootclonable",
   "shadowrootdelegatesfocus",
   "shadowrootserializable",
+  "webkitdirectory",
 ]);

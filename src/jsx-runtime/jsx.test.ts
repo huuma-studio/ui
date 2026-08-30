@@ -22,6 +22,19 @@ Deno.test("jsxAttr boolean attributes", async (t) => {
     });
   });
 
+  await t.step("covers media and embed boolean attributes", () => {
+    assertEquals(jsxAttr("disablepictureinpicture", false), "");
+    assertEquals(jsxAttr("disableremoteplayback", false), "");
+    assertEquals(jsxAttr("disablepictureinpicture", true), {
+      templates: ["disablepictureinpicture"],
+      nodes: [""],
+    });
+    assertEquals(jsxAttr("muted", true), {
+      templates: ["muted"],
+      nodes: [""],
+    });
+  });
+
   await t.step("emits the bare attribute name for any truthy value", () => {
     assertEquals(jsxAttr("checked", 1), {
       templates: ["checked"],

@@ -222,6 +222,33 @@ Deno.test("compareAttributes boolean attribute transitions", async (t) => {
   });
 });
 
+Deno.test("media boolean attributes omitted when falsy", () => {
+  // Regression: falsy values of omitted standard boolean attributes (e.g.
+  // the media restriction attributes) must never be written verbatim.
+  for (
+    const name of [
+      "disablepictureinpicture",
+      "disableremoteplayback",
+      "allowpaymentrequest",
+      "webkitdirectory",
+    ] as const
+  ) {
+    const vNode = vElementNode({ [name]: false });
+    const recorded = fakeElement(vNode);
+
+    attribute(
+      <CreateAttributeChangeSet> {
+        [Props.Type]: Type.Attribute,
+        [Props.Action]: Action.Create,
+        [Props.Payload]: { vNode, name, value: false },
+      },
+    );
+
+    assertEquals(recorded.set, []);
+    assertEquals(recorded.remove, [name]);
+  }
+});
+
 Deno.test("signal-driven disabled flip adds and removes the attribute", () => {
   const busy = signal(true);
 
