@@ -1,6 +1,7 @@
 import { escape } from "@std/html/entities";
 
 import { eventName, isEventName } from "./event.ts";
+import { BOOLEAN_ATTRIBUTES } from "./boolean-attributes.ts";
 import type { Signal } from "../signal/mod.ts";
 import { Ref } from "../ref/mod.ts";
 
@@ -110,12 +111,15 @@ export function jsx(
 }
 
 export function jsxAttr(name: string, value: unknown): JSX.Element {
+  if (BOOLEAN_ATTRIBUTES.has(name)) {
+    // A boolean attribute is true by its presence alone: a falsy value
+    // must be omitted, a truthy value must emit the bare name.
+    return value ? { templates: [escape(name)], nodes: [""] } : "";
+  }
   if (typeof value === "string" || value === true) {
     return {
       templates: [
-        ...(value === true
-          ? escape(name)
-          : `${escape(name)}="${escape(value)}"`),
+        value === true ? escape(name) : `${escape(name)}="${escape(value)}"`,
       ],
       nodes: [""],
     };

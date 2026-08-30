@@ -3,6 +3,7 @@ import {
   type VElement,
   VNodeProps,
 } from "../../../../v-node/mod.ts";
+import { BOOLEAN_ATTRIBUTES } from "../../../../jsx-runtime/boolean-attributes.ts";
 import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
@@ -58,8 +59,19 @@ export function attribute(change: AttributeChangeSet) {
 }
 
 function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
-  if (name === "checked" && typeof value === "boolean") {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = value;
+  if (BOOLEAN_ATTRIBUTES.has(name)) {
+    // A boolean attribute is true by its presence alone: never write the
+    // value verbatim. Falsy values remove (or omit) the attribute,
+    // truthy values set the bare attribute name.
+    if (!value) {
+      (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
+      return;
+    }
+    if (name === "checked" && typeof value === "boolean") {
+      (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = value;
+      return;
+    }
+    (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, "");
     return;
   }
   if (name === "value" && value != null) {
@@ -102,6 +114,7 @@ export function compareAttributes(
 
   for (const prop in vNode[VNodeProps.PROPS]) {
     if (
+      !BOOLEAN_ATTRIBUTES.has(prop) &&
       typeof vNode[VNodeProps.PROPS][prop] !== "string" &&
       typeof vNode[VNodeProps.PROPS][prop] !== "boolean" &&
       prop !== "dangerouslySetInnerHTML"
@@ -158,6 +171,33 @@ export function setAttribute(
   value: unknown,
   vNode: VElement<Node>,
 ): AttributeChangeSet[] {
+  if (BOOLEAN_ATTRIBUTES.has(key)) {
+    // Diffing mirrors the boolean semantics of createOrUpdate: a truthy
+    // value adds the bare attribute, a falsy value removes it.
+    if (value) {
+      return [
+        {
+          [Props.Action]: Action.Create,
+          [Props.Type]: Type.Attribute,
+          [Props.Payload]: {
+            vNode,
+            name: key,
+            value: true,
+          },
+        },
+      ];
+    }
+    return [
+      {
+        [Props.Type]: Type.Attribute,
+        [Props.Action]: Action.Delete,
+        [Props.Payload]: {
+          vNode,
+          name: key,
+        },
+      },
+    ];
+  }
   if (typeof value === "string" || value === true) {
     return [
       {
