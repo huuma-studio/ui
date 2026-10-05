@@ -3,6 +3,8 @@ import { array, object, string, unknown } from "@huuma/validate";
 import { info } from "@huuma/route/utils/logger";
 import { parse } from "@std/path/parse";
 import { join } from "@std/path/join";
+import { readFile } from "node:fs/promises";
+import process from "node:process";
 
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 
@@ -144,11 +146,13 @@ export async function packRemoteFunctions<
   return app;
 }
 
-function readScript(path: string): Promise<Uint8Array<ArrayBuffer>> {
-  return Deno.readFile(join(
-    Deno.cwd(),
-    path,
-  ));
+async function readScript(path: string): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(
+    await readFile(join(
+      process.cwd(),
+      path,
+    )),
+  );
 }
 
 /**

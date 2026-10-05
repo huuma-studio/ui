@@ -2,7 +2,10 @@ import { dirname } from "@std/path/dirname";
 import { join } from "@std/path/join";
 import { walk } from "@std/fs/walk";
 import { EOL } from "@std/fs/eol";
+import { readFile, writeFile } from "node:fs/promises";
+import process from "node:process";
 import type { List } from "../mod.ts";
+import { isNodeError } from "./utils.ts";
 
 export interface FileImport {
   name: string;
@@ -41,7 +44,7 @@ export async function createList(
     await import(
       join(
         "file://",
-        Deno.cwd(),
+        process.cwd(),
         await writeListFrom(
           {
             pages: pagesList.pages,
@@ -235,13 +238,13 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
 
   const packFilePath = join(packPath, "list.ts");
   try {
-    const existingManifest = await Deno.readTextFile(packFilePath);
+    const existingManifest = await readFile(packFilePath, "utf8");
     if (existingManifest !== content) {
-      await Deno.writeTextFile(packFilePath, content);
+      await writeFile(packFilePath, content);
     }
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) {
-      await Deno.writeTextFile(packFilePath, content);
+    if (isNodeError(e, "ENOENT")) {
+      await writeFile(packFilePath, content);
     } else {
       throw e;
     }

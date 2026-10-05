@@ -3,6 +3,8 @@ import { denoPlugin } from "@deno/esbuild-plugin";
 import { parse } from "@std/path/parse";
 import { relative } from "@std/path/relative";
 import { EOL } from "@std/fs/eol";
+import { readFile } from "node:fs/promises";
+import process from "node:process";
 import { generateHash, toCanonicalPath } from "./utils.ts";
 
 export type EntryPoint =
@@ -79,7 +81,7 @@ export class Bundler {
       write: false,
       jsx: "automatic",
       jsxImportSource: "@huuma/ui",
-      absWorkingDir: Deno.cwd(),
+      absWorkingDir: process.cwd(),
       target: ["chrome99", "firefox99", "safari15"],
       inject: shims ?? [],
     });
@@ -120,7 +122,7 @@ const remoteFunctionsPlugin: esbuild.Plugin = {
   setup(build) {
     build.onLoad({ filter: /\.remote\.ts$/ }, async (args) => {
       // Look into the file in scope and find the names of all exported functions
-      const fileContent = await Deno.readTextFile(args.path);
+      const fileContent = await readFile(args.path, "utf8");
 
       const exportedFunctions = new Set<string>();
       let hasDefaultExport = false;
@@ -150,7 +152,7 @@ const remoteFunctionsPlugin: esbuild.Plugin = {
 
       const fileName = parse(args.path).name;
       const fileHash = await generateHash(
-        toCanonicalPath(relative(Deno.cwd(), args.path)),
+        toCanonicalPath(relative(process.cwd(), args.path)),
       );
       const endpoint = `/_huuma/remote/${fileHash}/${fileName}`;
 
