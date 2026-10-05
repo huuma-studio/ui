@@ -75,7 +75,7 @@ export async function list<T extends UIAppContext>(
   }
 
   if (options?.enableLiveReload !== false) {
-    enableLiveReload(app);
+    await enableLiveReload(app);
   }
 
   for (const island of islands) {
