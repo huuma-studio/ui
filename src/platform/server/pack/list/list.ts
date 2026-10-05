@@ -19,7 +19,7 @@ interface Page {
   middlewares: string[];
 }
 
-interface Pack {
+export interface Pack {
   pages: Page[];
   layouts: FileImport[];
   middlewares: FileImport[];
@@ -189,7 +189,17 @@ export async function listRemoteFunctions(path: string): Promise<FileImport[]> {
   return remoteFunctions;
 }
 
-async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
+/**
+ * @internal Not part of the public `@huuma/ui` API. Exported only for
+ * unit-testing; `list/mod.ts` does not re-export it.
+ *
+ * Writes the generated `list.ts` into `packPath` and returns its path. The
+ * file is only rewritten when its content changed.
+ */
+export async function writeListFrom(
+  pack: Pack,
+  packPath: string,
+): Promise<string> {
   const content = [
     "// Huuma UI generated code - Do not modify!",
     ...(pack.pages.length
