@@ -2,7 +2,10 @@ import { dirname } from "@std/path/dirname";
 import { join } from "@std/path/join";
 import { walk } from "@std/fs/walk";
 import { EOL } from "@std/fs/eol";
+import { readFile, writeFile } from "node:fs/promises";
+import process from "node:process";
 import type { List } from "../mod.ts";
+import { isNodeError } from "./utils.ts";
 
 export interface FileImport {
   name: string;
@@ -16,7 +19,7 @@ interface Page {
   middlewares: string[];
 }
 
-interface Pack {
+export interface Pack {
   pages: Page[];
   layouts: FileImport[];
   middlewares: FileImport[];
@@ -41,7 +44,7 @@ export async function createList(
     await import(
       join(
         "file://",
-        Deno.cwd(),
+        process.cwd(),
         await writeListFrom(
           {
             pages: pagesList.pages,
@@ -186,7 +189,17 @@ export async function listRemoteFunctions(path: string): Promise<FileImport[]> {
   return remoteFunctions;
 }
 
-async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
+/**
+ * @internal Not part of the public `@huuma/ui` API. Exported only for
+ * unit-testing; `list/mod.ts` does not re-export it.
+ *
+ * Writes the generated `list.ts` into `packPath` and returns its path. The
+ * file is only rewritten when its content changed.
+ */
+export async function writeListFrom(
+  pack: Pack,
+  packPath: string,
+): Promise<string> {
   const content = [
     "// Huuma UI generated code - Do not modify!",
     ...(pack.pages.length
@@ -235,13 +248,13 @@ async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
 
   const packFilePath = join(packPath, "list.ts");
   try {
-    const existingManifest = await Deno.readTextFile(packFilePath);
+    const existingManifest = await readFile(packFilePath, "utf8");
     if (existingManifest !== content) {
-      await Deno.writeTextFile(packFilePath, content);
+      await writeFile(packFilePath, content);
     }
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) {
-      await Deno.writeTextFile(packFilePath, content);
+    if (isNodeError(e, "ENOENT")) {
+      await writeFile(packFilePath, content);
     } else {
       throw e;
     }

@@ -1,6 +1,9 @@
 import { assertEquals } from "@std/assert";
-import { sortPages } from "./list.ts";
-import type { FileImport } from "./list.ts";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "@std/path/join";
+import { sortPages, writeListFrom } from "./list.ts";
+import type { FileImport, Pack } from "./list.ts";
 
 // Helper: build a FileImport with just the filePath (the only field sortPages
 // reads). name/fileName are irrelevant to the sort.
@@ -117,4 +120,52 @@ Deno.test("sortPages: case-insensitive comparison", () => {
   );
   assertEquals(sorted[0].filePath, "app/About");
   assertEquals(sorted[1].filePath, "app/about");
+});
+
+Deno.test(writeListFrom.name, async (t) => {
+  const packPath = await mkdtemp(join(tmpdir(), "huuma-list-"));
+  const listPath = join(packPath, "list.ts");
+  const emptyPack: Pack = {
+    pages: [],
+    layouts: [],
+    middlewares: [],
+    islands: [],
+    scripts: [],
+    remoteFunctions: [],
+  };
+  const islandPack: Pack = {
+    ...emptyPack,
+    islands: [{ name: "I0", filePath: "components", fileName: "a.client.tsx" }],
+  };
+
+  try {
+    await t.step("creates the list when it does not exist yet", async () => {
+      assertEquals(await writeListFrom(emptyPack, packPath), listPath);
+      assertEquals(
+        await readFile(listPath, "utf8"),
+        "// Huuma UI generated code - Do not modify!",
+      );
+    });
+
+    await t.step("does not rewrite an unchanged list", async () => {
+      const before = (await stat(listPath)).mtimeMs;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await writeListFrom(emptyPack, packPath);
+      assertEquals((await stat(listPath)).mtimeMs, before);
+    });
+
+    await t.step("replaces a list whose content changed", async () => {
+      await writeFile(listPath, "// stale");
+      await writeListFrom(islandPack, packPath);
+      const content = await readFile(listPath, "utf8");
+      assertEquals(
+        content.includes(
+          'import * as I0 from "../components/a.client.tsx";',
+        ),
+        true,
+      );
+    });
+  } finally {
+    await rm(packPath, { recursive: true, force: true });
+  }
 });

@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
-import { generateHash, toCanonicalPath } from "./utils.ts";
+import { readFile } from "node:fs/promises";
+import { generateHash, isNodeError, toCanonicalPath } from "./utils.ts";
 
 Deno.test(toCanonicalPath.name, async (t) => {
   await t.step("leaves an already-canonical path unchanged", () => {
@@ -80,5 +81,25 @@ Deno.test(generateHash.name, async (t) => {
     const a = await generateHash("/src/a.remote.ts");
     const b = await generateHash("/src/b.remote.ts");
     assertEquals(a === b, false);
+  });
+});
+
+Deno.test(isNodeError.name, async (t) => {
+  await t.step("matches a node:fs error by its code", async () => {
+    const error = await readFile("./does-not-exist.txt").catch((e) => e);
+    assertEquals(isNodeError(error, "ENOENT"), true);
+    assertEquals(isNodeError(error, "EEXIST"), false);
+  });
+
+  await t.step("matches a Deno.errors error by its code", async () => {
+    const error = await Deno.readFile("./does-not-exist.txt").catch((e) => e);
+    assertEquals(error instanceof Deno.errors.NotFound, true);
+    assertEquals(isNodeError(error, "ENOENT"), true);
+  });
+
+  await t.step("rejects errors without a code and non-errors", () => {
+    assertEquals(isNodeError(new Error("boom"), "ENOENT"), false);
+    assertEquals(isNodeError({ code: "ENOENT" }, "ENOENT"), false);
+    assertEquals(isNodeError(undefined, "ENOENT"), false);
   });
 });
