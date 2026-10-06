@@ -74,8 +74,23 @@ export function launch(islands: Island[], transferState: TransferState) {
 
     let node: Node | null;
 
+    /*
+     * Collect island start comments BEFORE hydrating. The passes below
+     * mutate the tree - parent passes consume nested islands and remove
+     * their markers - so a live NodeIterator would walk a moving target.
+     * A consumed island's start comment is detached from the DOM; the
+     * parentNode check below skips it.
+     */
+    const islandStarts: Node[] = [];
+
     // deno-lint-ignore no-cond-assign
     while (node = iterator.nextNode()) {
+      islandStarts.push(node);
+    }
+
+    for (const node of islandStarts) {
+      if (!node.parentNode) continue;
+
       const attachmentRef = createRootAttachmentRef(node);
 
       if (isIslandStart(node)) {
@@ -131,7 +146,8 @@ function collectIslandNodes(
   return nodes;
 }
 
-function findIslandChildren(
+// Exported for hydration tests.
+export function findIslandChildren(
   props: { islandId: string; nodes: Node[]; islands: Island[] },
 ): JSX.Element[] {
   const children: JSX.Element = [];
@@ -187,16 +203,18 @@ function findIslandChildren(
           isChild
         ) {
           const island = removeIslandFrom(props.islands, childIslandId);
-          children.push(
-            jsx(island.fn, {
-              ...island.props,
-              children: findIslandChildren({
-                islandId: childIslandId,
-                islands: props.islands,
-                nodes: childIslandNodes,
+          if (island) {
+            children.push(
+              jsx(island.fn, {
+                ...island.props,
+                children: findIslandChildren({
+                  islandId: childIslandId,
+                  islands: props.islands,
+                  nodes: childIslandNodes,
+                }),
               }),
-            }),
-          );
+            );
+          }
           childIslandId = undefined;
           childIslandNodes = [];
           removeNode(node);
@@ -227,7 +245,8 @@ function findIslandChildren(
   return children;
 }
 
-function createChild(node: Node, islands: Island[]): JSX.Element {
+// Exported for hydration tests.
+export function createChild(node: Node, islands: Island[]): JSX.Element {
   if (isElement(node)) {
     // Convert element attributes to props
     const props: JSX.ComponentProps = node.getAttributeNames()
@@ -253,23 +272,29 @@ function createChild(node: Node, islands: Island[]): JSX.Element {
       }
       if (islandId && isIslandEnd(childNode, islandId)) {
         const island = removeIslandFrom(islands, islandId);
-        children.push(
-          jsx(island.fn, {
-            ...island.props,
-            children: findIslandChildren({
-              islandId,
-              islands,
-              nodes: islandChildren,
+        if (island) {
+          children.push(
+            jsx(island.fn, {
+              ...island.props,
+              children: findIslandChildren({
+                islandId,
+                islands,
+                nodes: islandChildren,
+              }),
             }),
-          }),
-        );
+          );
+        }
         islandId = undefined;
         islandChildren = [];
         removeNode(childNode);
         continue;
       }
       if (islandId) {
-        islandChildren.push(node);
+        // Collect the island's own content roots - not the wrapper node
+        // this createChild call is about; handing the wrapper to the
+        // island's children stream would make its materialization walk
+        // the whole wrapper subtree and swallow sibling islands.
+        islandChildren.push(childNode);
       }
     }
 
@@ -312,22 +337,40 @@ function isChildrenEndNode(
   return trim(textContent) === `end_children_${islandId}`;
 }
 
-function isComment(node: Node | null): node is Comment {
-  return (node?.nodeType === Node.COMMENT_NODE);
-}
-function isElement(node: Node | null): node is Element {
-  return (node?.nodeType === Node.ELEMENT_NODE);
-}
-function isText(node: Node | null): node is Text {
-  return node?.nodeType === Node.TEXT_NODE;
+function isIslandMarkerComment(node: Node): boolean {
+  if (!isComment(node)) return false;
+  const text = trim(node.textContent) ?? "";
+  return text.startsWith("start_island") || text.startsWith("end_island") ||
+    text.startsWith("start_children") || text.startsWith("end_children");
 }
 
-function removeIslandFrom(islands: Island[], islandId: string): Island {
+// Numeric NodeType constants: the `Node` global only exists in the
+// browser, and these helpers also run in Deno (tests, SSR tooling).
+const COMMENT_NODE = 8;
+const ELEMENT_NODE = 1;
+const TEXT_NODE = 3;
+
+function isComment(node: Node | null): node is Comment {
+  return (node?.nodeType === COMMENT_NODE);
+}
+function isElement(node: Node | null): node is Element {
+  return (node?.nodeType === ELEMENT_NODE);
+}
+function isText(node: Node | null): node is Text {
+  return node?.nodeType === TEXT_NODE;
+}
+
+function removeIslandFrom(
+  islands: Island[],
+  islandId: string,
+): Island | undefined {
   const islandIndex = islands.findIndex((island) =>
     island.islandId === islandId
   );
-  const island = islands[islandIndex];
-  islands.splice(islandIndex, 1);
+  // A missing island must not fall through to splice(-1, 1), which
+  // silently drops the last island in the list.
+  if (islandIndex < 0) return undefined;
+  const [island] = islands.splice(islandIndex, 1);
   return island;
 }
 function trim(value: string | null): string | undefined {
@@ -338,12 +381,18 @@ function removeNode(node?: Node) {
   node?.parentNode?.removeChild(node);
 }
 
+/*
+ * Removes every island marker comment left in the document after
+ * hydration - island and children markers alike. Markers inside subtrees
+ * the hydration passes did not walk (e.g. inside islands that hydrate via
+ * their parent's tree) would otherwise linger forever.
+ */
 function removeIslandComments() {
   const iterator = document.createNodeIterator(
     document.body,
     NodeFilter.SHOW_COMMENT,
     (node) => {
-      return isIslandStart(node) || isIslandEnd(node)
+      return isIslandMarkerComment(node)
         ? NodeFilter.FILTER_ACCEPT
         : NodeFilter.FILTER_REJECT;
     },

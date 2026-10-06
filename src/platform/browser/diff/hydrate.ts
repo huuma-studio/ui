@@ -50,20 +50,52 @@ export function hydrate(
       return fragment(vNode, nodes, attachmentRef);
     }
 
-    const node = nodes.shift();
+    const node = peekNode(nodes);
 
     if (node) {
       if (isVElement(vNode)) {
+        nodes.shift();
         return element(vNode, node, attachmentRef);
       }
 
-      if (isVText(vNode)) {
+      /*
+       * A text vNode must only bind to a DOM text node. The HTML parser
+       * drops empty text nodes (e.g. a "" child from a falsy guard like
+       * `{error && <p/>}`), so the next node can be the following
+       * sibling element. Leave it for that sibling and render the text
+       * instead of hijacking its DOM node - otherwise every following
+       * sibling (e.g. further lists in the island) hydrates the previous
+       * sibling's DOM.
+       */
+      if (isVText(vNode) && node.nodeType === 3 /* Node.TEXT_NODE */) {
+        nodes.shift();
         return text(vNode, node, attachmentRef);
       }
     }
   }
 
   return render(vNode, attachmentRef);
+}
+
+/*
+ * Hydration consumes the server-rendered nodes as one sequential stream:
+ * one DOM node per client vNode child, in order. Anything in the stream
+ * that the client tree does not model desyncs it, mixing up every
+ * following sibling (e.g. a second list hydrating into the first list's
+ * DOM):
+ *
+ * - The HTML parser drops empty text nodes (handled at the text branch
+ *   above).
+ * - Island marker comments were already stripped from the DOM but can
+ *   still sit in the collected node stream (e.g. with nested islands).
+ *
+ * Comments are never part of the client tree, so skip them.
+ */
+function peekNode(nodes: Node[]): Node | undefined {
+  while (nodes.length && nodes[0]?.nodeType === 8 /* Node.COMMENT_NODE */) {
+    nodes.shift();
+  }
+  return nodes[0];
 }
 
 function component(
