@@ -1,11 +1,13 @@
 import { assertEquals } from "@std/assert";
 
-import { jsx } from "../../../jsx-runtime/mod.ts";
+import { type JSX, jsx } from "../../../jsx-runtime/mod.ts";
+import { signal } from "../../../signal/mod.ts";
 import { VNodeProps } from "../../../v-node/mod.ts";
 import { create } from "../../../v-node/sync.ts";
 import { AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 import { Action, Props, Type } from "./dispatch.ts";
 import { hydrate } from "./hydrate.ts";
+import type { ReplaceTextPayload } from "./types/text.ts";
 
 /*
  * Minimal DOM stand-ins. While computing change sets, hydrate() only
@@ -99,6 +101,75 @@ Deno.test("hydrate skips island marker comments left in the node stream", () => 
     )
     .map((changeSet) => (changeSet[Props.Payload] as { node: Node }).node);
   assertEquals(links, [div, section]);
+});
+
+Deno.test("hydrate structurally replaces a server element for nonempty diverged text", () => {
+  // Server: <div><span>server</span><button>next</button></div>
+  // Client: <div>["client", <button>next</button>]</div>
+  // The content diverged between the renders - the nonempty text must
+  // consume and replace the span. Leaving it behind would make the
+  // client button replace the span instead, leaving the server's button
+  // visible and untracked (duplicate content).
+  const span = elementNode("span");
+  const button = elementNode("button");
+  const div = elementNode("div", [span, button]);
+
+  const vNode = create<Node>(
+    jsx("div", {
+      children: ["client", jsx("button", {})],
+    }),
+  );
+
+  const changeSets = hydrate(vNode, [div], parentAttachmentRef(div));
+
+  const replacedTexts = changeSets.filter((changeSet) =>
+    changeSet[Props.Type] === Type.Text &&
+    changeSet[Props.Action] === Action.Replace
+  );
+  assertEquals(replacedTexts.length, 1);
+  assertEquals(
+    (replacedTexts[0][Props.Payload] as ReplaceTextPayload)
+      .vText[VNodeProps.NODE_REF],
+    span,
+  );
+
+  const links = changeSets
+    .filter((changeSet) =>
+      changeSet[Props.Type] === Type.Element &&
+      changeSet[Props.Action] === Action.Link
+    )
+    .map((changeSet) => (changeSet[Props.Payload] as { node: Node }).node);
+  assertEquals(links, [div, button]);
+});
+
+Deno.test("hydrate leaves a server element for an empty signal text", () => {
+  // A signal-bound text child with value "" - the parser dropped the
+  // text node, so the following element belongs to the next sibling.
+  const section = elementNode("section");
+  const div = elementNode("div", [section]);
+
+  const emptySignal = signal("") as unknown as JSX.SignalLike;
+
+  const vNode = create<Node>(
+    jsx("div", {
+      children: [emptySignal, jsx("section", {})],
+    }),
+  );
+
+  const changeSets = hydrate(vNode, [div], parentAttachmentRef(div));
+
+  const links = changeSets
+    .filter((changeSet) =>
+      changeSet[Props.Type] === Type.Element &&
+      changeSet[Props.Action] === Action.Link
+    )
+    .map((changeSet) => (changeSet[Props.Payload] as { node: Node }).node);
+  assertEquals(links, [div, section]);
+  assertEquals(
+    changeSets.filter((changeSet) => changeSet[Props.Action] === Action.Replace)
+      .length,
+    0,
+  );
 });
 
 Deno.test("hydrate links a text child to its DOM text node", () => {

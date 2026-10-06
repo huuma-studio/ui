@@ -58,16 +58,26 @@ export function hydrate(
         return element(vNode, node, attachmentRef);
       }
 
-      /*
-       * A text vNode must only bind to a DOM text node. The HTML parser
-       * drops empty text nodes (e.g. a "" child from a falsy guard like
-       * `{error && <p/>}`), so the next node can be the following
-       * sibling element. Leave it for that sibling and render the text
-       * instead of hijacking its DOM node - otherwise every following
-       * sibling (e.g. further lists in the island) hydrates the previous
-       * sibling's DOM.
-       */
-      if (isVText(vNode) && node.nodeType === 3 /* Node.TEXT_NODE */) {
+      if (isVText(vNode)) {
+        /*
+         * An empty text child ("") has no DOM counterpart: the HTML
+         * parser drops empty text nodes (e.g. a "" child from a falsy
+         * guard like `{error && <p/>}`). Do not hijack the following
+         * sibling element for it - render the text and leave the node,
+         * or every later sibling (e.g. further lists in the island)
+         * hydrates the previous sibling's DOM.
+         */
+        if (node.nodeType !== 3 /* Node.TEXT_NODE */ && isEmpty(vNode)) {
+          return render(vNode, attachmentRef);
+        }
+
+        /*
+         * Nonempty text facing a server element diverged in content,
+         * not in parser normalization (e.g. `<span>server</span>` on
+         * the server vs `"client"` on the client). Consume the node and
+         * structurally replace it - leaving it would let the server's
+         * original sibling content linger untracked in the DOM.
+         */
         nodes.shift();
         return text(vNode, node, attachmentRef);
       }
@@ -96,6 +106,13 @@ function peekNode(nodes: Node[]): Node | undefined {
     nodes.shift();
   }
   return nodes[0];
+}
+
+function isEmpty(vText: VText<Node>): boolean {
+  const text = vText[VNodeProps.TEXT];
+  // signal.get() outside a subscriber scope is a plain read, and
+  // hydration never runs inside one.
+  return (isVSignal(text) ? `${text.get()}` : text) === "";
 }
 
 function component(
