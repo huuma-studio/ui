@@ -34,6 +34,52 @@ export function setSubscriber<T, S>(
   }
 }
 
+/*
+ * Scopes updated during the current notification pass. A pass starts at
+ * a WritableSignal.set() and spans the computed signals it propagates
+ * through, so a scope reached both directly and via a computed is updated
+ * once.
+ */
+let currentPass: Set<SubscriberScope<unknown>> | undefined;
+
+function notifyScopes<T>(
+  source: Signal<T>,
+  scopes: Set<SubscriberScope<T>>,
+  read: () => T,
+  startPass: boolean,
+): void {
+  const previousPass = currentPass;
+  if (startPass || !currentPass) currentPass = new Set();
+  const pass = <Set<SubscriberScope<T>>> currentPass;
+
+  const deferred: SubscriberScope<T>[] = [];
+  try {
+    for (const scope of [...scopes]) {
+      // Unsubscribed earlier in this pass (e.g. a child component whose
+      // parent re-rendered): its subscriber closes over stale state.
+      if (!scopes.has(scope)) continue;
+
+      // Glitch avoidance: let the dependent computed signals update first.
+      if (scope.signals.some((signal) => signal.dependsOn(source))) {
+        deferred.push(scope);
+        continue;
+      }
+      pass.add(scope);
+      scope.subscriber.update(read());
+    }
+
+    // Deferred scopes still need the update when no computed reached them,
+    // i.e. when the computed values did not change.
+    for (const scope of deferred) {
+      if (!scopes.has(scope) || pass.has(scope)) continue;
+      pass.add(scope);
+      scope.subscriber.update(read());
+    }
+  } finally {
+    currentPass = previousPass;
+  }
+}
+
 export abstract class Signal<T> {
   abstract get(): T;
   abstract subscribe(subscriber: SubscriberScope<T>): Cleanup;
@@ -42,7 +88,7 @@ export abstract class Signal<T> {
 
 export class WritableSignal<T> extends Signal<T> {
   #value: T;
-  #scopes: SubscriberScope<T>[] = [];
+  #scopes = new Set<SubscriberScope<T>>();
 
   constructor(value: T) {
     super();
@@ -71,8 +117,8 @@ export class WritableSignal<T> extends Signal<T> {
 
   subscribe(scope: SubscriberScope<T>): Cleanup {
     const cleanup = this.#createCleanup(scope);
-    if (!this.#scopes.find((existing) => existing === scope)) {
-      this.#scopes.push(scope);
+    if (!this.#scopes.has(scope)) {
+      this.#scopes.add(scope);
       scope.signals.push(this);
       scope.subscriber.cleanupCallback?.call(this, cleanup);
     }
@@ -85,27 +131,19 @@ export class WritableSignal<T> extends Signal<T> {
       signal: this,
       cleanup: () => {
         scope.signals = scope.signals.filter((signal) => signal !== this);
-        this.#scopes = this.#scopes.filter((existing) => existing !== scope);
+        this.#scopes.delete(scope);
       },
     };
   }
 
   #notify(): void {
-    const scopes: SubscriberScope<T>[] = this.#scopes.map((scope) => ({
-      signals: [...scope.signals],
-      subscriber: scope.subscriber,
-    }));
-    scopes.forEach((scope) => {
-      if (!scope.signals.filter((signal) => signal.dependsOn(this)).length) {
-        scope.subscriber.update(this.#value);
-      }
-    });
+    notifyScopes(this, this.#scopes, () => this.#value, true);
   }
 }
 
 export class ComputedSignal<T> extends Signal<T> {
   #value: T;
-  #scopes: SubscriberScope<T>[] = [];
+  #scopes = new Set<SubscriberScope<T>>();
   #cleanups: Cleanup[] = [];
 
   constructor(callbackFn: () => T) {
@@ -146,8 +184,8 @@ export class ComputedSignal<T> extends Signal<T> {
   }
 
   subscribe(scope: SubscriberScope<T>): Cleanup {
-    if (!this.#scopes.find((existing) => existing === scope)) {
-      this.#scopes.push(scope);
+    if (!this.#scopes.has(scope)) {
+      this.#scopes.add(scope);
       scope.signals.push(this);
       scope.subscriber.cleanupCallback?.call(this, this.#createCleanup(scope));
     }
@@ -159,22 +197,15 @@ export class ComputedSignal<T> extends Signal<T> {
     return {
       signal: this,
       cleanup: () => {
-        this.#scopes = this.#scopes.filter((existing) => existing !== scope);
+        this.#scopes.delete(scope);
         scope.signals = scope.signals.filter((signal) => signal !== this);
       },
     };
   }
 
   #notify(): void {
-    const scopes: SubscriberScope<T>[] = this.#scopes.map((scope) => ({
-      signals: [...scope.signals],
-      subscriber: scope.subscriber,
-    }));
-    scopes.forEach((scope) => {
-      if (!scope.signals.filter((signal) => signal.dependsOn(this)).length) {
-        scope.subscriber.update(this.#value);
-      }
-    });
+    // Propagates the change of the source signal: stays in its pass.
+    notifyScopes(this, this.#scopes, () => this.#value, false);
   }
 }
 
