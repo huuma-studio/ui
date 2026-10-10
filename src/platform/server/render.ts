@@ -94,8 +94,8 @@ function stringFrom(attributes: JSX.Attributes): string {
   let attributesString = "";
   for (const key in attributes) {
     const attribute = attributes[key];
-    if (typeof attribute === "string") {
-      attributesString += ` ${key}="${escape(attribute)}"`;
+    if (typeof attribute === "string" || typeof attribute === "number") {
+      attributesString += ` ${key}="${escape(`${attribute}`)}"`;
     }
     if (attribute === true) {
       attributesString += ` ${key}`;

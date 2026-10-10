@@ -37,6 +37,13 @@ Deno.test(renderToString.name, async (t) => {
     );
   });
 
+  await t.step("should render numeric attributes as string", async () => {
+    assertEquals(
+      await renderToString(<td tabindex={0} colspan={2}>cell</td>, {}),
+      '<td tabindex="0" colspan="2">cell</td>',
+    );
+  });
+
   await t.step("should render image as string", async () => {
     assertEquals(
       await renderToString(

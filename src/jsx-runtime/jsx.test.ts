@@ -70,9 +70,23 @@ Deno.test("jsxAttr non-boolean attributes", async (t) => {
     });
   });
 
-  await t.step("omits values that are neither strings nor true", () => {
-    assertEquals(jsxAttr("class", false), "");
-    assertEquals(jsxAttr("class", undefined), "");
-    assertEquals(jsxAttr("class", 0), "");
+  await t.step(
+    "omits values that are neither strings, numbers nor true",
+    () => {
+      assertEquals(jsxAttr("class", false), "");
+      assertEquals(jsxAttr("class", undefined), "");
+      assertEquals(jsxAttr("class", null), "");
+    },
+  );
+
+  await t.step("emits numbers as attribute values", () => {
+    assertEquals(jsxAttr("tabindex", 0), {
+      templates: [`tabindex="0"`],
+      nodes: [""],
+    });
+    assertEquals(jsxAttr("colspan", 2), {
+      templates: [`colspan="2"`],
+      nodes: [""],
+    });
   });
 });

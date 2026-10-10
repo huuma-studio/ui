@@ -13,13 +13,13 @@ interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
 export interface CreateAttributePayload {
   vNode: VElement<Node>;
   name: string;
-  value: string | boolean | { __html: string };
+  value: string | number | boolean | { __html: string };
 }
 
 export interface UpdateAttributePayload {
   vNode: VElement<Node>;
   name: string;
-  value: string | boolean | { __html: string };
+  value: string | number | boolean | { __html: string };
 }
 
 export interface DeleteAttributePayload {
@@ -110,48 +110,35 @@ export function compareAttributes(
   previousVNode: VElement<Node>,
 ): ChangeSet<unknown>[] {
   const changes: AttributeChangeSet[] = [];
-  const { ...previousProps } = previousVNode[VNodeProps.PROPS];
+  const props = vNode[VNodeProps.PROPS];
+  const previousProps = previousVNode[VNodeProps.PROPS];
 
-  for (const prop in vNode[VNodeProps.PROPS]) {
-    if (
-      !BOOLEAN_ATTRIBUTES.has(prop) &&
-      typeof vNode[VNodeProps.PROPS][prop] !== "string" &&
-      typeof vNode[VNodeProps.PROPS][prop] !== "boolean" &&
-      prop !== "dangerouslySetInnerHTML"
-    ) {
-      continue;
-    }
-
-    // Attribute does not exist on previous vnode
-    if (!previousProps[prop]) {
-      changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
-      continue;
-    }
+  for (const prop in props) {
+    if (!isAttribute(prop, props[prop])) continue;
 
     // Compare dangerously set inner html
-    if (prop === "dangerouslySetInnerHTML" && previousProps[prop]) {
-      const previousInnerHTML = previousProps[prop]?.__html;
-      const innerHTML = vNode[VNodeProps.PROPS][prop]?.__html;
-
-      if (previousInnerHTML !== innerHTML) {
-        changes.push(
-          ...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode),
-        );
-        delete previousProps[prop];
+    if (prop === "dangerouslySetInnerHTML") {
+      if (props[prop]?.__html !== previousProps[prop]?.__html) {
+        changes.push(...setAttribute(prop, props[prop], vNode));
       }
       continue;
     }
 
-    // Update attribute if value has changed
-    if (vNode[VNodeProps.PROPS][prop] !== previousProps[prop]) {
-      changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
-      delete previousProps[prop];
+    // Existence is checked by key: "" and false are valid previous values.
+    if (
+      Object.hasOwn(previousProps, prop) && props[prop] === previousProps[prop]
+    ) {
+      continue;
     }
+    changes.push(...setAttribute(prop, props[prop], vNode));
   }
 
-  // Remove left attributes from node
+  // Remove attributes the vnode no longer renders
   for (const prop in previousProps) {
-    if (!vNode[VNodeProps.PROPS][prop]) {
+    if (
+      isAttribute(prop, previousProps[prop]) &&
+      (!Object.hasOwn(props, prop) || !isAttribute(prop, props[prop]))
+    ) {
       changes.push({
         [Props.Action]: Action.Delete,
         [Props.Type]: Type.Attribute,
@@ -164,6 +151,16 @@ export function compareAttributes(
   }
 
   return changes;
+}
+
+function isAttribute(prop: string, value: unknown): boolean {
+  if (prop === "children") return false;
+  if (prop === "dangerouslySetInnerHTML") return value != null;
+  // Boolean attributes are diffed for any value: falsy ones are removed.
+  return BOOLEAN_ATTRIBUTES.has(prop) ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean";
 }
 
 export function setAttribute(
@@ -198,7 +195,9 @@ export function setAttribute(
       },
     ];
   }
-  if (typeof value === "string" || value === true) {
+  if (
+    typeof value === "string" || typeof value === "number" || value === true
+  ) {
     return [
       {
         [Props.Action]: Action.Create,

@@ -116,10 +116,14 @@ export function jsxAttr(name: string, value: unknown): JSX.Element {
     // must be omitted, a truthy value must emit the bare name.
     return value ? { templates: [escape(name)], nodes: [""] } : "";
   }
-  if (typeof value === "string" || value === true) {
+  if (
+    typeof value === "string" || typeof value === "number" || value === true
+  ) {
     return {
       templates: [
-        value === true ? escape(name) : `${escape(name)}="${escape(value)}"`,
+        value === true
+          ? escape(name)
+          : `${escape(name)}="${escape(`${value}`)}"`,
       ],
       nodes: [""],
     };

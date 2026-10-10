@@ -289,3 +289,97 @@ Deno.test("signal-driven disabled flip adds and removes the attribute", () => {
   assertEquals(reEnabledRecorded.set, [["disabled", ""]]);
   assertEquals(reEnabledRecorded.remove, []);
 });
+
+Deno.test("compareAttributes numeric values", async (t) => {
+  await t.step("update a changed number", () => {
+    const previous = vElementNode({ tabindex: 1 });
+    const vNode = vElementNode({ tabindex: 2 });
+    const recorded = fakeElement(vNode);
+
+    const changes = compareAttributes(vNode, previous);
+    assertEquals(changes.length, 1);
+    changes.forEach((change) => attribute(change as AttributeChangeSet));
+    assertEquals(recorded.set, [["tabindex", "2"]]);
+  });
+
+  await t.step("unchanged numbers produce no changesets", () => {
+    assertEquals(
+      compareAttributes(
+        vElementNode({ tabindex: 0 }),
+        vElementNode({ tabindex: 0 }),
+      ),
+      [],
+    );
+  });
+
+  await t.step("remove a dropped number", () => {
+    const vNode = vElementNode({});
+    const recorded = fakeElement(vNode);
+
+    const changes = compareAttributes(vNode, vElementNode({ tabindex: 0 }));
+    changes.forEach((change) => attribute(change as AttributeChangeSet));
+    assertEquals(recorded.remove, ["tabindex"]);
+    assertEquals(recorded.set, []);
+  });
+});
+
+Deno.test("compareAttributes falsy previous values", async (t) => {
+  await t.step("unchanged empty strings produce no changesets", () => {
+    assertEquals(
+      compareAttributes(
+        vElementNode({ class: "", alt: "" }),
+        vElementNode({ class: "", alt: "" }),
+      ),
+      [],
+    );
+  });
+
+  await t.step("unchanged false values produce no changesets", () => {
+    assertEquals(
+      compareAttributes(
+        vElementNode({ disabled: false, "data-on": false }),
+        vElementNode({ disabled: false, "data-on": false }),
+      ),
+      [],
+    );
+  });
+
+  await t.step("empty string transitions produce one update each", () => {
+    const empty = vElementNode({ class: "" });
+    const filled = vElementNode({ class: "x" });
+    const emptyAgain = vElementNode({ class: "" });
+
+    const toFilled = compareAttributes(filled, empty);
+    const toEmpty = compareAttributes(emptyAgain, filled);
+
+    assertEquals(toFilled.length, 1);
+    assertEquals(toFilled[0][Props.Action], Action.Create);
+    assertEquals(toEmpty.length, 1);
+    assertEquals(toEmpty[0][Props.Action], Action.Create);
+
+    const recorded = fakeElement(emptyAgain);
+    toEmpty.forEach((change) => attribute(change as AttributeChangeSet));
+    assertEquals(recorded.set, [["class", ""]]);
+    assertEquals(recorded.remove, []);
+  });
+
+  await t.step("remove a dropped empty string", () => {
+    const vNode = vElementNode({});
+    const recorded = fakeElement(vNode);
+
+    const changes = compareAttributes(vNode, vElementNode({ class: "" }));
+    changes.forEach((change) => attribute(change as AttributeChangeSet));
+    assertEquals(recorded.remove, ["class"]);
+  });
+
+  await t.step("keep an empty string that is still set", () => {
+    const changes = compareAttributes(
+      vElementNode({ alt: "" }),
+      vElementNode({ alt: "", class: "x" }),
+    );
+
+    assertEquals(changes.length, 1);
+    assertEquals(changes[0][Props.Action], Action.Delete);
+    assertEquals((changes[0][Props.Payload] as { name: string }).name, "class");
+  });
+});
