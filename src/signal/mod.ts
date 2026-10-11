@@ -35,12 +35,20 @@ export function setSubscriber<T, S>(
 }
 
 /*
- * Scopes updated during the current notification pass. A pass starts at
- * a WritableSignal.set() and spans the computed signals it propagates
- * through, so a scope reached both directly and via a computed is updated
- * once.
+ * A notification pass starts at a WritableSignal.set() and spans the
+ * computed signals it propagates through. Computed signals update
+ * immediately; every other subscriber is queued and runs once when the
+ * pass ends, so it sees the settled value of every computed it reads.
  */
-let currentPass: Set<SubscriberScope<unknown>> | undefined;
+interface Pass {
+  updatedComputed: Set<object>;
+  // Keyed by scope: a scope reached several times in a pass runs once.
+  queue: Map<object, () => void>;
+}
+
+let currentPass: Pass | undefined;
+
+const computedSubscribers = new WeakSet<object>();
 
 function notifyScopes<T>(
   source: Signal<T>,
@@ -49,31 +57,44 @@ function notifyScopes<T>(
   startPass: boolean,
 ): void {
   const previousPass = currentPass;
-  if (startPass || !currentPass) currentPass = new Set();
-  const pass = <Set<SubscriberScope<T>>> currentPass;
+  const ownsPass = startPass || !currentPass;
+  const pass: Pass = currentPass = ownsPass
+    ? { updatedComputed: new Set(), queue: new Map() }
+    : <Pass> currentPass;
 
-  const deferred: SubscriberScope<T>[] = [];
   try {
+    const deferred: SubscriberScope<T>[] = [];
     for (const scope of [...scopes]) {
       // Unsubscribed earlier in this pass (e.g. a child component whose
       // parent re-rendered): its subscriber closes over stale state.
       if (!scopes.has(scope)) continue;
 
+      if (!computedSubscribers.has(scope.subscriber)) {
+        pass.queue.set(scope, () => {
+          // Unsubscribed by an earlier subscriber of this pass.
+          if (scope.signals.length) scope.subscriber.update(read());
+        });
+        continue;
+      }
       // Glitch avoidance: let the dependent computed signals update first.
       if (scope.signals.some((signal) => signal.dependsOn(source))) {
         deferred.push(scope);
         continue;
       }
-      pass.add(scope);
+      pass.updatedComputed.add(scope);
       scope.subscriber.update(read());
     }
 
-    // Deferred scopes still need the update when no computed reached them,
-    // i.e. when the computed values did not change.
+    // Deferred computed signals still need the update when no computed
+    // reached them, i.e. when the computed values did not change.
     for (const scope of deferred) {
-      if (!scopes.has(scope) || pass.has(scope)) continue;
-      pass.add(scope);
+      if (!scopes.has(scope) || pass.updatedComputed.has(scope)) continue;
+      pass.updatedComputed.add(scope);
       scope.subscriber.update(read());
+    }
+
+    if (ownsPass) {
+      for (const update of pass.queue.values()) update();
     }
   } finally {
     currentPass = previousPass;
@@ -149,7 +170,7 @@ export class ComputedSignal<T> extends Signal<T> {
   constructor(callbackFn: () => T) {
     super();
 
-    const value = setSubscriber(() => callbackFn(), {
+    const subscriber: Subscriber<T> = {
       update: () => {
         const value = callbackFn();
         if (value !== this.#value) {
@@ -159,8 +180,10 @@ export class ComputedSignal<T> extends Signal<T> {
       cleanupCallback: (cleanup) => {
         this.#cleanups.push(cleanup);
       },
-    });
-    this.#value = value;
+    };
+    computedSubscribers.add(subscriber);
+
+    this.#value = setSubscriber(() => callbackFn(), subscriber);
   }
 
   dependsOn(signal: Signal<unknown>): boolean {

@@ -87,6 +87,47 @@ Deno.test("notify", async (t) => {
     assertEquals(updates, [[2, false]]);
   });
 
+  await t.step(
+    "update a subscriber once with settled values of two computed signals",
+    () => {
+      const count = signal(1);
+      const double = computed(() => count.get() * 2);
+      const triple = computed(() => count.get() * 3);
+      const withSource: number[][] = [];
+      const computedOnly: number[][] = [];
+
+      setSubscriber(() => {
+        count.get();
+        double.get();
+        triple.get();
+      }, {
+        update: () =>
+          withSource.push([count.get(), double.get(), triple.get()]),
+      });
+      setSubscriber(() => {
+        double.get();
+        triple.get();
+      }, { update: () => computedOnly.push([double.get(), triple.get()]) });
+
+      count.set(2);
+      assertEquals(withSource, [[2, 4, 6]]);
+      assertEquals(computedOnly, [[4, 6]]);
+    },
+  );
+
+  await t.step("pass the computed value to its subscriber", () => {
+    const count = signal(1);
+    const double = computed(() => count.get() * 2);
+    const values: number[] = [];
+
+    setSubscriber(() => double.get(), {
+      update: (value: number) => values.push(value),
+    });
+
+    count.set(5);
+    assertEquals(values, [10]);
+  });
+
   await t.step("skip a scope unsubscribed earlier in the same pass", () => {
     const count = signal(0);
     const cleanups: Cleanup[] = [];
