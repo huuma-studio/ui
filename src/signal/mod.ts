@@ -39,11 +39,20 @@ export function setSubscriber<T, S>(
  * computed signals it propagates through. Computed signals update
  * immediately; every other subscriber is queued and runs once when the
  * pass ends, so it sees the settled value of every computed it reads.
+ * A throwing update does not stop the pass: every other subscriber still
+ * runs, and the pass rethrows once it has ended.
  */
+interface QueuedScope {
+  scope: { signals: Signal<unknown>[] };
+  // Per source that queued the scope: delivers that source's value.
+  updates: Map<Signal<unknown>, () => void>;
+}
+
 interface Pass {
   updatedComputed: Set<object>;
   // Keyed by scope: a scope reached several times in a pass runs once.
-  queue: Map<object, () => void>;
+  queue: Map<object, QueuedScope>;
+  errors: unknown[];
 }
 
 let currentPass: Pass | undefined;
@@ -59,7 +68,7 @@ function notifyScopes<T>(
   const previousPass = currentPass;
   const ownsPass = startPass || !currentPass;
   const pass: Pass = currentPass = ownsPass
-    ? { updatedComputed: new Set(), queue: new Map() }
+    ? { updatedComputed: new Set(), queue: new Map(), errors: [] }
     : <Pass> currentPass;
 
   try {
@@ -70,10 +79,12 @@ function notifyScopes<T>(
       if (!scopes.has(scope)) continue;
 
       if (!computedSubscribers.has(scope.subscriber)) {
-        pass.queue.set(scope, () => {
-          // Unsubscribed by an earlier subscriber of this pass.
-          if (scope.signals.length) scope.subscriber.update(read());
-        });
+        let queued = pass.queue.get(scope);
+        if (!queued) {
+          queued = { scope, updates: new Map() };
+          pass.queue.set(scope, queued);
+        }
+        queued.updates.set(source, () => scope.subscriber.update(read()));
         continue;
       }
       // Glitch avoidance: let the dependent computed signals update first.
@@ -82,7 +93,7 @@ function notifyScopes<T>(
         continue;
       }
       pass.updatedComputed.add(scope);
-      scope.subscriber.update(read());
+      run(pass, () => scope.subscriber.update(read()));
     }
 
     // Deferred computed signals still need the update when no computed
@@ -90,14 +101,39 @@ function notifyScopes<T>(
     for (const scope of deferred) {
       if (!scopes.has(scope) || pass.updatedComputed.has(scope)) continue;
       pass.updatedComputed.add(scope);
-      scope.subscriber.update(read());
+      run(pass, () => scope.subscriber.update(read()));
     }
 
     if (ownsPass) {
-      for (const update of pass.queue.values()) update();
+      flush(pass);
     }
   } finally {
     currentPass = previousPass;
+  }
+}
+
+function run(pass: Pass, update: () => void): void {
+  try {
+    update();
+  } catch (error) {
+    pass.errors.push(error);
+  }
+}
+
+function flush(pass: Pass): void {
+  for (const { scope, updates } of pass.queue.values()) {
+    // Deliver through a source the scope still subscribes to: an earlier
+    // subscriber of this pass may have canceled some or all of them.
+    let update: (() => void) | undefined;
+    for (const [source, deliver] of updates) {
+      if (scope.signals.includes(source)) update = deliver;
+    }
+    if (update) run(pass, update);
+  }
+
+  if (pass.errors.length === 1) throw pass.errors[0];
+  if (pass.errors.length > 1) {
+    throw new AggregateError(pass.errors, "Signal subscribers failed");
   }
 }
 

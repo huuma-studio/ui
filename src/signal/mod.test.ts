@@ -150,6 +150,94 @@ Deno.test("notify", async (t) => {
     assertEquals(updates, ["first"]);
   });
 
+  await t.step("skip a source unsubscribed earlier in the same pass", () => {
+    const a = signal(0);
+    const b = signal(0);
+    const cleanups = new Map<unknown, Cleanup>();
+    const values: number[] = [];
+
+    // Cancels only the second scope's subscription to a: it still
+    // subscribes to b, but a must no longer reach it.
+    setSubscriber(() => a.get(), {
+      update: () => cleanups.get(a)?.cleanup(),
+    });
+    setSubscriber(() => {
+      a.get();
+      b.get();
+    }, {
+      update: (value: number) => values.push(value),
+      cleanupCallback: (cleanup) => cleanups.set(cleanup.signal, cleanup),
+    });
+
+    a.set(1);
+    assertEquals(values, []);
+
+    b.set(2);
+    assertEquals(values, [2]);
+  });
+
+  await t.step("deliver through a source that is still subscribed", () => {
+    const count = signal(1);
+    const cleanups = new Map<unknown, Cleanup>();
+    const values: number[] = [];
+
+    // Subscribed before double, so it is queued before the scope below.
+    setSubscriber(() => count.get(), {
+      update: () => cleanups.get(count)?.cleanup(),
+    });
+    const double = computed(() => count.get() * 2);
+    setSubscriber(() => {
+      count.get();
+      double.get();
+    }, {
+      update: (value: number) => values.push(value),
+      cleanupCallback: (cleanup) => cleanups.set(cleanup.signal, cleanup),
+    });
+
+    count.set(5);
+    assertEquals(values, [10]);
+  });
+
+  await t.step("update other subscribers when a computed throws", () => {
+    const count = signal(0);
+    const updates: number[] = [];
+
+    setSubscriber(() => count.get(), {
+      update: (value: number) => updates.push(value),
+    });
+    computed(() => {
+      if (count.get() > 0) throw new Error("computed failed");
+      return count.get();
+    });
+    setSubscriber(() => count.get(), {
+      update: (value: number) => updates.push(value * 10),
+    });
+
+    assertThrows(() => count.set(1), Error, "computed failed");
+    assertEquals(updates, [1, 10]);
+  });
+
+  await t.step("run every subscriber and rethrow all errors", () => {
+    const count = signal(0);
+    const updates: string[] = [];
+
+    for (const name of ["first", "second", "third"]) {
+      setSubscriber(() => count.get(), {
+        update: () => {
+          updates.push(name);
+          if (name !== "second") throw new Error(name);
+        },
+      });
+    }
+
+    const error = assertThrows(() => count.set(1), AggregateError);
+    assertEquals(updates, ["first", "second", "third"]);
+    assertEquals(
+      error.errors.map((error: Error) => error.message),
+      ["first", "third"],
+    );
+  });
+
   await t.step("start a new pass for a set() inside a subscriber", () => {
     const a = signal(0);
     const b = signal(0);
