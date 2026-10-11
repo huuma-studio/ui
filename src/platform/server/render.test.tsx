@@ -44,6 +44,29 @@ Deno.test(renderToString.name, async (t) => {
     );
   });
 
+  await t.step("should omit falsy boolean attributes", async () => {
+    assertEquals(
+      await renderToString(
+        <div>
+          <input disabled={0} required={false} readonly="" />
+          <p hidden={0}>text</p>
+        </div>,
+        {},
+      ),
+      "<div><input/><p>text</p></div>",
+    );
+  });
+
+  await t.step("should render truthy boolean attributes bare", async () => {
+    assertEquals(
+      await renderToString(
+        <input disabled={1} required readonly="readonly" />,
+        {},
+      ),
+      "<input disabled required readonly/>",
+    );
+  });
+
   await t.step("should render image as string", async () => {
     assertEquals(
       await renderToString(

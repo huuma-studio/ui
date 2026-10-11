@@ -2,6 +2,7 @@ import { escape } from "@std/html/entities";
 
 import { create as createSync } from "../../v-node/sync.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
+import { BOOLEAN_ATTRIBUTES } from "../../jsx-runtime/boolean-attributes.ts";
 import { create } from "../../v-node/async.ts";
 import {
   type VElement,
@@ -94,6 +95,12 @@ function stringFrom(attributes: JSX.Attributes): string {
   let attributesString = "";
   for (const key in attributes) {
     const attribute = attributes[key];
+    if (BOOLEAN_ATTRIBUTES.has(key)) {
+      // A boolean attribute is true by its presence alone: a falsy value
+      // must be omitted, a truthy value must emit the bare name.
+      if (attribute) attributesString += ` ${key}`;
+      continue;
+    }
     if (typeof attribute === "string" || typeof attribute === "number") {
       attributesString += ` ${key}="${escape(`${attribute}`)}"`;
     }
