@@ -217,6 +217,41 @@ Deno.test("notify", async (t) => {
     assertEquals(updates, [1, 10]);
   });
 
+  await t.step("skip everything that reads a failed computed", () => {
+    const a = signal(0);
+    const b = computed(() => {
+      if (a.get() > 0) throw new Error("b failed");
+      return a.get();
+    });
+    const c = computed(() => a.get() + b.get());
+    const sums: number[] = [];
+    const mixed: number[][] = [];
+    const unrelated: number[] = [];
+
+    setSubscriber(() => c.get(), {
+      update: (value: number) => sums.push(value),
+    });
+    setSubscriber(() => {
+      a.get();
+      c.get();
+    }, { update: () => mixed.push([a.get(), c.get()]) });
+    setSubscriber(() => a.get(), {
+      update: (value: number) => unrelated.push(value),
+    });
+
+    assertThrows(() => a.set(1), Error, "b failed");
+    assertEquals(c.get(), 0);
+    assertEquals(sums, []);
+    assertEquals(mixed, []);
+    assertEquals(unrelated, [1]);
+
+    // The next successful pass updates the whole chain again.
+    a.set(-1);
+    assertEquals(sums, [-2]);
+    assertEquals(mixed, [[-1, -2]]);
+    assertEquals(unrelated, [1, -1]);
+  });
+
   await t.step("run every subscriber and rethrow all errors", () => {
     const count = signal(0);
     const updates: string[] = [];
