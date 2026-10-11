@@ -115,6 +115,45 @@ Deno.test("notify", async (t) => {
     },
   );
 
+  await t.step("compute once from settled values in a deeper diamond", () => {
+    const count = signal(1);
+    const next = computed(() => count.get() + 1);
+    const tenfold = computed(() => count.get() * 10);
+    // One more level on this side of the diamond.
+    const tenfoldCopy = computed(() => tenfold.get());
+    const seen: number[][] = [];
+    const sum = computed(() => {
+      seen.push([next.get(), tenfoldCopy.get()]);
+      return next.get() + tenfoldCopy.get();
+    });
+    const values: number[] = [];
+    setSubscriber(() => sum.get(), {
+      update: (value: number) => values.push(value),
+    });
+
+    count.set(2);
+    assertEquals(seen, [[2, 10], [3, 20]]);
+    assertEquals(values, [23]);
+  });
+
+  await t.step("throw no error for values that never settled", () => {
+    const count = signal(1);
+    const left = computed(() => count.get());
+    const right = computed(() => count.get());
+    const rightCopy = computed(() => right.get());
+    const inSync = computed(() => {
+      if (left.get() !== rightCopy.get()) throw new Error("out of sync");
+      return left.get();
+    });
+    const values: number[] = [];
+    setSubscriber(() => inSync.get(), {
+      update: (value: number) => values.push(value),
+    });
+
+    count.set(2);
+    assertEquals(values, [2]);
+  });
+
   await t.step("pass the computed value to its subscriber", () => {
     const count = signal(1);
     const double = computed(() => count.get() * 2);
@@ -250,6 +289,51 @@ Deno.test("notify", async (t) => {
     assertEquals(sums, [-2]);
     assertEquals(mixed, [[-1, -2]]);
     assertEquals(unrelated, [1, -1]);
+  });
+
+  await t.step("recompute skipped work once the failure clears", () => {
+    const a = signal(0);
+    const b = computed(() => {
+      if (a.get() === 1) throw new Error("b failed");
+      return 0;
+    });
+    const e = computed(() => Math.min(a.get(), 1));
+    const c = computed(() => b.get() + e.get());
+    const values: number[] = [];
+    setSubscriber(() => c.get(), {
+      update: (value: number) => values.push(value),
+    });
+
+    assertThrows(() => a.set(1), Error, "b failed");
+    assertEquals(c.get(), 0);
+
+    // b recovers with its old value and e stays unchanged: neither changes,
+    // but c was skipped and must catch up.
+    a.set(2);
+    assertEquals(c.get(), 1);
+    assertEquals(values, [1]);
+  });
+
+  await t.step("run a skipped subscriber once the failure clears", () => {
+    const a = signal(0);
+    const broken = signal(false);
+    const zero = computed(() => {
+      if (broken.get()) throw new Error("zero failed");
+      return a.get() - a.get();
+    });
+    const seen: number[] = [];
+    setSubscriber(() => {
+      a.get();
+      zero.get();
+    }, { update: () => seen.push(a.get()) });
+
+    assertThrows(() => broken.set(true), Error, "zero failed");
+    assertThrows(() => a.set(1), Error, "zero failed");
+    assertEquals(seen, []);
+
+    // zero recovers unchanged, but the subscriber missed a = 1.
+    broken.set(false);
+    assertEquals(seen, [1]);
   });
 
   await t.step("run every subscriber and rethrow all errors", () => {
