@@ -75,6 +75,8 @@ Deno.test(deleteDirectory.name, async (t) => {
 });
 
 Deno.test(shimPublicEnvVars.name, async () => {
+  const publicValue = process.env.PUBLIC_HUUMA_TEST;
+  const secretValue = process.env.HUUMA_TEST_SECRET;
   process.env.PUBLIC_HUUMA_TEST = "visible";
   process.env.HUUMA_TEST_SECRET = "hidden";
   try {
@@ -86,8 +88,16 @@ Deno.test(shimPublicEnvVars.name, async () => {
       assertEquals(shim.includes("hidden"), false);
     });
   } finally {
-    delete process.env.PUBLIC_HUUMA_TEST;
-    delete process.env.HUUMA_TEST_SECRET;
+    if (publicValue === undefined) {
+      delete process.env.PUBLIC_HUUMA_TEST;
+    } else {
+      process.env.PUBLIC_HUUMA_TEST = publicValue;
+    }
+    if (secretValue === undefined) {
+      delete process.env.HUUMA_TEST_SECRET;
+    } else {
+      process.env.HUUMA_TEST_SECRET = secretValue;
+    }
   }
 });
 
