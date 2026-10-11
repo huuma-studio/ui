@@ -14,6 +14,8 @@ export type Cleanup = {
 };
 
 interface SubscriberScope {
+  // Creation order, see notify().
+  id: number;
   subscriber: Subscriber<never>;
   signals: Signal<unknown>[];
 }
@@ -28,12 +30,13 @@ interface ComputedScope extends SubscriberScope {
 }
 
 const subscriberScopes: SubscriberScope[] = [];
+let scopeCount = 0;
 
 export function setSubscriber<T, S>(
   callback: () => T,
   subscriber: Subscriber<S>,
 ): T {
-  return track({ subscriber, signals: [] }, callback);
+  return track({ id: scopeCount++, subscriber, signals: [] }, callback);
 }
 
 function track<T>(scope: SubscriberScope, callback: () => T): T {
@@ -53,70 +56,64 @@ function isComputed(scope: SubscriberScope): scope is ComputedScope {
 
 /*
  * A WritableSignal.set() notifies in two steps:
- * - Mark: walk the scopes downstream of the signal, without running any.
- *   Each computed is recorded after its readers, so the reversed list has
- *   every computed after the computed signals it reads.
- * - Settle: recompute each marked computed in that order if a signal it
- *   reads changed, so it computes once and only from settled values. Then
- *   run each other scope once if it still reads a signal that changed.
+ * - Mark: collect every scope downstream of the signal, without running
+ *   any.
+ * - Settle: go through them in creation order. First recompute each
+ *   computed if a signal it reads changed, so it computes once and only
+ *   from settled values. Then run each other scope once if it still reads
+ *   a signal that changed.
+ * Creation order puts a computed after the signals it reads, and a
+ * component before the children it renders, so a parent re-render cancels
+ * the old child scopes before they would run.
  * A computed that throws keeps its old value and nothing that reads it is
  * updated. Every other scope still runs, then set() rethrows. The failed
- * and skipped scopes stay pending: the next pass that reaches them runs
- * them even if nothing they read changed, so they catch up on what the
- * failed pass skipped.
+ * and skipped scopes stay pending: the next set() that reaches them runs
+ * them even if nothing they read changed, so they catch up.
  */
-interface Pass {
-  // Every scope reached, in first-reached order.
-  marked: Set<SubscriberScope>;
-  computed: ComputedScope[];
-  changed: Set<Signal<unknown>>;
-  failed: Set<Signal<unknown>>;
-}
-
 const pending = new WeakSet<SubscriberScope>();
 
 function notify(source: Signal<unknown>, readers: Set<SubscriberScope>): void {
-  const pass: Pass = {
-    marked: new Set(),
-    computed: [],
-    changed: new Set([source]),
-    failed: new Set(),
-  };
+  const marked = new Set<SubscriberScope>();
+  mark(marked, readers);
+  const scopes = [...marked].sort((a, b) => a.id - b.id);
+  const changed = new Set<Signal<unknown>>([source]);
+  const failed = new Set<Signal<unknown>>();
   const errors: unknown[] = [];
-  mark(pass, readers);
 
-  for (const scope of pass.computed.reverse()) {
-    if (reads(scope, pass.failed)) {
-      pass.failed.add(scope.signal);
+  for (const scope of scopes) {
+    if (!isComputed(scope)) continue;
+    if (reads(scope, failed)) {
+      failed.add(scope.signal);
       pending.add(scope);
-    } else if (pending.has(scope) || reads(scope, pass.changed)) {
+    } else if (pending.has(scope) || reads(scope, changed)) {
       try {
-        if (scope.recompute()) pass.changed.add(scope.signal);
+        if (scope.recompute()) changed.add(scope.signal);
         pending.delete(scope);
       } catch (error) {
-        pass.failed.add(scope.signal);
+        failed.add(scope.signal);
         pending.add(scope);
         errors.push(error);
       }
     }
   }
 
-  for (const scope of pass.marked) {
+  for (const scope of scopes) {
     if (isComputed(scope)) continue;
-    if (reads(scope, pass.failed)) {
+    if (reads(scope, failed)) {
       pending.add(scope);
       continue;
     }
     // Checked when it runs: an earlier subscriber may have canceled some
     // or all of its subscriptions.
-    const source = scope.signals.findLast((signal) =>
-      pass.changed.has(signal)
-    ) ?? (pending.has(scope) ? scope.signals.at(-1) : undefined);
-    if (!source) continue;
+    const from = lastRead(scope, changed) ??
+      (pending.has(scope)
+        ? scope.signals[scope.signals.length - 1]
+        : undefined);
+    if (!from) continue;
     pending.delete(scope);
     try {
       (<Subscriber<unknown>> scope.subscriber).update(
-        untracked(() => source.get()),
+        untracked(() => from.get()),
       );
     } catch (error) {
       errors.push(error);
@@ -129,14 +126,24 @@ function notify(source: Signal<unknown>, readers: Set<SubscriberScope>): void {
   }
 }
 
-function mark(pass: Pass, readers: Set<SubscriberScope>): void {
+function mark(
+  marked: Set<SubscriberScope>,
+  readers: Set<SubscriberScope>,
+): void {
   for (const scope of readers) {
-    if (pass.marked.has(scope)) continue;
-    pass.marked.add(scope);
-    if (isComputed(scope)) {
-      mark(pass, scope.readers);
-      pass.computed.push(scope);
-    }
+    if (marked.has(scope)) continue;
+    marked.add(scope);
+    if (isComputed(scope)) mark(marked, scope.readers);
+  }
+}
+
+// A loop instead of findLast(): the bundler targets browsers without it.
+function lastRead(
+  scope: SubscriberScope,
+  signals: Set<Signal<unknown>>,
+): Signal<unknown> | undefined {
+  for (let i = scope.signals.length - 1; i >= 0; i--) {
+    if (signals.has(scope.signals[i])) return scope.signals[i];
   }
 }
 
@@ -202,7 +209,8 @@ export class ComputedSignal<T> extends Signal<T> {
     super();
 
     const scope: ComputedScope = {
-      // Never called: a pass recomputes computed signals itself.
+      id: 0,
+      // Never called: notify() recomputes computed signals itself.
       subscriber: { update: () => {} },
       signals: [],
       signal: this,
@@ -215,6 +223,9 @@ export class ComputedSignal<T> extends Signal<T> {
       },
     };
     this.#value = track(scope, callbackFn);
+    // Numbered after its callback, so it comes after every computed it
+    // reads, even one created inside the callback.
+    scope.id = scopeCount++;
   }
 
   get(): T {

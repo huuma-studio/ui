@@ -126,7 +126,7 @@ export function compareAttributes(
 
     // Existence is checked by key: "" and false are valid previous values.
     if (
-      Object.hasOwn(previousProps, prop) && props[prop] === previousProps[prop]
+      hasOwn(previousProps, prop) && props[prop] === previousProps[prop]
     ) {
       continue;
     }
@@ -137,7 +137,7 @@ export function compareAttributes(
   for (const prop in previousProps) {
     if (
       isAttribute(prop, previousProps[prop]) &&
-      (!Object.hasOwn(props, prop) || !isAttribute(prop, props[prop]))
+      (!hasOwn(props, prop) || !isAttribute(prop, props[prop]))
     ) {
       changes.push({
         [Props.Action]: Action.Delete,
@@ -151,6 +151,11 @@ export function compareAttributes(
   }
 
   return changes;
+}
+
+// Object.hasOwn() is missing from browsers the bundler targets (Safari 15).
+function hasOwn(object: object, prop: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, prop);
 }
 
 function isAttribute(prop: string, value: unknown): boolean {
