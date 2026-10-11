@@ -2,6 +2,8 @@ import { info, log } from "@huuma/route/utils/logger";
 import { parseArgs } from "@std/cli/parse-args";
 import { parse } from "@std/path/parse";
 import { join } from "@std/path/join";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import process from "node:process";
 
 import type { UIAppContext } from "../../app.ts";
 import type { UIApp } from "../../mod.ts";
@@ -21,7 +23,7 @@ import {
   listPages,
   listRemoteFunctions,
 } from "./list.ts";
-import { generateHash } from "./utils.ts";
+import { generateHash, isNodeError } from "./utils.ts";
 
 export interface PrepareOptions {
   routesPath?: string;
@@ -30,7 +32,7 @@ export async function prepare<T extends UIAppContext>(
   app: UIApp<T>,
   { routesPath }: PrepareOptions = {},
 ): Promise<UIApp<T> | undefined> {
-  if (!parseArgs(Deno.args).bundle) {
+  if (!parseArgs(process.argv.slice(2)).bundle) {
     await list(app, { isProd: false });
     return app;
   }
@@ -73,7 +75,7 @@ export async function list<T extends UIAppContext>(
   }
 
   if (options?.enableLiveReload !== false) {
-    enableLiveReload(app);
+    await enableLiveReload(app);
   }
 
   for (const island of islands) {
@@ -83,7 +85,7 @@ export async function list<T extends UIAppContext>(
       }`
     ] = {
       path: new URL(
-        join("file://", Deno.cwd(), island.filePath, island.fileName),
+        join("file://", process.cwd(), island.filePath, island.fileName),
       ).href,
       isIsland: true,
     };
@@ -104,7 +106,7 @@ export async function list<T extends UIAppContext>(
 
   // Write bundled scripts
   for (const [name, outputFile] of files) {
-    await Deno.writeFile(join(scriptsDirectory, name), outputFile.contents);
+    await writeFile(join(scriptsDirectory, name), outputFile.contents);
     scripts.push([hash, name, {
       isEntryPoint: outputFile.isEntryPoint,
       isIsland: outputFile.isIsland,
@@ -129,7 +131,7 @@ export async function list<T extends UIAppContext>(
 
     return app;
   } catch (e) {
-    if (e instanceof Deno.errors.NotFound) {
+    if (isNodeError(e, "ENOENT")) {
       info(
         "PACK",
         `Could not find '${routesPath}' directory while packaging the application. Please ensure it exists.`,
@@ -143,40 +145,26 @@ export async function list<T extends UIAppContext>(
 }
 
 export async function createDirectory(path: string) {
-  try {
-    await Deno.mkdir(path);
-  } catch (e) {
-    if (e instanceof Deno.errors.AlreadyExists) {
-      return;
-    }
-    throw e;
-  }
+  await mkdir(path, { recursive: true });
 }
 
 export async function deleteDirectory(path: string) {
-  try {
-    await Deno.remove(path, { recursive: true });
-  } catch (e) {
-    if (e instanceof Deno.errors.NotFound) {
-      return;
-    }
-    throw e;
-  }
+  await rm(path, { recursive: true, force: true });
 }
 
 export async function shimPublicEnvVars(): Promise<string> {
   const filePath = `./${shimsDirectory}/deno-env-shim.js`;
-  const envVars = Object.entries(Deno.env.toObject());
+  const envVars = Object.entries(process.env);
   const define: Record<string, string> = {};
 
   envVars.forEach(([key, value]) => {
-    if (key.startsWith("PUBLIC_")) {
+    if (key.startsWith("PUBLIC_") && value !== undefined) {
       define[key] = value;
     }
   });
 
   await createDirectory(`${shimsDirectory}`);
-  await Deno.writeTextFile(
+  await writeFile(
     `./${huumaDirectory}/shims/deno-env-shim.js`,
     `export const Deno = {env: { get:(key) => (${
       JSON.stringify(define)

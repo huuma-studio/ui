@@ -16,3 +16,12 @@ export async function generateHash(value: string): Promise<string> {
 export function toCanonicalPath(path: string): string {
   return "/" + path.replaceAll("\\", "/").replace(/^\/+/, "");
 }
+
+/**
+ * Checks for a filesystem error by its errno code (e.g. "ENOENT"). Works for
+ * errors from `node:fs` as well as Deno's own `Deno.errors.*`, which carry
+ * the same `code`.
+ */
+export function isNodeError(error: unknown, code: string): boolean {
+  return error instanceof Error && "code" in error && error.code === code;
+}

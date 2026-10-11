@@ -1,6 +1,6 @@
 {
   "name": "@huuma/ui",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "exports": {
     ".": "./src/mod.ts",
     "./v-node": "./src/v-node/mod.ts",
@@ -48,7 +48,7 @@
   },
   "tasks": {
     "check": "deno check src/**/*.tsx src/**/*.ts",
-    "test": "deno test --allow-read src/"
+    "test": "deno test --allow-read --allow-env --allow-write --allow-run src/"
   },
   "compilerOptions": {
     "jsx": "react-jsx",
