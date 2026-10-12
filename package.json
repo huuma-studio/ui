@@ -18,6 +18,7 @@
     "./hooks/ref": "./src/hooks/ref/mod.ts",
     "./hooks/scope": "./src/hooks/scope.ts",
     "./jsx-runtime": "./src/jsx-runtime/mod.ts",
+    "./jsx-dev-runtime": "./src/jsx-runtime/dev.ts",
     "./i18n": "./src/i18n/mod.ts",
     "./i18n/middleware": "./src/i18n/middleware/mod.ts",
     "./lint": "./src/lint/mod.ts"

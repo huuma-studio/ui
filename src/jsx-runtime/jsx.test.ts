@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { jsxAttr } from "./jsx.ts";
+import { createElement, jsx, jsxAttr } from "./jsx.ts";
 
 describe("jsxAttr boolean attributes", () => {
   test("omits falsy boolean attributes", () => {
@@ -85,5 +85,36 @@ describe("jsxAttr non-boolean attributes", () => {
       templates: [`colspan="2"`],
       nodes: [""],
     });
+  });
+});
+
+describe(createElement.name, () => {
+  test("builds the same node as jsx with the key taken from the props", () => {
+    expect(createElement("div", { id: "a", key: "k", children: "hi" })).toStrictEqual(
+      jsx("div", { id: "a", children: "hi" }, "k"),
+    );
+  });
+
+  test("takes children from the arguments over props.children", () => {
+    expect(createElement("p", { children: "ignored" }, "only")).toStrictEqual(
+      jsx("p", { children: "only" }),
+    );
+    expect(createElement("p", null, "a", "b")).toStrictEqual(jsx("p", { children: ["a", "b"] }));
+  });
+
+  test("drops the __self and __source props of the dev transform", () => {
+    expect(
+      createElement("div", {
+        id: "a",
+        __self: undefined,
+        __source: { fileName: "page.tsx", lineNumber: 1, columnNumber: 1 },
+      }),
+    ).toStrictEqual(jsx("div", { id: "a" }));
+  });
+
+  test("does not mutate the props it is given", () => {
+    const props = { key: "k", "on-click": () => {} };
+    createElement("button", props);
+    expect(Object.keys(props)).toStrictEqual(["key", "on-click"]);
   });
 });

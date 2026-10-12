@@ -106,6 +106,24 @@ export function jsx(
   };
 }
 
+/**
+ * The classic `createElement(type, props, ...children)`. The automatic JSX
+ * runtime falls back to it, imported from `@huuma/ui`, when `key` follows a
+ * spread: `<div {...props} key="a" />`.
+ */
+export function createElement(
+  type: string | JSX.Component,
+  config?: JSX.ComponentProps | null,
+  ...children: JSX.Element[]
+): JSX.Element {
+  // The development transform adds __self and __source, which aren't props.
+  const { key, __self: _self, __source: _source, ...props } = config ?? {};
+  if (children.length) {
+    props.children = children.length === 1 ? children[0] : children;
+  }
+  return jsx(type, props, (key ?? undefined) as string | number | undefined);
+}
+
 export function jsxAttr(name: string, value: unknown): JSX.Element {
   if (BOOLEAN_ATTRIBUTES.has(name)) {
     // A boolean attribute is true by its presence alone: a falsy value

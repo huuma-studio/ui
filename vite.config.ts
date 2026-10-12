@@ -2,8 +2,8 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   oxc: {
-    // Production runtime until @huuma/ui/jsx-dev-runtime exists (Phase 3).
-    jsx: { runtime: "automatic", importSource: "@huuma/ui", development: false },
+    // Dev and test builds use @huuma/ui/jsx-dev-runtime.
+    jsx: { runtime: "automatic", importSource: "@huuma/ui" },
   },
   test: {
     include: ["src/**/*.test.{ts,tsx}", "test/*.test.ts"],
