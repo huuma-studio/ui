@@ -88,6 +88,56 @@ export default function Counter() {
 }
 ```
 
+## Vite (preview)
+
+> The Vite setup is in development on the `next` branch and isn't released yet. It replaces the Deno build pipeline (`@huuma/ui/server/pack/list`) with a plugin for [Vite 8](https://vite.dev).
+
+With Vite, the dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page.
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import { huuma } from "@huuma/ui/vite";
+
+export default defineConfig({ plugins: [huuma()] });
+```
+
+```ts
+// server.ts: the app, as the default export
+import { createUIApp } from "@huuma/ui/server";
+import Root from "./app/root.tsx";
+
+export default createUIApp(Root);
+```
+
+```tsx
+// app/root.tsx: the HTML document around every page
+import { Launch, type RootPageProps, Scripts } from "@huuma/ui/server";
+
+export default function Root({ children, scripts, islands, transferState }: RootPageProps<unknown>) {
+  return (
+    <html lang="en">
+      <head>
+        <Scripts scripts={scripts?.head} nonce={scripts?.nonce} />
+      </head>
+      <body>
+        {children}
+        <Launch body={scripts?.body} islands={islands} transferState={transferState} nonce={scripts?.nonce} />
+      </body>
+    </html>
+  );
+}
+```
+
+Pages, layouts and middlewares go in `app/` as before, islands anywhere in the project as `*.client.tsx`. Start the dev server with `vite` (or `vp dev` with Vite+).
+
+Options of `huuma()`:
+
+- `routes`: the directory with `page.tsx`, `layout.tsx` and `middleware.ts` files. Defaults to `"app"`.
+- `server`: the module that exports the app. Defaults to `"server.ts"`.
+
+Not there yet: remote functions, `PUBLIC_*` environment variables and decorators in the dev server, island updates that keep their state, and the production build (`vite build`).
+
 ## Remote server functions
 
 Remote server functions provide a type-safe way to handle form submissions and server-side data mutations. They run exclusively on the server and can be called from both server and client components. Remote server functions are defined in files with the `.remote.ts` suffix and must be exported async functions. Remote server functions only accept JSON-conform data as function input.
