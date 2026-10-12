@@ -4,6 +4,8 @@ import { join, relative } from "node:path";
 import { listRemoteFunctions } from "../platform/server/discover.ts";
 import { remoteEndpoint, remoteStub } from "../platform/server/remote.ts";
 
+import { valueBindings } from "./bindings.ts";
+
 /**
  * Every remote module by its endpoint. Server only: the server registers
  * a route per module, the browser gets stubs instead.
@@ -170,7 +172,11 @@ export function remoteExports(program: ESTree.Program): RemoteExports {
   return { names: [...names], problems };
 }
 
-/** The top-level names that are only types: interfaces, type aliases, type imports. */
+/**
+ * The top-level names that are only types: interfaces, type aliases, type
+ * imports. A name that is also a value (`type Save = …; const Save = …`)
+ * isn't.
+ */
 function typeNames(program: ESTree.Program): Set<string> {
   const types = new Set<string>();
   for (const node of program.body) {
@@ -187,6 +193,7 @@ function typeNames(program: ESTree.Program): Set<string> {
       }
     }
   }
+  for (const name of valueBindings(program)) types.delete(name);
   return types;
 }
 

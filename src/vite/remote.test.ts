@@ -90,6 +90,16 @@ describe(remoteExports.name, () => {
     ).toStrictEqual(["roles"]);
   });
 
+  test("keeps an export that is both a type and a value", () => {
+    expect(
+      namesOf(`
+        type Save = () => Promise<void>;
+        const Save: Save = async () => {};
+        export { Save };
+      `),
+    ).toStrictEqual(["Save"]);
+  });
+
   test("reports exports the stub can't name or call", () => {
     const { names, problems } = exportsOf(`
       export * from "./all.ts";
