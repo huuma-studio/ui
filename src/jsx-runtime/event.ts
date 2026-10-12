@@ -1,4 +1,4 @@
-export function isEventName(a: string) {
+export function isEventName(a: string): boolean {
   const p = /^on-([a-z]+)$/;
   return p.test(a);
 }

@@ -14,6 +14,9 @@ jobs:
       - run: vp check
       - run: vp test
       - run: vp run jsr:dry-run
+      # The native npm build (not published), which also enforces
+      # isolatedDeclarations: `vp check` doesn't report those errors.
+      - run: vp run pack
   deno-smoke:
     # Deno is best effort (spec #126, D4): this job never blocks a merge.
     continue-on-error: true

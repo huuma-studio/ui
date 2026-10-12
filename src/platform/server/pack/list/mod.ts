@@ -142,11 +142,11 @@ export async function list<T extends UIAppContext>(
   }
 }
 
-export async function createDirectory(path: string) {
+export async function createDirectory(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
 }
 
-export async function deleteDirectory(path: string) {
+export async function deleteDirectory(path: string): Promise<void> {
   await rm(path, { recursive: true, force: true });
 }
 

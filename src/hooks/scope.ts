@@ -20,7 +20,7 @@ export function $scope(): Scope {
   throw Error("No sync vnode scope found. Did you use a '${function}() in a async component?'");
 }
 
-export const $route = $url;
+export const $route: typeof $url = $url;
 export function $url(): URL {
   const url = $scope()[VNodeProps.OPTIONS]._GLOBAL.url;
   if (url instanceof URL) {

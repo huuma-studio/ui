@@ -1,9 +1,10 @@
 import { defineConfig } from "vite-plus";
+import jsr from "./jsr.json" with { type: "json" };
 
 export default defineConfig({
   oxc: {
-    // Production runtime until @huuma/ui/jsx-dev-runtime exists (Phase 3).
-    jsx: { runtime: "automatic", importSource: "@huuma/ui", development: false },
+    // Dev and test builds use @huuma/ui/jsx-dev-runtime.
+    jsx: { runtime: "automatic", importSource: "@huuma/ui" },
   },
   test: {
     include: ["src/**/*.test.{ts,tsx}", "test/*.test.ts"],
@@ -23,10 +24,23 @@ export default defineConfig({
     // Prose: formatting it would bury content changes in blame.
     ignorePatterns: ["**/*.md"],
   },
+  // A native npm build (spec #126, D7), checked in CI but not published. It
+  // mirrors src/ so each jsr.json export maps to one file in dist/.
+  pack: {
+    entry: Object.values(jsr.exports),
+    root: "src",
+    unbundle: true,
+    platform: "neutral",
+    // Server code imports Node built-ins, which "neutral" doesn't know.
+    deps: { neverBundle: [/^node:/] },
+    dts: true,
+    failOnWarn: true,
+  },
   run: {
     tasks: {
       // Runs every check JSR publish runs, including slow types.
       "jsr:dry-run": { command: "jsr publish --dry-run", cache: false },
+      pack: { command: ["vp pack", "node scripts/check-pack.ts"], cache: false },
     },
   },
 });

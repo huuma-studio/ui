@@ -9,7 +9,7 @@ export function $destroy(fn: () => void): void {
   $hook(fn, VHook.DESTROY);
 }
 
-export function $hook(fn: (() => () => void) | (() => void), vHook: VHook) {
+export function $hook(fn: (() => () => void) | (() => void), vHook: VHook): void {
   const vNode = $scope();
 
   if (isVComponent(vNode) && vNode[VNodeProps.MODE] === VMode.NotCreated) {

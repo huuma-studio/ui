@@ -59,7 +59,7 @@ globalThis.addEventListener("pageshow", (event) => {
 // A cancelled navigation (e.g. the user stays at an "unsaved changes?"
 // prompt) sets `unloading` but never fires `pagehide`/`pageshow` to reset it.
 // Focus, visibility, or any interaction proves the page survived.
-function recoverFromCancelledNavigation() {
+function recoverFromCancelledNavigation(): void {
   if (!unloading) return;
   unloading = false;
   // Don't trust the leftover socket: Firefox may have killed it with
@@ -88,7 +88,7 @@ document.addEventListener("visibilitychange", () => {
 globalThis.addEventListener("pointerdown", recoverFromCancelledNavigation);
 globalThis.addEventListener("keydown", recoverFromCancelledNavigation);
 
-function manageWebSocket(isReconnectAttempt = false) {
+function manageWebSocket(isReconnectAttempt = false): void {
   // No new connections during teardown.
   if (unloading) return;
 

@@ -49,7 +49,7 @@ function change(changeSet: ChangeSet<unknown>) {
   }
 }
 
-export function dispatch(changeSets: ChangeSet<unknown>[]) {
+export function dispatch(changeSets: ChangeSet<unknown>[]): void {
   while (changeSets.length) {
     const changeSet = changeSets.shift();
     if (changeSet) change(changeSet);

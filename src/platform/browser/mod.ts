@@ -19,7 +19,7 @@ type Island = {
 
 export const IS_BROWSER: boolean = !!globalThis.window;
 
-export function launch(islands: Island[], transferState: TransferState) {
+export function launch(islands: Island[], transferState: TransferState): void {
   let hydrationDone = false;
   const queuedUpdates: (() => void)[] = [];
   setVNodeUpdater<Node>((component, vComponent, globalOptions) => {

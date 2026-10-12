@@ -40,7 +40,7 @@ export type AttributeChangeSet =
   | UpdateAttributeChangeSet
   | DeleteAttributeChangeSet;
 
-export function attribute(change: AttributeChangeSet) {
+export function attribute(change: AttributeChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
       return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
