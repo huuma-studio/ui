@@ -117,8 +117,11 @@ function isRunnable(environment: DevEnvironment): environment is RunnableDevEnvi
 /**
  * Adds Vite's client (HMR) to an HTML response. With a Content-Security-
  * Policy nonce, the script gets the same nonce as the page's own scripts.
+ * A response without a body (`204`, `304`) stays as it is: those statuses
+ * can't have one.
  */
-async function withViteClient(response: Response, base: string): Promise<Response> {
+export async function withViteClient(response: Response, base: string): Promise<Response> {
+  if (!response.body) return response;
   const nonce = /'nonce-([^']+)'/.exec(response.headers.get("content-security-policy") ?? "")?.[1];
   const headers = new Headers(response.headers);
   headers.delete("content-length");

@@ -3,7 +3,7 @@ import { createServer, type ViteDevServer } from "vite";
 import { fileURLToPath } from "node:url";
 
 import { huuma } from "./mod.ts";
-import { injectViteClient } from "./dev.ts";
+import { injectViteClient, withViteClient } from "./dev.ts";
 
 const fixture = fileURLToPath(new URL("../../test/fixtures/basic", import.meta.url));
 
@@ -30,6 +30,29 @@ describe(injectViteClient.name, () => {
     expect(injectViteClient("<p>x</p>", "/")).toBe(
       '<script type="module" src="/@vite/client"></script><p>x</p>',
     );
+  });
+});
+
+describe(withViteClient.name, () => {
+  test("leaves HTML responses without a body alone", async () => {
+    for (const status of [204, 304]) {
+      const response = new Response(null, { status, headers: { "content-type": "text/html" } });
+      expect(await withViteClient(response, "/")).toBe(response);
+    }
+  });
+
+  test("keeps status and headers, but drops a stale Content-Length", async () => {
+    const response = await withViteClient(
+      new Response("<head></head>", {
+        status: 404,
+        headers: { "content-type": "text/html", "content-length": "13", "x-app": "1" },
+      }),
+      "/",
+    );
+    expect(response.status).toStrictEqual(404);
+    expect(response.headers.get("x-app")).toStrictEqual("1");
+    expect(response.headers.has("content-length")).toStrictEqual(false);
+    expect(await response.text()).toContain("/@vite/client");
   });
 });
 
