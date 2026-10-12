@@ -72,9 +72,15 @@ export function islandsModule(islands: { name: string; file: string; path: strin
   ].join("\n");
 }
 
-/** The path the browser loads an island file from, e.g. `app/counter.client.tsx`. */
+/**
+ * The path the browser loads an island file from, e.g.
+ * `app/counter.client.tsx`. Each segment is URL-encoded: a raw `%` or `?`
+ * in a directory name would change the URL. (`#` doesn't work either way:
+ * Vite can't load files with `#` in their path.)
+ */
 export function islandPath(root: string, base: string, file: string): string {
-  return withoutLeadingSlash(base + relative(root, file).replaceAll("\\", "/"));
+  const segments = relative(root, file).split(/[\\/]/).map(encodeURIComponent);
+  return withoutLeadingSlash(base + segments.join("/"));
 }
 
 /**

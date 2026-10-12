@@ -16,6 +16,10 @@ describe("browser paths", () => {
     expect(islandPath("/srv/app", "/shop/", "/srv/app/app/counter.client.tsx")).toStrictEqual(
       "shop/app/counter.client.tsx",
     );
+    // Encoded, so the browser requests the file Vite serves.
+    expect(
+      islandPath("/srv/app", "/", "/srv/app/components/50%off a/tag.client.tsx"),
+    ).toStrictEqual("components/50%25off%20a/tag.client.tsx");
     expect(runtimePath("/")).toStrictEqual("@id/__x00__virtual:huuma/runtime");
     expect(runtimePath("/shop/")).toStrictEqual("shop/@id/__x00__virtual:huuma/runtime");
   });
