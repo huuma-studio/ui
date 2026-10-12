@@ -12,5 +12,11 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
     // Deno-only smoke tests, checked by `deno test`.
     ignorePatterns: ["test/deno/**"],
+    jsPlugins: ["./src/lint/mod.ts"],
+    rules: {
+      "huuma/async-remote-functions": "error",
+      "huuma/no-async-hook-calling": "error",
+      "huuma/no-async-client-jsx": "error",
+    },
   },
 });
