@@ -50,7 +50,11 @@ export function toRequest(req: IncomingMessage, signal: AbortSignal): Request {
   } as RequestInit);
 }
 
-/** Writes a web Response to a Node response, streaming its body. */
+/**
+ * Writes a web Response to a Node response, streaming its body. Rejects
+ * if the body fails while streaming; a client that goes away isn't an
+ * error.
+ */
 export async function writeResponse(response: Response, res: ServerResponse): Promise<void> {
   const headers: Record<string, string | string[]> = {};
   response.headers.forEach((value, name) => {
@@ -70,8 +74,11 @@ export async function writeResponse(response: Response, res: ServerResponse): Pr
       Readable.fromWeb(response.body as unknown as NodeReadableStream<Uint8Array>),
       res,
     );
-  } catch {
-    // The client went away or the body failed; the pipeline already
-    // destroyed both streams, which cancels the response body.
+  } catch (error) {
+    // The client went away. The pipeline already cancelled the body.
+    if ((error as { code?: string }).code === "ERR_STREAM_PREMATURE_CLOSE") return;
+    // The body failed. The client got a truncated response; the caller
+    // reports why.
+    throw error;
   }
 }

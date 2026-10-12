@@ -81,6 +81,16 @@ function appMiddleware(server: ViteDevServer, app: { stale: boolean }): Connect.
     } catch (error) {
       // Maps the stack trace to the app's source before Vite shows it.
       if (error instanceof Error) server.ssrFixStacktrace(error);
+      if (res.headersSent) {
+        // The response already started (its body failed while streaming),
+        // so Vite's error page can't be sent: log it instead.
+        server.config.logger.error(
+          `[huuma] ${req.url}: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
+          { error: error instanceof Error ? error : null },
+        );
+        res.destroy();
+        return;
+      }
       next(error);
     }
   };

@@ -121,4 +121,59 @@ describe("node-http", () => {
     expect(response.status).toStrictEqual(204);
     expect(await response.text()).toStrictEqual("");
   });
+
+  describe("while streaming the body", () => {
+    /** Serves `body` and resolves with how `writeResponse` ended. */
+    async function serveBody(body: () => ReadableStream<Uint8Array>) {
+      let settled!: Promise<unknown>;
+      const server = createServer((_req, res) => {
+        settled = writeResponse(new Response(body()), res).then(
+          () => "resolved",
+          (error: Error) => error.message,
+        );
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      servers.push(server);
+      return {
+        origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        outcome: () => settled,
+      };
+    }
+    const chunk = new TextEncoder().encode("partial");
+
+    test("rejects with the error of a failing body", async () => {
+      const { origin, outcome } = await serveBody(
+        () =>
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(chunk);
+              setTimeout(() => controller.error(new Error("render failed")), 20);
+            },
+          }),
+      );
+
+      // The client gets a truncated response.
+      await expect(fetch(origin).then((response) => response.text())).rejects.toThrow();
+      expect(await outcome()).toStrictEqual("render failed");
+    });
+
+    test("doesn't reject when the client goes away", async () => {
+      const { origin, outcome } = await serveBody(
+        () =>
+          new ReadableStream({
+            pull(controller) {
+              return new Promise((resolve) => setTimeout(resolve, 10)).then(() => {
+                controller.enqueue(chunk);
+              });
+            },
+          }),
+      );
+
+      const client = new AbortController();
+      const response = await fetch(origin, { signal: client.signal });
+      await response.body?.getReader().read();
+      client.abort();
+      expect(await outcome()).toStrictEqual("resolved");
+    });
+  });
 });

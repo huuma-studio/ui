@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { createServer, type ViteDevServer } from "vite";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
+import { createLogger, createServer, type ViteDevServer } from "vite";
 import { fileURLToPath } from "node:url";
 
 import { huuma } from "./mod.ts";
@@ -59,11 +59,17 @@ describe(withViteClient.name, () => {
 describe("dev server", () => {
   let server: ViteDevServer;
   let origin: string;
+  // Vite's log, kept silent.
+  const errors: string[] = [];
+  const logger = createLogger("silent");
+  logger.error = (message) => {
+    errors.push(message);
+  };
   beforeAll(async () => {
     server = await createServer({
       root: fixture,
       configFile: false,
-      logLevel: "silent",
+      customLogger: logger,
       server: { host: "127.0.0.1", port: 0 },
       plugins: [huuma()],
     });
@@ -110,6 +116,19 @@ describe("dev server", () => {
     expect(islandModule.headers.get("content-type")).toContain("javascript");
     // Compiled by Oxc with Huuma's dev JSX runtime.
     expect(await islandModule.text()).toContain("jsx-runtime/dev.ts");
+  });
+
+  test("logs an error of a body that fails while streaming", async () => {
+    // The response started, so the client gets a truncated one.
+    await expect(
+      fetch(`${origin}/stream-error`).then((response) => response.text()),
+    ).rejects.toThrow();
+    // Logged once the server sees the failure, just after the client does.
+    await vi.waitFor(() => {
+      expect(
+        errors.some((error) => error.includes("/stream-error: Error: stream failed")),
+      ).toStrictEqual(true);
+    });
   });
 
   test("serves other pages and the 404 page", async () => {
