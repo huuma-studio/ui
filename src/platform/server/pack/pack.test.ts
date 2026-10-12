@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { assert, describe, expect, test } from "vite-plus/test";
 import { executeRemoteFunction } from "./pack.ts";
 
 // Type alias for the per-file remote-function map shape used by the helper.
@@ -15,33 +15,33 @@ type RemoteFunctions = Record<
 // awaitable). Behavior is identical from the helper's perspective.
 const resolve = <T>(value: T): Promise<T> => Promise.resolve(value);
 
-Deno.test("executeRemoteFunction: void/undefined return → 204 No Content", async (t) => {
-  await t.step(
+describe("executeRemoteFunction: void/undefined return → 204 No Content", () => {
+  test(
     "explicit `return;` resolves to a 204 with empty body",
     async () => {
       const fns: RemoteFunctions = { noop: () => resolve(undefined) };
       const res = await executeRemoteFunction(fns, "noop", undefined);
-      assertEquals(res.status, 204);
-      assertEquals(await res.text(), "");
+      expect(res.status).toStrictEqual(204);
+      expect(await res.text()).toStrictEqual("");
     },
   );
 
-  await t.step("explicit `return undefined` also yields 204", async () => {
+  test("explicit `return undefined` also yields 204", async () => {
     const fns: RemoteFunctions = { noop: () => resolve(undefined) };
     const res = await executeRemoteFunction(fns, "noop", undefined);
-    assertEquals(res.status, 204);
-    assertEquals(await res.text(), "");
+    expect(res.status).toStrictEqual(204);
+    expect(await res.text()).toStrictEqual("");
   });
 });
 
-Deno.test("executeRemoteFunction: null return → 200 body `null`", async () => {
+test("executeRemoteFunction: null return → 200 body `null`", async () => {
   const fns: RemoteFunctions = { returnsNull: () => resolve(null) };
   const res = await executeRemoteFunction(fns, "returnsNull", undefined);
-  assertEquals(res.status, 200);
-  assertEquals(await res.text(), "null");
+  expect(res.status).toStrictEqual(200);
+  expect(await res.text()).toStrictEqual("null");
 });
 
-Deno.test(
+test(
   "executeRemoteFunction: void vs null distinction is preserved",
   async () => {
     const voidRes = await executeRemoteFunction(
@@ -54,53 +54,47 @@ Deno.test(
       "f",
       undefined,
     );
-    assertEquals(voidRes.status, 204);
-    assertEquals(nullRes.status, 200);
-    assertEquals(await nullRes.text(), "null");
+    expect(voidRes.status).toStrictEqual(204);
+    expect(nullRes.status).toStrictEqual(200);
+    expect(await nullRes.text()).toStrictEqual("null");
   },
 );
 
-Deno.test("executeRemoteFunction: JSON-serializable return → 200 body", async (t) => {
-  await t.step("object return is serialized verbatim", async () => {
+describe("executeRemoteFunction: JSON-serializable return → 200 body", () => {
+  test("object return is serialized verbatim", async () => {
     const fns: RemoteFunctions = {
       createUser: () => resolve({ success: true, user: { name: "Ada" } }),
     };
     const res = await executeRemoteFunction(fns, "createUser", undefined);
-    assertEquals(res.status, 200);
-    assertEquals(
-      await res.text(),
-      JSON.stringify({ success: true, user: { name: "Ada" } }),
-    );
-    assertEquals(res.headers.get("content-type"), "application/json");
+    expect(res.status).toStrictEqual(200);
+    expect(await res.text()).toStrictEqual(JSON.stringify({ success: true, user: { name: "Ada" } }));
+    expect(res.headers.get("content-type")).toStrictEqual("application/json");
   });
 
-  await t.step("args are forwarded to the remote function", async () => {
+  test("args are forwarded to the remote function", async () => {
     const fns: RemoteFunctions = {
       add: (a: unknown, b: unknown) => resolve((a as number) + (b as number)),
     };
     const res = await executeRemoteFunction(fns, "add", [2, 3]);
-    assertEquals(res.status, 200);
-    assertEquals(await res.text(), "5");
+    expect(res.status).toStrictEqual(200);
+    expect(await res.text()).toStrictEqual("5");
   });
 });
 
-Deno.test(
+test(
   "executeRemoteFunction: BigInt return → 500 RemoteFunctionSerializationError",
   async () => {
     const fns: RemoteFunctions = { big: () => resolve(1n) };
     const res = await executeRemoteFunction(fns, "big", undefined);
-    assertEquals(res.status, 500);
-    assertEquals(res.headers.get("content-type"), "application/json");
+    expect(res.status).toStrictEqual(500);
+    expect(res.headers.get("content-type")).toStrictEqual("application/json");
     const body = await res.json();
-    assertEquals(body.name, "RemoteFunctionSerializationError");
-    assertEquals(
-      body.message,
-      'Remote function "big" returned a value that cannot be JSON-serialized: Do not know how to serialize a BigInt',
-    );
+    expect(body.name).toStrictEqual("RemoteFunctionSerializationError");
+    expect(body.message).toStrictEqual('Remote function "big" returned a value that cannot be JSON-serialized: Do not know how to serialize a BigInt');
   },
 );
 
-Deno.test(
+test(
   "executeRemoteFunction: circular reference → 500 RemoteFunctionSerializationError",
   async () => {
     const fns: RemoteFunctions = {
@@ -111,50 +105,41 @@ Deno.test(
       },
     };
     const res = await executeRemoteFunction(fns, "circular", undefined);
-    assertEquals(res.status, 500);
+    expect(res.status).toStrictEqual(500);
     const body = await res.json();
-    assertEquals(body.name, "RemoteFunctionSerializationError");
+    expect(body.name).toStrictEqual("RemoteFunctionSerializationError");
     // The circular-reference error message is multi-line and engine-specific
     // (V8 adds `--> starting at...` / `--- property ... closes the circle`);
     // assert only the stable prefix.
-    assertStringIncludes(
-      body.message,
-      'Remote function "circular" returned a value that cannot be JSON-serialized: Converting circular structure to JSON',
-    );
+    expect(body.message).toContain('Remote function "circular" returned a value that cannot be JSON-serialized: Converting circular structure to JSON');
   },
 );
 
-Deno.test(
+test(
   "executeRemoteFunction: function return (silent JSON.stringify failure) → 500 RemoteFunctionSerializationError",
   async () => {
     const fns: RemoteFunctions = { returnsFn: () => resolve(() => 42) };
     const res = await executeRemoteFunction(fns, "returnsFn", undefined);
-    assertEquals(res.status, 500);
+    expect(res.status).toStrictEqual(500);
     const body = await res.json();
-    assertEquals(body.name, "RemoteFunctionSerializationError");
-    assertEquals(
-      body.message,
-      'Remote function "returnsFn" returned a value that cannot be JSON-serialized (function)',
-    );
+    expect(body.name).toStrictEqual("RemoteFunctionSerializationError");
+    expect(body.message).toStrictEqual('Remote function "returnsFn" returned a value that cannot be JSON-serialized (function)');
   },
 );
 
-Deno.test(
+test(
   "executeRemoteFunction: Symbol return (silent JSON.stringify failure) → 500 RemoteFunctionSerializationError",
   async () => {
     const fns: RemoteFunctions = { returnsSym: () => resolve(Symbol("x")) };
     const res = await executeRemoteFunction(fns, "returnsSym", undefined);
-    assertEquals(res.status, 500);
+    expect(res.status).toStrictEqual(500);
     const body = await res.json();
-    assertEquals(body.name, "RemoteFunctionSerializationError");
-    assertEquals(
-      body.message,
-      'Remote function "returnsSym" returned a value that cannot be JSON-serialized (symbol)',
-    );
+    expect(body.name).toStrictEqual("RemoteFunctionSerializationError");
+    expect(body.message).toStrictEqual('Remote function "returnsSym" returned a value that cannot be JSON-serialized (symbol)');
   },
 );
 
-Deno.test(
+test(
   "executeRemoteFunction: user-thrown error propagates (NOT wrapped) — locks in current Round-1-pending behavior",
   async () => {
     class ValidationError extends Error {
@@ -170,11 +155,11 @@ Deno.test(
     // framework's handleException. This test pins that behavior so a future
     // Round 1 change (wrapping with { name, message }) is a deliberate,
     // visible diff rather than an accidental regression.
-    const error = await assertRejects(
-      () => executeRemoteFunction(fns, "save", undefined),
-      ValidationError,
-      "email is required",
+    const error = await executeRemoteFunction(fns, "save", undefined).catch(
+      (thrown: unknown) => thrown,
     );
-    assertEquals(error.name, "ValidationError");
+    assert(error instanceof ValidationError);
+    expect(error.message).toContain("email is required");
+    expect(error.name).toStrictEqual("ValidationError");
   },
 );

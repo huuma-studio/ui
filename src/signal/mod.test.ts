@@ -1,8 +1,8 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assert, describe, expect, test } from "vite-plus/test";
 import { type Cleanup, computed, setSubscriber, signal } from "./mod.ts";
 
-Deno.test(setSubscriber.name, async (t) => {
-  await t.step("subscribe reads inside the callback", () => {
+describe(setSubscriber.name, () => {
+  test("subscribe reads inside the callback", () => {
     const count = signal(0);
     const updates: number[] = [];
 
@@ -11,14 +11,14 @@ Deno.test(setSubscriber.name, async (t) => {
     });
 
     count.set(1);
-    assertEquals(updates, [1]);
+    expect(updates).toStrictEqual([1]);
   });
 
-  await t.step("pop the subscriber scope when the callback throws", () => {
+  test("pop the subscriber scope when the callback throws", () => {
     const count = signal(0);
     const updates: number[] = [];
 
-    assertThrows(
+    assert.throws(
       () =>
         setSubscriber((): void => {
           throw new Error("render failed");
@@ -31,15 +31,15 @@ Deno.test(setSubscriber.name, async (t) => {
     // runs outside any subscriber scope and must not subscribe.
     count.get();
     count.set(1);
-    assertEquals(updates, []);
+    expect(updates).toStrictEqual([]);
   });
 
-  await t.step("restore the outer scope after a nested callback throws", () => {
+  test("restore the outer scope after a nested callback throws", () => {
     const count = signal(0);
     const outerUpdates: number[] = [];
 
     setSubscriber(() => {
-      assertThrows(
+      assert.throws(
         () =>
           setSubscriber((): void => {
             throw new Error("inner failed");
@@ -53,12 +53,12 @@ Deno.test(setSubscriber.name, async (t) => {
     }, { update: (value: number) => outerUpdates.push(value) });
 
     count.set(1);
-    assertEquals(outerUpdates, [1]);
+    expect(outerUpdates).toStrictEqual([1]);
   });
 });
 
-Deno.test("notify", async (t) => {
-  await t.step("update a subscriber when its computed stays unchanged", () => {
+describe("notify", () => {
+  test("update a subscriber when its computed stays unchanged", () => {
     const count = signal(1);
     const isOdd = computed(() => count.get() % 2 === 1);
     const updates: number[] = [];
@@ -70,10 +70,10 @@ Deno.test("notify", async (t) => {
 
     // isOdd stays true: only the direct dependency reaches the subscriber.
     count.set(3);
-    assertEquals(updates, [3]);
+    expect(updates).toStrictEqual([3]);
   });
 
-  await t.step("update a subscriber once when its computed changes", () => {
+  test("update a subscriber once when its computed changes", () => {
     const count = signal(1);
     const isOdd = computed(() => count.get() % 2 === 1);
     const updates: [number, boolean][] = [];
@@ -84,10 +84,10 @@ Deno.test("notify", async (t) => {
     }, { update: () => updates.push([count.get(), isOdd.get()]) });
 
     count.set(2);
-    assertEquals(updates, [[2, false]]);
+    expect(updates).toStrictEqual([[2, false]]);
   });
 
-  await t.step(
+  test(
     "update a subscriber once with settled values of two computed signals",
     () => {
       const count = signal(1);
@@ -110,12 +110,12 @@ Deno.test("notify", async (t) => {
       }, { update: () => computedOnly.push([double.get(), triple.get()]) });
 
       count.set(2);
-      assertEquals(withSource, [[2, 4, 6]]);
-      assertEquals(computedOnly, [[4, 6]]);
+      expect(withSource).toStrictEqual([[2, 4, 6]]);
+      expect(computedOnly).toStrictEqual([[4, 6]]);
     },
   );
 
-  await t.step("compute once from settled values in a deeper diamond", () => {
+  test("compute once from settled values in a deeper diamond", () => {
     const count = signal(1);
     const next = computed(() => count.get() + 1);
     const tenfold = computed(() => count.get() * 10);
@@ -132,11 +132,11 @@ Deno.test("notify", async (t) => {
     });
 
     count.set(2);
-    assertEquals(seen, [[2, 10], [3, 20]]);
-    assertEquals(values, [23]);
+    expect(seen).toStrictEqual([[2, 10], [3, 20]]);
+    expect(values).toStrictEqual([23]);
   });
 
-  await t.step("throw no error for values that never settled", () => {
+  test("throw no error for values that never settled", () => {
     const count = signal(1);
     const left = computed(() => count.get());
     const right = computed(() => count.get());
@@ -151,10 +151,10 @@ Deno.test("notify", async (t) => {
     });
 
     count.set(2);
-    assertEquals(values, [2]);
+    expect(values).toStrictEqual([2]);
   });
 
-  await t.step("pass the computed value to its subscriber", () => {
+  test("pass the computed value to its subscriber", () => {
     const count = signal(1);
     const double = computed(() => count.get() * 2);
     const values: number[] = [];
@@ -164,10 +164,10 @@ Deno.test("notify", async (t) => {
     });
 
     count.set(5);
-    assertEquals(values, [10]);
+    expect(values).toStrictEqual([10]);
   });
 
-  await t.step("skip a scope unsubscribed earlier in the same pass", () => {
+  test("skip a scope unsubscribed earlier in the same pass", () => {
     const count = signal(0);
     const cleanups: Cleanup[] = [];
     const updates: string[] = [];
@@ -186,10 +186,10 @@ Deno.test("notify", async (t) => {
     });
 
     count.set(1);
-    assertEquals(updates, ["first"]);
+    expect(updates).toStrictEqual(["first"]);
   });
 
-  await t.step("skip a source unsubscribed earlier in the same pass", () => {
+  test("skip a source unsubscribed earlier in the same pass", () => {
     const a = signal(0);
     const b = signal(0);
     const cleanups = new Map<unknown, Cleanup>();
@@ -209,13 +209,13 @@ Deno.test("notify", async (t) => {
     });
 
     a.set(1);
-    assertEquals(values, []);
+    expect(values).toStrictEqual([]);
 
     b.set(2);
-    assertEquals(values, [2]);
+    expect(values).toStrictEqual([2]);
   });
 
-  await t.step("deliver through a source that is still subscribed", () => {
+  test("deliver through a source that is still subscribed", () => {
     const count = signal(1);
     const cleanups = new Map<unknown, Cleanup>();
     const values: number[] = [];
@@ -234,10 +234,10 @@ Deno.test("notify", async (t) => {
     });
 
     count.set(5);
-    assertEquals(values, [10]);
+    expect(values).toStrictEqual([10]);
   });
 
-  await t.step("update other subscribers when a computed throws", () => {
+  test("update other subscribers when a computed throws", () => {
     const count = signal(0);
     const updates: number[] = [];
 
@@ -252,11 +252,11 @@ Deno.test("notify", async (t) => {
       update: (value: number) => updates.push(value * 10),
     });
 
-    assertThrows(() => count.set(1), Error, "computed failed");
-    assertEquals(updates, [1, 10]);
+    assert.throws(() => count.set(1), Error, "computed failed");
+    expect(updates).toStrictEqual([1, 10]);
   });
 
-  await t.step("skip everything that reads a failed computed", () => {
+  test("skip everything that reads a failed computed", () => {
     const a = signal(0);
     const b = computed(() => {
       if (a.get() > 0) throw new Error("b failed");
@@ -278,20 +278,20 @@ Deno.test("notify", async (t) => {
       update: (value: number) => unrelated.push(value),
     });
 
-    assertThrows(() => a.set(1), Error, "b failed");
-    assertEquals(c.get(), 0);
-    assertEquals(sums, []);
-    assertEquals(mixed, []);
-    assertEquals(unrelated, [1]);
+    assert.throws(() => a.set(1), Error, "b failed");
+    expect(c.get()).toStrictEqual(0);
+    expect(sums).toStrictEqual([]);
+    expect(mixed).toStrictEqual([]);
+    expect(unrelated).toStrictEqual([1]);
 
     // The next successful pass updates the whole chain again.
     a.set(-1);
-    assertEquals(sums, [-2]);
-    assertEquals(mixed, [[-1, -2]]);
-    assertEquals(unrelated, [1, -1]);
+    expect(sums).toStrictEqual([-2]);
+    expect(mixed).toStrictEqual([[-1, -2]]);
+    expect(unrelated).toStrictEqual([1, -1]);
   });
 
-  await t.step("recompute skipped work once the failure clears", () => {
+  test("recompute skipped work once the failure clears", () => {
     const a = signal(0);
     const b = computed(() => {
       if (a.get() === 1) throw new Error("b failed");
@@ -304,17 +304,17 @@ Deno.test("notify", async (t) => {
       update: (value: number) => values.push(value),
     });
 
-    assertThrows(() => a.set(1), Error, "b failed");
-    assertEquals(c.get(), 0);
+    assert.throws(() => a.set(1), Error, "b failed");
+    expect(c.get()).toStrictEqual(0);
 
     // b recovers with its old value and e stays unchanged: neither changes,
     // but c was skipped and must catch up.
     a.set(2);
-    assertEquals(c.get(), 1);
-    assertEquals(values, [1]);
+    expect(c.get()).toStrictEqual(1);
+    expect(values).toStrictEqual([1]);
   });
 
-  await t.step("run a skipped subscriber once the failure clears", () => {
+  test("run a skipped subscriber once the failure clears", () => {
     const a = signal(0);
     const broken = signal(false);
     const zero = computed(() => {
@@ -327,16 +327,16 @@ Deno.test("notify", async (t) => {
       zero.get();
     }, { update: () => seen.push(a.get()) });
 
-    assertThrows(() => broken.set(true), Error, "zero failed");
-    assertThrows(() => a.set(1), Error, "zero failed");
-    assertEquals(seen, []);
+    assert.throws(() => broken.set(true), Error, "zero failed");
+    assert.throws(() => a.set(1), Error, "zero failed");
+    expect(seen).toStrictEqual([]);
 
     // zero recovers unchanged, but the subscriber missed a = 1.
     broken.set(false);
-    assertEquals(seen, [1]);
+    expect(seen).toStrictEqual([1]);
   });
 
-  await t.step("run every subscriber and rethrow all errors", () => {
+  test("run every subscriber and rethrow all errors", () => {
     const count = signal(0);
     const updates: string[] = [];
 
@@ -349,15 +349,18 @@ Deno.test("notify", async (t) => {
       });
     }
 
-    const error = assertThrows(() => count.set(1), AggregateError);
-    assertEquals(updates, ["first", "second", "third"]);
-    assertEquals(
-      error.errors.map((error: Error) => error.message),
-      ["first", "third"],
-    );
+    let error: unknown;
+    try {
+      count.set(1);
+    } catch (thrown) {
+      error = thrown;
+    }
+    assert(error instanceof AggregateError);
+    expect(updates).toStrictEqual(["first", "second", "third"]);
+    expect(error.errors.map((error: Error) => error.message)).toStrictEqual(["first", "third"]);
   });
 
-  await t.step("start a new pass for a set() inside a subscriber", () => {
+  test("start a new pass for a set() inside a subscriber", () => {
     const a = signal(0);
     const b = signal(0);
     const bIsPositive = computed(() => b.get() >= 0);
@@ -374,6 +377,6 @@ Deno.test("notify", async (t) => {
     });
 
     a.set(1);
-    assertEquals(seen, [0, 10]);
+    expect(seen).toStrictEqual([0, 10]);
   });
 });

@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, describe, expect, test } from "vite-plus/test";
 import { VNodeProps, type VText } from "../../../../v-node/mod.ts";
 import { vElement } from "../../../../v-node/sync.ts";
 import { setSubscriber, signal } from "../../../../signal/mod.ts";
@@ -6,8 +6,8 @@ import type { JSX } from "../../../../jsx-runtime/mod.ts";
 import { Action, Props, Type } from "../dispatch.ts";
 import { type DeleteElementChangeSet, element } from "./element.ts";
 
-Deno.test("element delete changeset", async (t) => {
-  await t.step("drain nested text subscriptions on delete", () => {
+describe("element delete changeset", () => {
+  test("drain nested text subscriptions on delete", () => {
     const sig = signal("live");
 
     // <div><span>{sig}</span></div> - the Delete changeset only targets
@@ -53,7 +53,7 @@ Deno.test("element delete changeset", async (t) => {
     // The commit point drained the nested subscription - the signal no
     // longer writes into the detached subtree.
     sig.set("gone");
-    assertEquals(writes, []);
-    assertEquals(vNode[VNodeProps.NODE_REF], undefined);
+    expect(writes).toStrictEqual([]);
+    expect(vNode[VNodeProps.NODE_REF]).toStrictEqual(undefined);
   });
 });

@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert/equals";
+import { describe, expect, test } from "vite-plus/test";
 import { VMode, VNodeProps, VType } from "./../mod.ts";
 
 import { WritableSignal } from "../../signal/mod.ts";
@@ -9,10 +9,10 @@ function ComponentA({ children }: JSX.ComponentProps) {
   return <div class="text-blue">{["", children]}</div>;
 }
 
-Deno.test(create.name, async (t) => {
-  await t.step("should create VText Node", () => {
+describe(create.name, () => {
+  test("should create VText Node", () => {
     const vText = create("Hello");
-    assertEquals(vText, {
+    expect(vText).toStrictEqual({
       type: VType.TEXT,
       [VNodeProps.TEXT]: "Hello",
       [VNodeProps.SKIP_ESCAPING]: false,
@@ -20,7 +20,7 @@ Deno.test(create.name, async (t) => {
     });
 
     const vNumber = create(0);
-    assertEquals(vNumber, {
+    expect(vNumber).toStrictEqual({
       type: VType.TEXT,
       [VNodeProps.TEXT]: "0",
       [VNodeProps.SKIP_ESCAPING]: false,
@@ -29,7 +29,7 @@ Deno.test(create.name, async (t) => {
 
     const signal = new WritableSignal("Signal");
     const vSignal = create(signal);
-    assertEquals(vSignal, {
+    expect(vSignal).toStrictEqual({
       type: 0,
       [VNodeProps.TEXT]: signal,
       [VNodeProps.SKIP_ESCAPING]: false,
@@ -37,25 +37,25 @@ Deno.test(create.name, async (t) => {
     });
   });
 
-  await t.step("should return null", () => {
+  test("should return null", () => {
     const nullVNode = create(null);
-    assertEquals(nullVNode, null);
+    expect(nullVNode).toStrictEqual(null);
 
     const trueVNode = create(true);
-    assertEquals(trueVNode, null);
+    expect(trueVNode).toStrictEqual(null);
 
     const falseVNode = create(false);
-    assertEquals(falseVNode, null);
+    expect(falseVNode).toStrictEqual(null);
 
     const undefinedVNode = create(undefined);
-    assertEquals(undefinedVNode, null);
+    expect(undefinedVNode).toStrictEqual(null);
   });
 
-  await t.step("should create vElement", () => {
+  test("should create vElement", () => {
     const text1 = "Hello World";
 
     const vElement = create(<div class="nice">{text1}</div>);
-    assertEquals(vElement, {
+    expect(vElement).toStrictEqual({
       type: VType.ELEMENT,
       [VNodeProps.TAG]: "div",
       [VNodeProps.KEY]: undefined,
@@ -79,11 +79,11 @@ Deno.test(create.name, async (t) => {
     });
   });
 
-  await t.step("should create VComponent", () => {
+  test("should create VComponent", () => {
     const vComponent = create(
       <ComponentA>Hello World!</ComponentA>,
     );
-    assertEquals(vComponent, {
+    expect(vComponent).toStrictEqual({
       type: VType.COMPONENT,
       [VNodeProps.FN]: ComponentA,
       [VNodeProps.KEY]: undefined,

@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { describe, expect, test } from "vite-plus/test";
 
 import type { JSX } from "../../jsx-runtime/mod.ts";
 import { jsx } from "../../jsx-runtime/mod.ts";
@@ -120,15 +120,11 @@ function parseTransferState(source: string): unknown {
 // every sequence that can terminate or change the parser state of an
 // inline script element begins with `<`.
 function assertScriptDataSafe(inner: string): void {
-  assertEquals(
-    inner.includes("<"),
-    false,
-    `expected no literal "<" in serialized script data: ${inner}`,
-  );
+  expect(inner.includes("<"), `expected no literal "<" in serialized script data: ${inner}`).toStrictEqual(false);
 }
 
-Deno.test("Launch inline script serialization", async (t) => {
-  await t.step(
+describe("Launch inline script serialization", () => {
+  test(
     "renders exactly one literal </script> for the launch element",
     async () => {
       const html = await renderLaunch(
@@ -136,40 +132,36 @@ Deno.test("Launch inline script serialization", async (t) => {
         { note: "</script>" },
       );
       // Only the element's own closing tag should appear.
-      assertEquals(html.split("</script>").length - 1, 1);
+      expect(html.split("</script>").length - 1).toStrictEqual(1);
     },
   );
 
-  await t.step(
+  test(
     "escapes </script> in a prop and keeps the payload safe",
     async () => {
       const html = await renderLaunch([makeIsland({ danger: "</script>" })]);
-      assertStringIncludes(
-        html,
-        "\\u003C/script>",
-        "expected </script> to be escaped in the serialized props",
-      );
+      expect(html, "expected </script> to be escaped in the serialized props").toContain("\\u003C/script>");
       assertScriptDataSafe(scriptSource(html));
     },
   );
 
-  await t.step("covers <!-- followed by <script in prop data", async () => {
+  test("covers <!-- followed by <script in prop data", async () => {
     const value = { a: "<!--<script>", b: "<!--", c: "<script>" };
     const html = await renderLaunch([makeIsland(value)]);
     assertScriptDataSafe(scriptSource(html));
-    assertEquals(parseProps(scriptSource(html)), value);
+    expect(parseProps(scriptSource(html))).toStrictEqual(value);
   });
 
-  await t.step("covers U+2028 and U+2029 in prop data", async () => {
+  test("covers U+2028 and U+2029 in prop data", async () => {
     const value = { ls: "\u2028", ps: "\u2029", mix: "x\u2028y\u2029z" };
     const html = await renderLaunch([makeIsland(value)]);
     const src = scriptSource(html);
-    assertEquals(src.includes("\u2028"), false);
-    assertEquals(src.includes("\u2029"), false);
-    assertEquals(parseProps(src), value);
+    expect(src.includes("\u2028")).toStrictEqual(false);
+    expect(src.includes("\u2029")).toStrictEqual(false);
+    expect(parseProps(src)).toStrictEqual(value);
   });
 
-  await t.step("round-trips props exactly after JSON.parse", async () => {
+  test("round-trips props exactly after JSON.parse", async () => {
     const value = {
       close: "</script>",
       comment: "<!--",
@@ -182,50 +174,50 @@ Deno.test("Launch inline script serialization", async (t) => {
       normal: "plain",
     };
     const src = scriptSource(await renderLaunch([makeIsland(value)]));
-    assertEquals(parseProps(src), value);
+    expect(parseProps(src)).toStrictEqual(value);
   });
 
-  await t.step(
+  test(
     "leaves normal prop serialization unchanged from previous output",
     async () => {
       const html = await renderLaunch([
         makeIsland({ greeting: "Hello World!" }),
       ]);
       const src = scriptSource(html);
-      assertStringIncludes(src, `props: {"greeting":"Hello World!"}`);
-      assertEquals(parseProps(src), { greeting: "Hello World!" });
+      expect(src).toContain(`props: {"greeting":"Hello World!"}`);
+      expect(parseProps(src)).toStrictEqual({ greeting: "Hello World!" });
     },
   );
 
-  await t.step("escapes </script> in transfer state", async () => {
+  test("escapes </script> in transfer state", async () => {
     const html = await renderLaunch(
       [makeIsland({ a: 1 })],
       { note: "</script>" },
     );
-    assertStringIncludes(html, "\\u003C/script>");
+    expect(html).toContain("\\u003C/script>");
     assertScriptDataSafe(scriptSource(html));
   });
 
-  await t.step(
+  test(
     "covers <!-- followed by <script in transfer state",
     async () => {
       const value = { a: "<!--<script>", b: "<!--", c: "<script>" };
       const html = await renderLaunch([makeIsland({ a: 1 })], value);
       assertScriptDataSafe(scriptSource(html));
-      assertEquals(parseTransferState(scriptSource(html)), value);
+      expect(parseTransferState(scriptSource(html))).toStrictEqual(value);
     },
   );
 
-  await t.step("covers U+2028 and U+2029 in transfer state", async () => {
+  test("covers U+2028 and U+2029 in transfer state", async () => {
     const value = { ls: "\u2028", ps: "\u2029", mix: "x\u2028y\u2029z" };
     const html = await renderLaunch([makeIsland({ a: 1 })], value);
     const src = scriptSource(html);
-    assertEquals(src.includes("\u2028"), false);
-    assertEquals(src.includes("\u2029"), false);
-    assertEquals(parseTransferState(src), value);
+    expect(src.includes("\u2028")).toStrictEqual(false);
+    expect(src.includes("\u2029")).toStrictEqual(false);
+    expect(parseTransferState(src)).toStrictEqual(value);
   });
 
-  await t.step(
+  test(
     "round-trips transfer state exactly after JSON.parse",
     async () => {
       const value = {
@@ -242,37 +234,37 @@ Deno.test("Launch inline script serialization", async (t) => {
       const src = scriptSource(
         await renderLaunch([makeIsland({ a: 1 })], value),
       );
-      assertEquals(parseTransferState(src), value);
+      expect(parseTransferState(src)).toStrictEqual(value);
     },
   );
 
-  await t.step(
+  test(
     "dangerous props and transfer state together add no literal </script>",
     async () => {
       const html = await renderLaunch(
         [makeIsland({ danger: "</script>" })],
         { danger: "</script><!--<script>" },
       );
-      assertEquals(html.split("</script>").length - 1, 1);
+      expect(html.split("</script>").length - 1).toStrictEqual(1);
       assertScriptDataSafe(scriptSource(html));
       const src = scriptSource(html);
-      assertEquals(parseProps(src), { danger: "</script>" });
-      assertEquals(parseTransferState(src), {
+      expect(parseProps(src)).toStrictEqual({ danger: "</script>" });
+      expect(parseTransferState(src)).toStrictEqual({
         danger: "</script><!--<script>",
       });
     },
   );
 
-  await t.step(
+  test(
     "absent transfer state still emits {} and preserves launch structure",
     async () => {
       const html = await renderLaunch([makeIsland({ a: 1 })]);
       const src = scriptSource(html);
-      assertStringIncludes(src, "const transferState = {};");
-      assertStringIncludes(src, 'import { launch } from "/runtime.js";');
-      assertStringIncludes(src, 'import $I1 from "/island.js";');
-      assertStringIncludes(src, "launch([");
-      assertStringIncludes(src, "], transferState);");
+      expect(src).toContain("const transferState = {};");
+      expect(src).toContain('import { launch } from "/runtime.js";');
+      expect(src).toContain('import $I1 from "/island.js";');
+      expect(src).toContain("launch([");
+      expect(src).toContain("], transferState);");
     },
   );
 });

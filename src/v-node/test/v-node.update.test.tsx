@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, describe, expect, test } from "vite-plus/test";
 import {
   type VComponent,
   type VElement,
@@ -12,12 +12,12 @@ import { $signal } from "../../hooks/signal.ts";
 import { setSubscriber, signal, WritableSignal } from "../../signal/mod.ts";
 import { create, update, vElement } from "../sync.ts";
 
-Deno.test(update.name, async (t) => {
-  await t.step("update VText", () => {
+describe(update.name, () => {
+  test("update VText", () => {
     const vNode = create("Hello World");
     const updatedVNode = update("Hello Univers", vNode, { $: [] });
 
-    assertEquals(vNode, {
+    expect(vNode).toStrictEqual({
       type: VType.TEXT,
       [VNodeProps.TEXT]: "Hello Univers",
       [VNodeProps.SKIP_ESCAPING]: false,
@@ -27,7 +27,7 @@ Deno.test(update.name, async (t) => {
     assert(vNode === updatedVNode);
   });
 
-  await t.step("update VElement", () => {
+  test("update VElement", () => {
     const vNode = vElement(
       <div>Hello World</div> as JSX.ComponentNode<string>,
       {
@@ -43,7 +43,7 @@ Deno.test(update.name, async (t) => {
       { $: [] },
     );
 
-    assertEquals(updateVElement, {
+    expect(updateVElement).toStrictEqual({
       type: VType.ELEMENT,
       [VNodeProps.TAG]: "div",
       [VNodeProps.KEY]: undefined,
@@ -67,7 +67,7 @@ Deno.test(update.name, async (t) => {
     //Check if its the same object
     assert(vNode === updateVElement);
   });
-  await t.step("update vComponent", () => {
+  test("update vComponent", () => {
     const vComponent = create(<A />);
 
     const signal = (vComponent as VComponent<unknown>)[VNodeProps.OPTIONS]
@@ -77,7 +77,7 @@ Deno.test(update.name, async (t) => {
 
     const updatedVComponent = update(<A />, vComponent, {}, true);
 
-    assertEquals(updatedVComponent, {
+    expect(updatedVComponent).toStrictEqual({
       [VNodeProps.AST]: {
         [VNodeProps.KEY]: undefined,
         [VNodeProps.BIND]: undefined,
@@ -119,21 +119,21 @@ Deno.test(update.name, async (t) => {
     assert(vComponent === updatedVComponent);
   });
 
-  await t.step("throw on TemplateNode", () => {
+  test("throw on TemplateNode", () => {
     const vNode = create("Hello World");
     const templateNode: JSX.TemplateNode = {
       templates: ["<div>", "</div>"],
       nodes: ["Hello Univers"],
     };
 
-    assertThrows(
+    assert.throws(
       () => update(templateNode, vNode, {}),
       Error,
       "TemplateNode is not supported in update()",
     );
 
     // Throws before cleanup - the previous vNode stays untouched.
-    assertEquals(vNode, {
+    expect(vNode).toStrictEqual({
       type: VType.TEXT,
       [VNodeProps.TEXT]: "Hello World",
       [VNodeProps.SKIP_ESCAPING]: false,
@@ -141,7 +141,7 @@ Deno.test(update.name, async (t) => {
     });
   });
 
-  await t.step(
+  test(
     "run destroy hooks of a VComponent replaced by another component",
     () => {
       const destroyed: string[] = [];
@@ -171,7 +171,7 @@ Deno.test(update.name, async (t) => {
       update(<Root swap />, vNode, {});
 
       // Nested components are destroyed too.
-      assertEquals(destroyed.sort(), ["OldChild", "OldParent"]);
+      expect(destroyed.sort()).toStrictEqual(["OldChild", "OldParent"]);
 
       destroyed.length = 0;
 
@@ -182,11 +182,11 @@ Deno.test(update.name, async (t) => {
       const elementVNode = create(<ElementRoot />);
       update(<ElementRoot swap />, elementVNode, {});
 
-      assertEquals(destroyed, ["Old"]);
+      expect(destroyed).toStrictEqual(["Old"]);
     },
   );
 
-  await t.step(
+  test(
     "keep the stale signal subscription until the diff commit",
     () => {
       const sigA = signal("A");
@@ -221,11 +221,11 @@ Deno.test(update.name, async (t) => {
       assert(vText[VNodeProps.TEXT] === sigB);
 
       sigA.set("still-live");
-      assertEquals(domWrites, ["still-live"]);
+      expect(domWrites).toStrictEqual(["still-live"]);
     },
   );
 
-  await t.step(
+  test(
     "run destroy hooks when replaced by an unrecognized node",
     () => {
       const destroyed: string[] = [];
@@ -240,12 +240,12 @@ Deno.test(update.name, async (t) => {
       // number) and reaches update()'s fall-through tail.
       const updated = update(NaN, vNode, {});
 
-      assertEquals(updated, undefined);
-      assertEquals(destroyed, ["Old"]);
+      expect(updated).toStrictEqual(undefined);
+      expect(destroyed).toStrictEqual(["Old"]);
     },
   );
 
-  await t.step(
+  test(
     "run destroy hooks only once when an update pass aborts",
     () => {
       const destroyed: string[] = [];
@@ -270,25 +270,25 @@ Deno.test(update.name, async (t) => {
 
       // Tracked is destroyed, then the sibling's render aborts the pass
       // before the parent's children are reassigned.
-      assertThrows(
+      assert.throws(
         () => update(<Root fail />, vNode, {}),
         Error,
         "render failed",
       );
-      assertEquals(destroyed, ["Tracked"]);
+      expect(destroyed).toStrictEqual(["Tracked"]);
 
       // The retry walks the stale children again - Tracked's hooks must
       // not re-fire.
-      assertThrows(
+      assert.throws(
         () => update(<Root fail />, vNode, {}),
         Error,
         "render failed",
       );
-      assertEquals(destroyed, ["Tracked"]);
+      expect(destroyed).toStrictEqual(["Tracked"]);
     },
   );
 
-  await t.step(
+  test(
     "keep subtree signal subscriptions until the diff commit",
     () => {
       const sig = signal("A");
@@ -319,11 +319,11 @@ Deno.test(update.name, async (t) => {
       update(<Root />, vNode, {});
 
       sig.set("still-live");
-      assertEquals(domWrites, ["still-live"]);
+      expect(domWrites).toStrictEqual(["still-live"]);
     },
   );
 
-  await t.step(
+  test(
     "keep the previous subtree intact when a replacement render throws",
     () => {
       const destroyed: string[] = [];
@@ -348,17 +348,17 @@ Deno.test(update.name, async (t) => {
 
       // The replacement is created before the old subtree is destroyed -
       // its throwing render must leave Old untouched.
-      assertThrows(
+      assert.throws(
         () => update(<Root variant="throwing" />, vNode, {}),
         Error,
         "render failed",
       );
-      assertEquals(destroyed, []);
+      expect(destroyed).toStrictEqual([]);
 
       // The old subtree is still live and tears down normally on the
       // next successful replacement.
       update(<Root variant="working" />, vNode, {});
-      assertEquals(destroyed, ["Old"]);
+      expect(destroyed).toStrictEqual(["Old"]);
 
       // Same for the element branch: a throwing child of the replacement
       // element must not tear down the previous element subtree.
@@ -379,12 +379,12 @@ Deno.test(update.name, async (t) => {
 
       const elementVNode = create(<ElementRoot />);
 
-      assertThrows(
+      assert.throws(
         () => update(<ElementRoot fail />, elementVNode, {}),
         Error,
         "render failed",
       );
-      assertEquals(destroyed, []);
+      expect(destroyed).toStrictEqual([]);
     },
   );
 });

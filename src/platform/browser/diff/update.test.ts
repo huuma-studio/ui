@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, describe, expect, test } from "vite-plus/test";
 import { snapshot, VNodeProps, vText } from "../../../v-node/mod.ts";
 import { setSubscriber, signal } from "../../../signal/mod.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
@@ -25,8 +25,8 @@ const bind = (
     cleanupCallback: (cleanup) => vNode[VNodeProps.CLEANUP].push(cleanup),
   });
 
-Deno.test("update text changesets", async (t) => {
-  await t.step("keep the binding when the signal is unchanged", () => {
+describe("update text changesets", () => {
+  test("keep the binding when the signal is unchanged", () => {
     const sig = asSignal("A");
     const vNode = vText<Node>(sig);
     bind(vNode, sig);
@@ -35,12 +35,12 @@ Deno.test("update text changesets", async (t) => {
 
     const changeSets = update(vNode, previousVNode, attachmentRef());
 
-    assertEquals(changeSets.length, 1);
-    assertEquals(changeSets[0][Props.Type], Type.Text);
-    assertEquals(changeSets[0][Props.Action], Action.Link);
+    expect(changeSets.length).toStrictEqual(1);
+    expect(changeSets[0][Props.Type]).toStrictEqual(Type.Text);
+    expect(changeSets[0][Props.Action]).toStrictEqual(Action.Link);
   });
 
-  await t.step("replace the node when the signal identity changes", () => {
+  test("replace the node when the signal identity changes", () => {
     const node = <Node> {};
     const previousVNode = vText<Node>(asSignal("A"));
     previousVNode[VNodeProps.NODE_REF] = node;
@@ -48,14 +48,14 @@ Deno.test("update text changesets", async (t) => {
 
     const changeSets = update(vNode, previousVNode, attachmentRef());
 
-    assertEquals(changeSets.length, 1);
-    assertEquals(changeSets[0][Props.Type], Type.Text);
-    assertEquals(changeSets[0][Props.Action], Action.Replace);
+    expect(changeSets.length).toStrictEqual(1);
+    expect(changeSets[0][Props.Type]).toStrictEqual(Type.Text);
+    expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
     // The replace handler needs the existing DOM node to rebind it.
     assert(vNode[VNodeProps.NODE_REF] === node);
   });
 
-  await t.step(
+  test(
     "replace the node when signals swap with equal values",
     () => {
       const previousVNode = vText<Node>(asSignal("same"));
@@ -63,22 +63,22 @@ Deno.test("update text changesets", async (t) => {
 
       const changeSets = update(vNode, previousVNode, attachmentRef());
 
-      assertEquals(changeSets.length, 1);
-      assertEquals(changeSets[0][Props.Action], Action.Replace);
+      expect(changeSets.length).toStrictEqual(1);
+      expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
     },
   );
 
-  await t.step("replace the node when a string becomes a signal", () => {
+  test("replace the node when a string becomes a signal", () => {
     const previousVNode = vText<Node>("static");
     const vNode = vText<Node>(asSignal("reactive"));
 
     const changeSets = update(vNode, previousVNode, attachmentRef());
 
-    assertEquals(changeSets.length, 1);
-    assertEquals(changeSets[0][Props.Action], Action.Replace);
+    expect(changeSets.length).toStrictEqual(1);
+    expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
   });
 
-  await t.step("replace the node when a signal becomes a string", () => {
+  test("replace the node when a signal becomes a string", () => {
     const sig = signal("reactive");
     const previousVNode = vText<Node>(<JSX.SignalLike> <unknown> sig);
     const vNode = vText<Node>("static");
@@ -88,11 +88,11 @@ Deno.test("update text changesets", async (t) => {
 
     const changeSets = update(vNode, previousVNode, attachmentRef());
 
-    assertEquals(changeSets.length, 1);
-    assertEquals(changeSets[0][Props.Action], Action.Replace);
+    expect(changeSets.length).toStrictEqual(1);
+    expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
   });
 
-  await t.step(
+  test(
     "rebind when the subscription does not match the binding",
     () => {
       const oldSig = signal("old");
@@ -105,29 +105,29 @@ Deno.test("update text changesets", async (t) => {
 
       const changeSets = update(vNode, previousVNode, attachmentRef());
 
-      assertEquals(changeSets.length, 1);
-      assertEquals(changeSets[0][Props.Action], Action.Replace);
+      expect(changeSets.length).toStrictEqual(1);
+      expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
     },
   );
 
-  await t.step("patch the text content for plain string changes", () => {
+  test("patch the text content for plain string changes", () => {
     const previousVNode = vText<Node>("Hello World");
     const vNode = vText<Node>("Hello Univers");
 
     const changeSets = update(vNode, previousVNode, attachmentRef());
 
-    assertEquals(changeSets.length, 2);
-    assertEquals(changeSets[0][Props.Action], Action.Link);
-    assertEquals(changeSets[1][Props.Action], Action.Update);
+    expect(changeSets.length).toStrictEqual(2);
+    expect(changeSets[0][Props.Action]).toStrictEqual(Action.Link);
+    expect(changeSets[1][Props.Action]).toStrictEqual(Action.Update);
   });
 
-  await t.step("only link when the string is unchanged", () => {
+  test("only link when the string is unchanged", () => {
     const previousVNode = vText<Node>("Hello World");
     const vNode = vText<Node>("Hello World");
 
     const changeSets = update(vNode, previousVNode, attachmentRef());
 
-    assertEquals(changeSets.length, 1);
-    assertEquals(changeSets[0][Props.Action], Action.Link);
+    expect(changeSets.length).toStrictEqual(1);
+    expect(changeSets[0][Props.Action]).toStrictEqual(Action.Link);
   });
 });

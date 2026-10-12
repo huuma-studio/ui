@@ -1,9 +1,9 @@
-import { assert } from "@std/assert/assert";
+import { assert, describe, test } from "vite-plus/test";
 import { create, update } from "../sync.ts";
 import { isVElement, type VElement, VNodeProps } from "../mod.ts";
 
-Deno.test("Update vNode", async (t) => {
-  await t.step("should update appended additional node", () => {
+describe("Update vNode", () => {
+  test("should update appended additional node", () => {
     const list = (
       <ul>
         <li class="item-1" key={1}>1</li>
@@ -62,7 +62,7 @@ Deno.test("Update vNode", async (t) => {
     );
   });
 
-  await t.step("should update prepended additional node", () => {
+  test("should update prepended additional node", () => {
     const list = (
       <ul>
         <li class="item-1" key={1}>1</li>
@@ -139,7 +139,7 @@ Deno.test("Update vNode", async (t) => {
     );
   });
 
-  await t.step("should update prepended additional node without key", () => {
+  test("should update prepended additional node without key", () => {
     const list = (
       <ul>
         <li class="item-1" key={1}>1</li>
@@ -186,7 +186,7 @@ Deno.test("Update vNode", async (t) => {
     );
   });
 
-  await t.step("should update prepended additional node without key", () => {
+  test("should update prepended additional node without key", () => {
     const list = (
       <ul>
         <li class="item-1" key={1}>1</li>

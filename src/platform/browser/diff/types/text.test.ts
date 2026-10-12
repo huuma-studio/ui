@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, describe, expect, test } from "vite-plus/test";
 import { VNodeProps, vText } from "../../../../v-node/mod.ts";
 import { setSubscriber, signal } from "../../../../signal/mod.ts";
 import type { JSX } from "../../../../jsx-runtime/mod.ts";
@@ -16,8 +16,8 @@ const replaceChangeSet = (
     [Props.Payload]: { vText: vNode, attachmentRef },
   };
 
-Deno.test("text replace changeset", async (t) => {
-  await t.step("rebind the existing DOM node to the new signal", () => {
+describe("text replace changeset", () => {
+  test("rebind the existing DOM node to the new signal", () => {
     const sig = signal("B");
     const vNode = vText<Node>(<JSX.SignalLike> <unknown> sig);
     const node = <Node> <unknown> { nodeType: 3, textContent: "A" };
@@ -33,7 +33,7 @@ Deno.test("text replace changeset", async (t) => {
     // The node identity is preserved - attachment anchors stored elsewhere
     // (component self-update refs, island roots) stay valid.
     assert(vNode[VNodeProps.NODE_REF] === node);
-    assertEquals(node.textContent, "B");
+    expect(node.textContent).toStrictEqual("B");
 
     // Following siblings anchor after the rebound node.
     assert(attachmentRef.type === AttachmentType.Sibling);
@@ -41,11 +41,11 @@ Deno.test("text replace changeset", async (t) => {
 
     // The new signal owns the node and its cleanup is registered.
     sig.set("C");
-    assertEquals(node.textContent, "C");
-    assertEquals(vNode[VNodeProps.CLEANUP].length, 1);
+    expect(node.textContent).toStrictEqual("C");
+    expect(vNode[VNodeProps.CLEANUP].length).toStrictEqual(1);
   });
 
-  await t.step("drop the previous signal's subscription at the commit", () => {
+  test("drop the previous signal's subscription at the commit", () => {
     const previousSig = signal("old");
     const nextSig = signal("new");
 
@@ -70,15 +70,15 @@ Deno.test("text replace changeset", async (t) => {
 
     // The handler is the commit point: the old subscription is gone...
     previousSig.set("stale");
-    assertEquals(previousWrites, []);
+    expect(previousWrites).toStrictEqual([]);
 
     // ...and the node is owned by the new signal alone.
     nextSig.set("next");
-    assertEquals(node.textContent, "next");
-    assertEquals(vNode[VNodeProps.CLEANUP].length, 1);
+    expect(node.textContent).toStrictEqual("next");
+    expect(vNode[VNodeProps.CLEANUP].length).toStrictEqual(1);
   });
 
-  await t.step("write the plain text on a signal-to-string change", () => {
+  test("write the plain text on a signal-to-string change", () => {
     const vNode = vText<Node>("static");
     const node = <Node> <unknown> { nodeType: 3, textContent: "reactive" };
     vNode[VNodeProps.NODE_REF] = node;
@@ -90,10 +90,10 @@ Deno.test("text replace changeset", async (t) => {
     text(replaceChangeSet(vNode, attachmentRef));
 
     assert(vNode[VNodeProps.NODE_REF] === node);
-    assertEquals(node.textContent, "static");
+    expect(node.textContent).toStrictEqual("static");
   });
 
-  await t.step(
+  test(
     "structurally replace a non-text node from hydration divergence",
     () => {
       const sig = signal("live");
@@ -131,14 +131,11 @@ Deno.test("text replace changeset", async (t) => {
 
       const replacement = vNode[VNodeProps.NODE_REF];
       assert(replacement !== divergent);
-      assertEquals(swaps, [[replacement, divergent]]);
+      expect(swaps).toStrictEqual([[replacement, divergent]]);
 
       // The subscription drives the replacement node.
       sig.set("updated");
-      assertEquals(
-        (<{ textContent: string }> <unknown> replacement).textContent,
-        "updated",
-      );
+      expect((<{ textContent: string }> <unknown> replacement).textContent).toStrictEqual("updated");
 
       // Siblings anchor after the replacement.
       assert(attachmentRef.type === AttachmentType.Sibling);
@@ -146,7 +143,7 @@ Deno.test("text replace changeset", async (t) => {
     },
   );
 
-  await t.step("leave the anchor untouched without a linked node", () => {
+  test("leave the anchor untouched without a linked node", () => {
     const vNode = vText<Node>("orphan");
     const anchor = <Node> {};
     const attachmentRef: AttachmentRef = {
@@ -158,6 +155,6 @@ Deno.test("text replace changeset", async (t) => {
 
     // No node to rebind: siblings must not chain onto a dangling node.
     assert(attachmentRef.node === anchor);
-    assertEquals(vNode[VNodeProps.NODE_REF], undefined);
+    expect(vNode[VNodeProps.NODE_REF]).toStrictEqual(undefined);
   });
 });
