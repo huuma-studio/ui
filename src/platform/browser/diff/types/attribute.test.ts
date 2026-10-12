@@ -110,6 +110,46 @@ describe("create attribute changesets", () => {
     expect(recorded.checked).toStrictEqual(true);
   });
 
+  test("write numbers and booleans of non-boolean attributes as strings", () => {
+    const vNode = vElementNode({});
+    const recorded = fakeElement(vNode);
+    const create = (name: string, value: string | number | boolean) =>
+      attribute(<CreateAttributeChangeSet>{
+        [Props.Type]: Type.Attribute,
+        [Props.Action]: Action.Create,
+        [Props.Payload]: { vNode, name, value },
+      });
+
+    create("tabindex", 0);
+    create("aria-expanded", false);
+    create("value", 5);
+
+    expect(recorded.set).toStrictEqual([
+      ["tabindex", "0"],
+      ["aria-expanded", "false"],
+    ]);
+    expect(recorded.value).toStrictEqual("5");
+  });
+
+  test("never write an object value as an attribute", () => {
+    const vNode = vElementNode({});
+    const recorded = fakeElement(vNode);
+    const create = (__html: string) =>
+      attribute(<CreateAttributeChangeSet>{
+        [Props.Type]: Type.Attribute,
+        [Props.Action]: Action.Create,
+        [Props.Payload]: { vNode, name: "dangerouslySetInnerHTML", value: { __html } },
+      });
+
+    create("<b>hi</b>");
+    expect((vNode[VNodeProps.NODE_REF] as { innerHTML?: string }).innerHTML).toStrictEqual(
+      "<b>hi</b>",
+    );
+    // An empty __html used to become dangerouslySetInnerHTML="[object Object]".
+    create("");
+    expect(recorded.set).toStrictEqual([]);
+  });
+
   test("leave non-boolean attributes verbatim", () => {
     const vNode = vElementNode({});
     const recorded = fakeElement(vNode);
