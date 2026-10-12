@@ -10,6 +10,8 @@
 import type { Plugin } from "vite";
 import { resolve } from "node:path";
 
+import { devPlugin } from "./dev.ts";
+import { entryPlugin } from "./entry.ts";
 import { islandsPlugin } from "./islands.ts";
 import { routesPlugin } from "./routes.ts";
 
@@ -20,6 +22,11 @@ export interface HuumaOptions {
    * `middleware.ts` files, relative to Vite's `root`. Defaults to `"app"`.
    */
   routes?: string;
+  /**
+   * The module that exports the app (`createUIApp(Root)`) as default,
+   * relative to Vite's `root`. Defaults to `"server.ts"`.
+   */
+  server?: string;
 }
 
 /**
@@ -43,6 +50,11 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     }),
     routesPlugin(() => resolve(app.root, options.routes ?? "app")),
     islandsPlugin(() => app),
+    entryPlugin(() => ({
+      server: resolve(app.root, options.server ?? "server.ts"),
+      base: app.base,
+    })),
+    devPlugin(),
   ];
 }
 

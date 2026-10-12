@@ -60,6 +60,12 @@ describe(mount.name, () => {
     expect(html).toContain('import $I1 from "/app/counter.client.tsx";');
   });
 
+  test("rejects a server entry without an app", () => {
+    expect(() => mount(undefined as never, manifest)).toThrow(
+      "The server entry must export the app as default",
+    );
+  });
+
   test("rejects an island without a default component", () => {
     expect(() =>
       mount(createUIApp(Root), { ...manifest, islands: { "app/broken.client.tsx": {} } }),

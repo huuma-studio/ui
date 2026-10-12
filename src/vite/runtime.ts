@@ -24,6 +24,12 @@ export interface Manifest {
  * the scripts, so the app only references them.
  */
 export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest): UIApp<T> {
+  // The server entry's default export, which nothing type-checks.
+  if (typeof (app as Partial<UIApp<T>> | undefined)?.addPage !== "function") {
+    throw new TypeError(
+      "The server entry must export the app as default: `export default createUIApp(Root);`",
+    );
+  }
   app.addScript(manifest.runtime, undefined, { isRuntime: true });
 
   for (const [path, island] of Object.entries(manifest.islands)) {

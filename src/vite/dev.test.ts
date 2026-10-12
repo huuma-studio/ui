@@ -1,0 +1,122 @@
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { createServer, type ViteDevServer } from "vite";
+import { fileURLToPath } from "node:url";
+
+import { huuma } from "./mod.ts";
+import { injectViteClient } from "./dev.ts";
+
+const fixture = fileURLToPath(new URL("../../test/fixtures/basic", import.meta.url));
+
+describe(injectViteClient.name, () => {
+  test("adds the client at the end of <head>", () => {
+    expect(injectViteClient("<html><head><title>x</title></head><body></body></html>", "/")).toBe(
+      '<html><head><title>x</title><script type="module" src="/@vite/client"></script></head><body></body></html>',
+    );
+  });
+
+  test("uses the base and the page's nonce", () => {
+    expect(injectViteClient("<head></head>", "/shop/", "abc")).toBe(
+      '<head><script type="module" src="/shop/@vite/client" nonce="abc"></script></head>',
+    );
+  });
+
+  test("without <head>, after <html>, after the doctype or at the start", () => {
+    expect(injectViteClient("<!DOCTYPE html><html><p>x</p></html>", "/")).toBe(
+      '<!DOCTYPE html><html><script type="module" src="/@vite/client"></script><p>x</p></html>',
+    );
+    expect(injectViteClient("<!DOCTYPE html><p>x</p>", "/")).toBe(
+      '<!DOCTYPE html><script type="module" src="/@vite/client"></script><p>x</p>',
+    );
+    expect(injectViteClient("<p>x</p>", "/")).toBe(
+      '<script type="module" src="/@vite/client"></script><p>x</p>',
+    );
+  });
+});
+
+describe("dev server", () => {
+  let server: ViteDevServer;
+  let origin: string;
+  beforeAll(async () => {
+    server = await createServer({
+      root: fixture,
+      configFile: false,
+      logLevel: "silent",
+      server: { host: "127.0.0.1", port: 0 },
+      plugins: [huuma()],
+    });
+    await server.listen();
+    origin = new URL(server.resolvedUrls!.local[0]).origin;
+  });
+  afterAll(async () => {
+    await server.close();
+  });
+
+  test("renders a page with its layout and middleware", async () => {
+    const response = await fetch(`${origin}/`);
+    const html = await response.text();
+
+    expect(response.status).toStrictEqual(200);
+    expect(response.headers.get("x-fixture-middleware")).toStrictEqual("app");
+    expect(html).toMatch(/^<!DOCTYPE html><html lang="en"><head><title>Fixture<\/title>/);
+    expect(html).toContain("<main><h1>Home</h1><!-- start_island_");
+    // With the nonce of the page's Content-Security-Policy, like its own scripts.
+    const nonce = /'nonce-([^']+)'/.exec(
+      response.headers.get("content-security-policy") ?? "",
+    )?.[1];
+    expect(nonce).toBeTruthy();
+    expect(html).toContain(
+      `<script type="module" src="/@vite/client" nonce="${nonce}"></script></head>`,
+    );
+    expect(html).toContain(`<script type="module" nonce="${nonce}">import { launch }`);
+  });
+
+  test("launches the page's islands from paths Vite serves", async () => {
+    const html = await (await fetch(`${origin}/`)).text();
+    const runtime = /import \{ launch \} from "([^"]+)";/.exec(html)?.[1];
+    const island = /import \$I1 from "([^"]+)";/.exec(html)?.[1];
+
+    expect(runtime).toStrictEqual("/@id/__x00__virtual:huuma/runtime");
+    expect(island).toStrictEqual("/app/counter.client.tsx");
+    expect(html).toContain('{fn: $I1, props: {"start":1}, islandId: "');
+
+    const runtimeModule = await fetch(origin + runtime);
+    expect(runtimeModule.headers.get("content-type")).toContain("javascript");
+    expect(await runtimeModule.text()).toContain("export { launch }");
+
+    const islandModule = await fetch(origin + island);
+    expect(islandModule.headers.get("content-type")).toContain("javascript");
+    // Compiled by Oxc with Huuma's dev JSX runtime.
+    expect(await islandModule.text()).toContain("jsx-runtime/dev.ts");
+  });
+
+  test("serves other pages and the 404 page", async () => {
+    const about = await fetch(`${origin}/about`);
+    expect(about.status).toStrictEqual(200);
+    expect(await about.text()).toContain("<main><h1>About</h1></main>");
+
+    const missing = await fetch(`${origin}/missing`);
+    expect(missing.status).toStrictEqual(404);
+    expect(await missing.text()).toContain("<h1>Not found</h1>");
+  });
+});
+
+test("names a missing server entry", async () => {
+  const server = await createServer({
+    root: fixture,
+    configFile: false,
+    logLevel: "silent",
+    server: { host: "127.0.0.1", port: 0 },
+    plugins: [huuma({ server: "missing.ts" })],
+  });
+  try {
+    await server.listen();
+    const response = await fetch(server.resolvedUrls!.local[0]);
+    expect(response.status).toStrictEqual(500);
+    // Vite's error page, with the message as JSON for its error overlay.
+    expect(await response.text()).toContain(
+      'The server entry \\"' + fixture + "/missing.ts\\\" doesn't exist.",
+    );
+  } finally {
+    await server.close();
+  }
+});
