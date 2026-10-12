@@ -23,14 +23,22 @@ export function toRequest(req: IncomingMessage, signal: AbortSignal): Request {
     if (!name.startsWith(":")) headers.append(name, req.rawHeaders[i + 1]);
   }
 
-  const host = VALID_HOST.test(req.headers.host ?? "") ? req.headers.host : "localhost";
+  // HTTP/2 (Vite's default with `server.https`) sends the host as the
+  // `:authority` pseudo-header instead of a Host header.
+  const authority = req.headers.host ?? req.headers[":authority"];
+  const host =
+    typeof authority === "string" && VALID_HOST.test(authority) ? authority : "localhost";
   const method = req.method ?? "GET";
   const hasBody = !BODYLESS_METHODS.has(method);
+
+  // HTTPS (Vite's `server.https`) comes in over a TLS socket. The scheme
+  // matters for redirects the app builds from `request.url`.
+  const scheme = (req.socket as { encrypted?: boolean }).encrypted ? "https" : "http";
 
   // Concatenated, not resolved against a base URL: a target such as
   // `//foo/bar` stays a path instead of becoming the host `foo`.
   const target = req.url ?? "/";
-  const url = target.startsWith("/") ? `http://${host}${target}` : `http://${host}/${target}`;
+  const url = `${scheme}://${host}${target.startsWith("/") ? "" : "/"}${target}`;
 
   return new Request(url, {
     method,

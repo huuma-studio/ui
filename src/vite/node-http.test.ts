@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { createServer, request, type Server } from "node:http";
+import { createServer, type IncomingMessage, request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { toRequest, writeResponse } from "./node-http.ts";
@@ -44,6 +44,36 @@ describe("node-http", () => {
       url: `${origin}/about?tab=1`,
       header: "yes",
     });
+  });
+
+  test("keeps the scheme of HTTPS requests", () => {
+    // What Node passes for a request over TLS, without a certificate.
+    const req = (encrypted: boolean) =>
+      ({
+        rawHeaders: ["Host", "localhost:5173"],
+        headers: { host: "localhost:5173" },
+        method: "GET",
+        url: "/de/about",
+        socket: { encrypted },
+      }) as unknown as IncomingMessage;
+    const signal = new AbortController().signal;
+
+    expect(toRequest(req(true), signal).url).toStrictEqual("https://localhost:5173/de/about");
+    expect(toRequest(req(false), signal).url).toStrictEqual("http://localhost:5173/de/about");
+  });
+
+  test("takes the host from HTTP/2's :authority", () => {
+    const req = {
+      rawHeaders: [":authority", "localhost:5173", ":path", "/de/about"],
+      headers: { ":authority": "localhost:5173" },
+      method: "GET",
+      url: "/de/about",
+      socket: { encrypted: true },
+    } as unknown as IncomingMessage;
+
+    expect(toRequest(req, new AbortController().signal).url).toStrictEqual(
+      "https://localhost:5173/de/about",
+    );
   });
 
   test("streams request bodies", async () => {
