@@ -4,4 +4,11 @@ export { Launch, Scripts } from "./scripts.ts";
 export { type ContentSecurityPolicy } from "./content-security-policy.ts";
 export { type Metadata, type MetadataGenerator } from "./metadata.ts";
 export { Meta } from "./meta.ts";
-export { createUIApp, type PageLike, type PageLikeProps, UIApp, type UIAppContext } from "./app.ts";
+export {
+  createUIApp,
+  type PageLike,
+  type PageLikeProps,
+  type RootPageProps,
+  UIApp,
+  type UIAppContext,
+} from "./app.ts";
