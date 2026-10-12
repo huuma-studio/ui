@@ -8,6 +8,18 @@
  * Runtime APIs come through the hook arguments instead.
  */
 import type { Plugin } from "vite";
+import { resolve } from "node:path";
+
+import { routesPlugin } from "./routes.ts";
+
+/** Options of the Huuma UI plugin. */
+export interface HuumaOptions {
+  /**
+   * The directory with the app's `page.tsx`, `layout.tsx` and
+   * `middleware.ts` files, relative to Vite's `root`. Defaults to `"app"`.
+   */
+  routes?: string;
+}
 
 /**
  * Creates the Huuma UI plugins for Vite 8.
@@ -20,14 +32,24 @@ import type { Plugin } from "vite";
  * export default defineConfig({ plugins: [huuma()] });
  * ```
  */
-export function huuma(): Plugin[] {
-  return [configPlugin()];
+export function huuma(options: HuumaOptions = {}): Plugin[] {
+  // Vite's resolved root, known once the config is resolved.
+  let root = "";
+  return [
+    configPlugin((resolvedRoot) => {
+      root = resolvedRoot;
+    }),
+    routesPlugin(() => resolve(root, options.routes ?? "app")),
+  ];
 }
 
 /** Settings every Huuma app needs. */
-function configPlugin(): Plugin {
+function configPlugin(onRoot: (root: string) => void): Plugin {
   return {
     name: "huuma:config",
+    configResolved(config) {
+      onRoot(config.root);
+    },
     config() {
       return {
         // Huuma renders its own HTML: no index.html, no SPA fallback.
