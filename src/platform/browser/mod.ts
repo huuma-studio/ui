@@ -9,6 +9,9 @@ import { attachmentRefFrom, createRootAttachmentRef } from "./diff/attachment-re
 import { diff } from "./diff/diff.ts";
 import { dispatch } from "./diff/dispatch.ts";
 import { hydrate } from "./diff/hydrate.ts";
+import { registerIslandModule, registerMountedIsland } from "./hot.ts";
+
+export { hotReplaceIsland } from "./hot.ts";
 
 type Island = {
   fn: JSX.Component;
@@ -59,6 +62,9 @@ export function launch(islands: Island[], transferState: TransferState): void {
   });
 
   if (islands?.length) {
+    for (const island of islands) {
+      if (island.path) registerIslandModule(island.path, island.fn);
+    }
     const iterator = document.createNodeIterator(document.body, NodeFilter.SHOW_COMMENT, (node) => {
       return isIslandStart(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
     });
@@ -79,13 +85,12 @@ export function launch(islands: Island[], transferState: TransferState): void {
               // Todo re-construct Signals
               ...island.props,
               children: findIslandChildren({ nodes, islandId, islands }),
-            });
-            const vNode = create<Node>(element, {
-              url: new URL(globalThis.window.location.href),
-              transferState,
-            });
+            }) as JSX.ComponentNode<JSX.Component>;
+            const options = { url: new URL(globalThis.window.location.href), transferState };
+            const vNode = create<Node>(element, options);
             if (isVComponent(vNode)) {
               dispatch(hydrate(vNode, nodes, attachmentRef));
+              registerMountedIsland({ element, vNode, options });
             }
           }
         }
