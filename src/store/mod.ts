@@ -26,6 +26,6 @@ export function createStore<T extends Record<string, unknown>>(
   }
 
   const state = init(set);
-  const signal = new WritableSignal({ ...state, ...(storedState || {}) });
+  const signal = new WritableSignal({ ...state, ...storedState });
   return signal;
 }

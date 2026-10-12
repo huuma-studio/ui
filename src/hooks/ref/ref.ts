@@ -78,9 +78,11 @@ export function refFromScope<T>(
   }
 
   const signal = createRef(value, refCreator);
-  vNode[VNodeProps.OPTIONS].$?.length
-    ? vNode[VNodeProps.OPTIONS].$.push(signal)
-    : (vNode[VNodeProps.OPTIONS].$ = [signal]);
+  if (vNode[VNodeProps.OPTIONS].$?.length) {
+    vNode[VNodeProps.OPTIONS].$.push(signal);
+  } else {
+    vNode[VNodeProps.OPTIONS].$ = [signal];
+  }
   return signal;
 }
 

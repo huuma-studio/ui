@@ -210,21 +210,23 @@ function vComponent<T>(component: JSX.ComponentNode<JSX.Component>, globalOption
   };
 
   scopedFn(vComponent, () => {
-    typeof vNodeSignalUpdater === "function"
-      ? setSubscriber(
-          () => {
-            const node = vComponent[VNodeProps.FN](props);
-            if (node instanceof Promise) {
-              throw Error("Promise/Async not supported in scoped functions");
-            }
-            return (vComponent[VNodeProps.AST] = create(node, globalOptions));
-          },
-          vNodeSignalUpdater(component, vComponent, globalOptions),
-        )
-      : (vComponent[VNodeProps.AST] = create(
-          assertSyncCall(vComponent[VNodeProps.FN](props)),
-          globalOptions,
-        ));
+    if (typeof vNodeSignalUpdater === "function") {
+      setSubscriber(
+        () => {
+          const node = vComponent[VNodeProps.FN](props);
+          if (node instanceof Promise) {
+            throw Error("Promise/Async not supported in scoped functions");
+          }
+          return (vComponent[VNodeProps.AST] = create(node, globalOptions));
+        },
+        vNodeSignalUpdater(component, vComponent, globalOptions),
+      );
+    } else {
+      vComponent[VNodeProps.AST] = create(
+        assertSyncCall(vComponent[VNodeProps.FN](props)),
+        globalOptions,
+      );
+    }
     vComponent[VNodeProps.MODE] = VMode.Created;
   });
 
