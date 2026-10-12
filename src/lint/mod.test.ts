@@ -30,27 +30,54 @@ const remoteError = (code: string) => ({
   errors: [{ message: "Huuma remote function MUST be an async function export" }],
 });
 
+const exportAllError = (code: string) => ({
+  ...remote(code),
+  errors: [
+    {
+      message: "Huuma remote modules can't use `export *`: export each remote function by name",
+    },
+  ],
+});
+
 tester.run("async-remote-functions", rule("async-remote-functions"), {
   valid: [
     remote("export async function save() {}"),
     remote("export async function save<T>(\n  input: T,\n): Promise<T> {\n  return input;\n}"),
+    remote(
+      "export function save(id: string): Promise<void>;\nexport function save(id: number): Promise<void>;\nexport async function save(id: unknown) {}",
+    ),
     remote("export type Input = { email: string };"),
     remote("export interface Input { email: string }"),
     remote('export type { Input } from "./input.ts";'),
+    remote('export type * from "./input.ts";'),
+    // The forms the Vite plugin's Oxc-based stub generator finds.
+    remote("export const save = async () => {};"),
+    remote("export const save = async function () {};"),
+    remote("export const save: Handler = async () => {};"),
+    remote("export const save = (async () => {}) satisfies Handler;"),
+    remote("export const first = async () => {}, second = async () => {};"),
+    remote("export let save = async (\n  id: string,\n  force = false,\n) => {};"),
+    remote("const save = async () => {}; export { save };"),
+    remote('async function save() {} export { save as store, save as "save-item" };'),
+    remote('import { save } from "./db.ts"; export { save };'),
+    remote('export { save, remove as delete } from "./db.ts";'),
+    remote('import type { Input } from "./input.ts"; interface Item {} export { Input, Item };'),
     { code: "export function helper() {}", filename: "helper.ts" },
+    { code: 'export * from "./helpers.ts";', filename: "helper.ts" },
   ],
   invalid: [
     remoteError("export function save() {}"),
     remoteError("export const limit = 10;"),
     remoteError("export async function* stream() {}"),
-    // The client stub generator misses these forms, so they would have no
-    // browser stub: only `export async function` is accepted for now.
-    remoteError("export const save = async () => {};"),
-    remoteError("export const save = async function () {};"),
-    remoteError("export const save: Handler = async () => {};"),
-    remoteError("export const first = async () => {}, second = async () => {};"),
-    remoteError("export let save = async () => {};"),
-    remoteError("const save = async () => {}; export { save };"),
+    remoteError("export const save = () => {};"),
+    remoteError("export const save = async () => {}, limit = 10;"),
+    remoteError("export const { save } = handlers;"),
+    remoteError("export class Store {}"),
+    remoteError("export enum Status { Open }"),
+    remoteError("function save() {} export { save };"),
+    remoteError("const limit = 10; export { limit };"),
+    exportAllError('export * from "./db.ts";'),
+    exportAllError('export * as db from "./db.ts";'),
   ],
 });
 
