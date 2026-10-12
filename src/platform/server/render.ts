@@ -41,10 +41,7 @@ export async function renderToString(
   return stringify(await create(node, globalOptions));
 }
 
-export function renderToStringSync(
-  node: JSX.Element,
-  globalOptions?: VGlobalOptions,
-): string {
+export function renderToStringSync(node: JSX.Element, globalOptions?: VGlobalOptions): string {
   return stringify(createSync<unknown>(node, globalOptions));
 }
 
@@ -52,18 +49,13 @@ function stringify<T>(vNode: VNode<T>): string {
   if (!vNode) return "";
   switch (vNode.type) {
     case VType.TEXT:
-      return vNode[VNodeProps.SKIP_ESCAPING]
-        ? textFromVText(vNode)
-        : escape(textFromVText(vNode));
+      return vNode[VNodeProps.SKIP_ESCAPING] ? textFromVText(vNode) : escape(textFromVText(vNode));
     case VType.ELEMENT:
       return elementToString(vNode);
     case VType.COMPONENT:
       return stringify(vNode[VNodeProps.AST]);
     case VType.FRAGMENT:
-      return (
-        vNode[VNodeProps.CHILDREN]?.map((child) => stringify(child)).join("") ??
-          ""
-      );
+      return vNode[VNodeProps.CHILDREN]?.map((child) => stringify(child)).join("") ?? "";
     default:
       throw Error("Node type is not supported!");
   }
@@ -82,9 +74,7 @@ function elementToString<T>(vNode: VElement<T>): string {
 
   const { dangerouslySetInnerHTML, children: _c, ...attributes } = props;
   if (dangerouslySetInnerHTML) {
-    return `<${tag}${
-      stringFrom(attributes)
-    }>${dangerouslySetInnerHTML.__html}</${tag}>`;
+    return `<${tag}${stringFrom(attributes)}>${dangerouslySetInnerHTML.__html}</${tag}>`;
   }
   return `<${tag}${stringFrom(attributes)}>${
     children?.map((child) => stringify(child)).join("") ?? ""
@@ -112,8 +102,7 @@ function stringFrom(attributes: JSX.Attributes): string {
 }
 
 function textFromVText<T>(vText: VText<T>): string {
-  return typeof vText[VNodeProps.TEXT] === "object" &&
-      "get" in vText[VNodeProps.TEXT]
+  return typeof vText[VNodeProps.TEXT] === "object" && "get" in vText[VNodeProps.TEXT]
     ? `${vText[VNodeProps.TEXT].get()}`
     : `${vText[VNodeProps.TEXT]}`;
 }

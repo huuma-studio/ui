@@ -6,21 +6,12 @@ import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { generateHash, toCanonicalPath } from "./utils.ts";
 
-export type EntryPoint =
-  & {
-    path: string;
-    imports?: string[];
-  }
-  & (
-    | { isEntryPoint: boolean }
-    | { isIsland: boolean }
-    | { isRuntime: boolean }
-  );
+export type EntryPoint = {
+  path: string;
+  imports?: string[];
+} & ({ isEntryPoint: boolean } | { isIsland: boolean } | { isRuntime: boolean });
 
-export type EntryPoints = Record<
-  string,
-  EntryPoint
->;
+export type EntryPoints = Record<string, EntryPoint>;
 
 interface OutputFile extends esbuild.OutputFile {
   isEntryPoint: boolean;
@@ -50,13 +41,15 @@ async function initialize() {
 export class Bundler {
   constructor() {}
 
-  async bundle(
-    { entryPoints, isProd = true, shims }: {
-      entryPoints: EntryPoints;
-      isProd?: boolean;
-      shims?: string[];
-    },
-  ): Promise<{ hash: string; files: Map<string, OutputFile> }> {
+  async bundle({
+    entryPoints,
+    isProd = true,
+    shims,
+  }: {
+    entryPoints: EntryPoints;
+    isProd?: boolean;
+    shims?: string[];
+  }): Promise<{ hash: string; files: Map<string, OutputFile> }> {
     await initialize();
 
     const result = await esbuild.build({
@@ -65,10 +58,13 @@ export class Bundler {
         remoteFunctionsPlugin,
         denoPlugin({ preserveJsx: true }),
       ],
-      entryPoints: Object.entries(entryPoints).reduce((acc, [key, value]) => {
-        acc[key] = value.path;
-        return acc;
-      }, {} as Record<string, string>),
+      entryPoints: Object.entries(entryPoints).reduce(
+        (acc, [key, value]) => {
+          acc[key] = value.path;
+          return acc;
+        },
+        {} as Record<string, string>,
+      ),
       bundle: true,
       format: "esm",
       treeShaking: true,
@@ -91,16 +87,13 @@ export class Bundler {
     result.outputFiles?.forEach((file) => {
       const metaInfo = result.metafile?.outputs[parse(file.path).base];
       hash = hash.concat(file.hash);
-      const entryPoint: EntryPoint | undefined =
-        entryPoints[parse(file.path).name];
+      const entryPoint: EntryPoint | undefined = entryPoints[parse(file.path).name];
 
       files.set(parse(file.path).base, {
-        isEntryPoint: (entryPoint && "isEntryPoint" in entryPoint &&
-          entryPoint.isEntryPoint) ?? false,
-        isIsland: (entryPoint && "isIsland" in entryPoint &&
-          entryPoint.isIsland) ?? false,
-        isRuntime: (entryPoint && "isRuntime" in entryPoint &&
-          entryPoint.isRuntime) ?? false,
+        isEntryPoint:
+          (entryPoint && "isEntryPoint" in entryPoint && entryPoint.isEntryPoint) ?? false,
+        isIsland: (entryPoint && "isIsland" in entryPoint && entryPoint.isIsland) ?? false,
+        isRuntime: (entryPoint && "isRuntime" in entryPoint && entryPoint.isRuntime) ?? false,
         imports: metaInfo?.imports ?? [],
         ...file,
         contents: new Uint8Array(file.contents),
@@ -150,9 +143,7 @@ const remoteFunctionsPlugin: esbuild.Plugin = {
       }
 
       const fileName = parse(args.path).name;
-      const fileHash = await generateHash(
-        toCanonicalPath(relative(process.cwd(), args.path)),
-      );
+      const fileHash = await generateHash(toCanonicalPath(relative(process.cwd(), args.path)));
       const endpoint = `/_huuma/remote/${fileHash}/${fileName}`;
 
       const buildFetch = (remoteFunction: string) =>
@@ -169,9 +160,9 @@ const remoteFunctionsPlugin: esbuild.Plugin = {
             const body = await res.json().catch(() => null);
             const err = new Error(
               body?.message ??
-                ("Remote function " + ${
-          JSON.stringify(remoteFunction)
-        } + " failed (HTTP " + res.status + ")"),
+                ("Remote function " + ${JSON.stringify(
+                  remoteFunction,
+                )} + " failed (HTTP " + res.status + ")"),
             );
             err.name = body?.name ?? "RemoteFunctionError";
             throw err;
@@ -180,16 +171,12 @@ const remoteFunctionsPlugin: esbuild.Plugin = {
         })`;
 
       // Create exports for each function found
-      const namedExports = [...exportedFunctions].map((fn) =>
-        `export async function ${fn}(...args){ return ${buildFetch(fn)}; }`
+      const namedExports = [...exportedFunctions].map(
+        (fn) => `export async function ${fn}(...args){ return ${buildFetch(fn)}; }`,
       );
 
       const defaultExport = hasDefaultExport
-        ? [
-          `export default async function(...args){ return ${
-            buildFetch("default")
-          }; }`,
-        ]
+        ? [`export default async function(...args){ return ${buildFetch("default")}; }`]
         : [];
 
       const exportContents = [...namedExports, ...defaultExport].join(EOL);

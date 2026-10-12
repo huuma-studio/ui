@@ -28,7 +28,7 @@ function fakeElement(vElement: VElement<Node>): Recorded {
     checked: false,
     value: "",
   };
-  vElement[VNodeProps.NODE_REF] = <Node> <unknown> {
+  vElement[VNodeProps.NODE_REF] = <Node>(<unknown>{
     setAttribute: (name: string, value: string) => {
       recorded.set.push([name, value]);
     },
@@ -47,20 +47,18 @@ function fakeElement(vElement: VElement<Node>): Recorded {
     set value(value: string) {
       recorded.value = value;
     },
-  };
+  });
   return recorded;
 }
 
-function vElementNode(
-  props: Record<string, unknown>,
-): VElement<Node> {
-  return <VElement<Node>> <unknown> {
+function vElementNode(props: Record<string, unknown>): VElement<Node> {
+  return <VElement<Node>>(<unknown>{
     type: 1,
     [VNodeProps.TAG]: "button",
     [VNodeProps.PROPS]: props,
     [VNodeProps.EVENT_REFS]: [],
     [VNodeProps.CHILDREN]: [],
-  };
+  });
 }
 
 describe("create attribute changesets", () => {
@@ -69,13 +67,11 @@ describe("create attribute changesets", () => {
       const vNode = vElementNode({ disabled: value });
       const recorded = fakeElement(vNode);
 
-      attribute(
-        <CreateAttributeChangeSet> {
-          [Props.Type]: Type.Attribute,
-          [Props.Action]: Action.Create,
-          [Props.Payload]: { vNode, name: "disabled", value },
-        },
-      );
+      attribute(<CreateAttributeChangeSet>{
+        [Props.Type]: Type.Attribute,
+        [Props.Action]: Action.Create,
+        [Props.Payload]: { vNode, name: "disabled", value },
+      });
 
       // No attribute value is ever written verbatim. The cleanup
       // removeAttribute is a no-op on freshly created elements.
@@ -89,13 +85,11 @@ describe("create attribute changesets", () => {
       const vNode = vElementNode({ [name]: true });
       const recorded = fakeElement(vNode);
 
-      attribute(
-        <CreateAttributeChangeSet> {
-          [Props.Type]: Type.Attribute,
-          [Props.Action]: Action.Create,
-          [Props.Payload]: { vNode, name, value: true },
-        },
-      );
+      attribute(<CreateAttributeChangeSet>{
+        [Props.Type]: Type.Attribute,
+        [Props.Action]: Action.Create,
+        [Props.Payload]: { vNode, name, value: true },
+      });
 
       expect(recorded.set).toStrictEqual([[name, ""]]);
       expect(recorded.remove).toStrictEqual([]);
@@ -106,13 +100,11 @@ describe("create attribute changesets", () => {
     const vNode = vElementNode({ checked: true });
     const recorded = fakeElement(vNode);
 
-    attribute(
-      <CreateAttributeChangeSet> {
-        [Props.Type]: Type.Attribute,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: { vNode, name: "checked", value: true },
-      },
-    );
+    attribute(<CreateAttributeChangeSet>{
+      [Props.Type]: Type.Attribute,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: { vNode, name: "checked", value: true },
+    });
 
     expect(recorded.set).toStrictEqual([]);
     expect(recorded.checked).toStrictEqual(true);
@@ -122,27 +114,21 @@ describe("create attribute changesets", () => {
     const vNode = vElementNode({});
     const recorded = fakeElement(vNode);
 
-    attribute(
-      <CreateAttributeChangeSet> {
-        [Props.Type]: Type.Attribute,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: { vNode, name: "class", value: "btn" },
-      },
-    );
-    attribute(
-      <CreateAttributeChangeSet> {
-        [Props.Type]: Type.Attribute,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: { vNode, name: "aria-busy", value: "false" },
-      },
-    );
-    attribute(
-      <CreateAttributeChangeSet> {
-        [Props.Type]: Type.Attribute,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: { vNode, name: "value", value: "text" },
-      },
-    );
+    attribute(<CreateAttributeChangeSet>{
+      [Props.Type]: Type.Attribute,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: { vNode, name: "class", value: "btn" },
+    });
+    attribute(<CreateAttributeChangeSet>{
+      [Props.Type]: Type.Attribute,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: { vNode, name: "aria-busy", value: "false" },
+    });
+    attribute(<CreateAttributeChangeSet>{
+      [Props.Type]: Type.Attribute,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: { vNode, name: "value", value: "text" },
+    });
 
     expect(recorded.set).toStrictEqual([
       ["class", "btn"],
@@ -194,10 +180,7 @@ describe("compareAttributes boolean attribute transitions", () => {
   });
 
   test("boolean attributes dropped from props are deleted", () => {
-    const changes = compareAttributes(
-      vElementNode({}),
-      vElementNode({ disabled: true }),
-    );
+    const changes = compareAttributes(vElementNode({}), vElementNode({ disabled: true }));
 
     const deletes = changes.filter((c) => c[Props.Action] === Action.Delete);
     expect(deletes.length).toStrictEqual(1);
@@ -212,31 +195,29 @@ describe("compareAttributes boolean attribute transitions", () => {
 
     expect(changes.length).toStrictEqual(1);
     expect(changes[0][Props.Action]).toStrictEqual(Action.Create);
-    expect((changes[0][Props.Payload] as { name: string; value: string }).value).toStrictEqual("next");
+    expect((changes[0][Props.Payload] as { name: string; value: string }).value).toStrictEqual(
+      "next",
+    );
   });
 });
 
 test("media boolean attributes omitted when falsy", () => {
   // Regression: falsy values of omitted standard boolean attributes (e.g.
   // the media restriction attributes) must never be written verbatim.
-  for (
-    const name of [
-      "disablepictureinpicture",
-      "disableremoteplayback",
-      "allowpaymentrequest",
-      "webkitdirectory",
-    ] as const
-  ) {
+  for (const name of [
+    "disablepictureinpicture",
+    "disableremoteplayback",
+    "allowpaymentrequest",
+    "webkitdirectory",
+  ] as const) {
     const vNode = vElementNode({ [name]: false });
     const recorded = fakeElement(vNode);
 
-    attribute(
-      <CreateAttributeChangeSet> {
-        [Props.Type]: Type.Attribute,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: { vNode, name, value: false },
-      },
-    );
+    attribute(<CreateAttributeChangeSet>{
+      [Props.Type]: Type.Attribute,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: { vNode, name, value: false },
+    });
 
     expect(recorded.set).toStrictEqual([]);
     expect(recorded.remove).toStrictEqual([name]);
@@ -249,13 +230,7 @@ test("signal-driven disabled flip adds and removes the attribute", () => {
   // Initial render with disabled={busy.get()} - control starts disabled.
   const previous = vElementNode({ disabled: busy.get() });
   const initialRecorded = fakeElement(previous);
-  for (
-    const change of setAttribute(
-      "disabled",
-      previous[VNodeProps.PROPS].disabled,
-      previous,
-    )
-  ) {
+  for (const change of setAttribute("disabled", previous[VNodeProps.PROPS].disabled, previous)) {
     attribute(change as AttributeChangeSet);
   }
   expect(initialRecorded.set).toStrictEqual([["disabled", ""]]);
@@ -297,10 +272,9 @@ describe("compareAttributes numeric values", () => {
   });
 
   test("unchanged numbers produce no changesets", () => {
-    expect(compareAttributes(
-        vElementNode({ tabindex: 0 }),
-        vElementNode({ tabindex: 0 }),
-      )).toStrictEqual([]);
+    expect(
+      compareAttributes(vElementNode({ tabindex: 0 }), vElementNode({ tabindex: 0 })),
+    ).toStrictEqual([]);
   });
 
   test("remove a dropped number", () => {
@@ -316,17 +290,18 @@ describe("compareAttributes numeric values", () => {
 
 describe("compareAttributes falsy previous values", () => {
   test("unchanged empty strings produce no changesets", () => {
-    expect(compareAttributes(
-        vElementNode({ class: "", alt: "" }),
-        vElementNode({ class: "", alt: "" }),
-      )).toStrictEqual([]);
+    expect(
+      compareAttributes(vElementNode({ class: "", alt: "" }), vElementNode({ class: "", alt: "" })),
+    ).toStrictEqual([]);
   });
 
   test("unchanged false values produce no changesets", () => {
-    expect(compareAttributes(
+    expect(
+      compareAttributes(
         vElementNode({ disabled: false, "data-on": false }),
         vElementNode({ disabled: false, "data-on": false }),
-      )).toStrictEqual([]);
+      ),
+    ).toStrictEqual([]);
   });
 
   test("empty string transitions produce one update each", () => {

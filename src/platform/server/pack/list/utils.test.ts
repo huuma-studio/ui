@@ -17,7 +17,9 @@ describe(toCanonicalPath.name, () => {
   });
 
   test("normalizes mixed separators", () => {
-    expect(toCanonicalPath("src\\nested/test.remote.ts")).toStrictEqual("/src/nested/test.remote.ts");
+    expect(toCanonicalPath("src\\nested/test.remote.ts")).toStrictEqual(
+      "/src/nested/test.remote.ts",
+    );
   });
 
   test("collapses repeated leading slashes", () => {
@@ -30,32 +32,29 @@ describe(toCanonicalPath.name, () => {
   });
 });
 
-test(
-  "toCanonicalPath: client and server hash inputs agree cross-platform",
-  async () => {
-    // Simulates the two code paths that must produce identical hashes:
-    //   client: relative(cwd, absPath) → normalize       (bundler.ts)
-    //   server: join(filePath, fileName) → normalize    (pack.ts)
-    // Each side may yield POSIX- or Windows-style separators depending on
-    // the platform; after toCanonicalPath both must be the same string.
-    const posixClient = "src/test.remote.ts";
-    const posixServer = "src/test.remote.ts";
-    const winClient = "src\\test.remote.ts";
-    const winServer = "src\\test.remote.ts";
+test("toCanonicalPath: client and server hash inputs agree cross-platform", async () => {
+  // Simulates the two code paths that must produce identical hashes:
+  //   client: relative(cwd, absPath) → normalize       (bundler.ts)
+  //   server: join(filePath, fileName) → normalize    (pack.ts)
+  // Each side may yield POSIX- or Windows-style separators depending on
+  // the platform; after toCanonicalPath both must be the same string.
+  const posixClient = "src/test.remote.ts";
+  const posixServer = "src/test.remote.ts";
+  const winClient = "src\\test.remote.ts";
+  const winServer = "src\\test.remote.ts";
 
-    const canonical = "/src/test.remote.ts";
-    expect(toCanonicalPath(posixClient)).toStrictEqual(canonical);
-    expect(toCanonicalPath(posixServer)).toStrictEqual(canonical);
-    expect(toCanonicalPath(winClient)).toStrictEqual(canonical);
-    expect(toCanonicalPath(winServer)).toStrictEqual(canonical);
+  const canonical = "/src/test.remote.ts";
+  expect(toCanonicalPath(posixClient)).toStrictEqual(canonical);
+  expect(toCanonicalPath(posixServer)).toStrictEqual(canonical);
+  expect(toCanonicalPath(winClient)).toStrictEqual(canonical);
+  expect(toCanonicalPath(winServer)).toStrictEqual(canonical);
 
-    const expectedHash = await generateHash(canonical);
-    expect(await generateHash(toCanonicalPath(posixClient))).toStrictEqual(expectedHash);
-    expect(await generateHash(toCanonicalPath(winClient))).toStrictEqual(expectedHash);
-    expect(await generateHash(toCanonicalPath(posixServer))).toStrictEqual(expectedHash);
-    expect(await generateHash(toCanonicalPath(winServer))).toStrictEqual(expectedHash);
-  },
-);
+  const expectedHash = await generateHash(canonical);
+  expect(await generateHash(toCanonicalPath(posixClient))).toStrictEqual(expectedHash);
+  expect(await generateHash(toCanonicalPath(winClient))).toStrictEqual(expectedHash);
+  expect(await generateHash(toCanonicalPath(posixServer))).toStrictEqual(expectedHash);
+  expect(await generateHash(toCanonicalPath(winServer))).toStrictEqual(expectedHash);
+});
 
 describe(generateHash.name, () => {
   test("is deterministic", async () => {

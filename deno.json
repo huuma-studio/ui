@@ -22,15 +22,8 @@
     "./lint": "./src/lint/mod.ts"
   },
   "publish": {
-    "include": [
-      "src",
-      "README.md",
-      "LICENSE"
-    ],
-    "exclude": [
-      "src/**/*.test.ts",
-      "src/**/*.test.tsx"
-    ]
+    "include": ["src", "README.md", "LICENSE"],
+    "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
   },
   "imports": {
     "@deno/esbuild-plugin": "jsr:@deno/esbuild-plugin@^1.2.1",
@@ -40,11 +33,6 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "@huuma/ui",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "dom.asynciterable",
-      "deno.ns"
-    ]
+    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
   }
 }

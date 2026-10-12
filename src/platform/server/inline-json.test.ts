@@ -3,13 +3,10 @@ import { assert, describe, expect, test } from "vite-plus/test";
 import { inlineJSON } from "./inline-json.ts";
 
 describe(inlineJSON.name, () => {
-  test(
-    "serializes a normal object exactly as JSON.stringify does",
-    () => {
-      const value = { a: 1, b: "text", c: true, d: null };
-      expect(inlineJSON(value)).toStrictEqual(JSON.stringify(value));
-    },
-  );
+  test("serializes a normal object exactly as JSON.stringify does", () => {
+    const value = { a: 1, b: "text", c: true, d: null };
+    expect(inlineJSON(value)).toStrictEqual(JSON.stringify(value));
+  });
 
   test("serializes arrays and primitives like JSON.stringify", () => {
     expect(inlineJSON([1, 2, 3])).toStrictEqual("[1,2,3]");

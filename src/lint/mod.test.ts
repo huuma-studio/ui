@@ -54,10 +54,7 @@ const hookError = {
 };
 
 tester.run("no-async-hook-calling", rule("no-async-hook-calling"), {
-  valid: [
-    "function Counter() { $signal(0); }",
-    "async function load() { fetchData(); }",
-  ],
+  valid: ["function Counter() { $signal(0); }", "async function load() { fetchData(); }"],
   invalid: [
     { code: "async function Counter() { $signal(0); }", errors: [hookError] },
     { code: "const Counter = async () => { $signal(0); };", errors: [hookError] },

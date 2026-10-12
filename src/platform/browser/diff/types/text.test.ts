@@ -10,7 +10,7 @@ const replaceChangeSet = (
   vNode: ReturnType<typeof vText<Node>>,
   attachmentRef: AttachmentRef,
 ): TextChangeSet =>
-  <TextChangeSet> {
+  <TextChangeSet>{
     [Props.Type]: Type.Text,
     [Props.Action]: Action.Replace,
     [Props.Payload]: { vText: vNode, attachmentRef },
@@ -19,13 +19,13 @@ const replaceChangeSet = (
 describe("text replace changeset", () => {
   test("rebind the existing DOM node to the new signal", () => {
     const sig = signal("B");
-    const vNode = vText<Node>(<JSX.SignalLike> <unknown> sig);
-    const node = <Node> <unknown> { nodeType: 3, textContent: "A" };
+    const vNode = vText<Node>(<JSX.SignalLike>(<unknown>sig));
+    const node = <Node>(<unknown>{ nodeType: 3, textContent: "A" });
     // updateText copies the previous vNode's node ref before dispatch.
     vNode[VNodeProps.NODE_REF] = node;
     const attachmentRef: AttachmentRef = {
       type: AttachmentType.Sibling,
-      node: <Node> {},
+      node: <Node>{},
     };
 
     text(replaceChangeSet(vNode, attachmentRef));
@@ -49,8 +49,8 @@ describe("text replace changeset", () => {
     const previousSig = signal("old");
     const nextSig = signal("new");
 
-    const vNode = vText<Node>(<JSX.SignalLike> <unknown> nextSig);
-    const node = <Node> <unknown> { nodeType: 3, textContent: "old" };
+    const vNode = vText<Node>(<JSX.SignalLike>(<unknown>nextSig));
+    const node = <Node>(<unknown>{ nodeType: 3, textContent: "old" });
     vNode[VNodeProps.NODE_REF] = node;
 
     // Simulate the subscription the browser diff created for the
@@ -63,7 +63,7 @@ describe("text replace changeset", () => {
 
     const attachmentRef: AttachmentRef = {
       type: AttachmentType.Sibling,
-      node: <Node> {},
+      node: <Node>{},
     };
 
     text(replaceChangeSet(vNode, attachmentRef));
@@ -80,11 +80,11 @@ describe("text replace changeset", () => {
 
   test("write the plain text on a signal-to-string change", () => {
     const vNode = vText<Node>("static");
-    const node = <Node> <unknown> { nodeType: 3, textContent: "reactive" };
+    const node = <Node>(<unknown>{ nodeType: 3, textContent: "reactive" });
     vNode[VNodeProps.NODE_REF] = node;
     const attachmentRef: AttachmentRef = {
       type: AttachmentType.Sibling,
-      node: <Node> {},
+      node: <Node>{},
     };
 
     text(replaceChangeSet(vNode, attachmentRef));
@@ -93,59 +93,55 @@ describe("text replace changeset", () => {
     expect(node.textContent).toStrictEqual("static");
   });
 
-  test(
-    "structurally replace a non-text node from hydration divergence",
-    () => {
-      const sig = signal("live");
-      const vNode = vText<Node>(<JSX.SignalLike> <unknown> sig);
+  test("structurally replace a non-text node from hydration divergence", () => {
+    const sig = signal("live");
+    const vNode = vText<Node>(<JSX.SignalLike>(<unknown>sig));
 
-      const swaps: unknown[][] = [];
-      const parentNode = {
-        replaceChild: (next: unknown, previous: unknown) =>
-          swaps.push([next, previous]),
-      };
-      // Hydration's divergence path paired the vText with an element.
-      const divergent = <Node> <unknown> { nodeType: 1, parentNode };
-      vNode[VNodeProps.NODE_REF] = divergent;
+    const swaps: unknown[][] = [];
+    const parentNode = {
+      replaceChild: (next: unknown, previous: unknown) => swaps.push([next, previous]),
+    };
+    // Hydration's divergence path paired the vText with an element.
+    const divergent = <Node>(<unknown>{ nodeType: 1, parentNode });
+    vNode[VNodeProps.NODE_REF] = divergent;
 
-      const attachmentRef: AttachmentRef = {
-        type: AttachmentType.Sibling,
-        node: <Node> {},
-      };
+    const attachmentRef: AttachmentRef = {
+      type: AttachmentType.Sibling,
+      node: <Node>{},
+    };
 
-      // createBoundNode needs the DOM Text constructor - stub it.
-      const globals = <Record<string, unknown>> globalThis;
-      const originalText = globals.Text;
-      globals.Text = class {
-        textContent: string;
-        constructor(value: unknown) {
-          this.textContent = `${value}`;
-        }
-      };
-      try {
-        text(replaceChangeSet(vNode, attachmentRef));
-      } finally {
-        if (originalText === undefined) delete globals.Text;
-        else globals.Text = originalText;
+    // createBoundNode needs the DOM Text constructor - stub it.
+    const globals = <Record<string, unknown>>globalThis;
+    const originalText = globals.Text;
+    globals.Text = class {
+      textContent: string;
+      constructor(value: unknown) {
+        this.textContent = `${value}`;
       }
+    };
+    try {
+      text(replaceChangeSet(vNode, attachmentRef));
+    } finally {
+      if (originalText === undefined) delete globals.Text;
+      else globals.Text = originalText;
+    }
 
-      const replacement = vNode[VNodeProps.NODE_REF];
-      assert(replacement !== divergent);
-      expect(swaps).toStrictEqual([[replacement, divergent]]);
+    const replacement = vNode[VNodeProps.NODE_REF];
+    assert(replacement !== divergent);
+    expect(swaps).toStrictEqual([[replacement, divergent]]);
 
-      // The subscription drives the replacement node.
-      sig.set("updated");
-      expect((<{ textContent: string }> <unknown> replacement).textContent).toStrictEqual("updated");
+    // The subscription drives the replacement node.
+    sig.set("updated");
+    expect((<{ textContent: string }>(<unknown>replacement)).textContent).toStrictEqual("updated");
 
-      // Siblings anchor after the replacement.
-      assert(attachmentRef.type === AttachmentType.Sibling);
-      assert(attachmentRef.node === replacement);
-    },
-  );
+    // Siblings anchor after the replacement.
+    assert(attachmentRef.type === AttachmentType.Sibling);
+    assert(attachmentRef.node === replacement);
+  });
 
   test("leave the anchor untouched without a linked node", () => {
     const vNode = vText<Node>("orphan");
-    const anchor = <Node> {};
+    const anchor = <Node>{};
     const attachmentRef: AttachmentRef = {
       type: AttachmentType.Sibling,
       node: anchor,

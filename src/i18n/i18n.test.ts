@@ -3,23 +3,32 @@ import { t } from "@huuma/ui/i18n";
 
 describe(t.name, () => {
   test("should return expected text", () => {
-    const value = t({
-      i18n: { activeLanguage: { hello: { huuma: "Hello Huuma" } } },
-    }, "hello.huuma");
+    const value = t(
+      {
+        i18n: { activeLanguage: { hello: { huuma: "Hello Huuma" } } },
+      },
+      "hello.huuma",
+    );
     expect(value).toStrictEqual("Hello Huuma");
   });
 
   test("should return key", () => {
-    const value = t({
-      i18n: { activeLanguage: {} },
-    }, "hello.huuma");
+    const value = t(
+      {
+        i18n: { activeLanguage: {} },
+      },
+      "hello.huuma",
+    );
     expect(value).toStrictEqual("hello.huuma");
   });
 
   test("should return key", () => {
-    const value = t({
-      i18n: { activeLanguage: {} },
-    }, "hello.huuma");
+    const value = t(
+      {
+        i18n: { activeLanguage: {} },
+      },
+      "hello.huuma",
+    );
     expect(value).toStrictEqual("hello.huuma");
   });
 
@@ -28,7 +37,7 @@ describe(t.name, () => {
       t({ some: "random" }, "hello.huuma");
     });
     assert.throws(() => {
-      t({ i18n: { "some": "random" } }, "hello.huuma");
+      t({ i18n: { some: "random" } }, "hello.huuma");
     });
   });
 });

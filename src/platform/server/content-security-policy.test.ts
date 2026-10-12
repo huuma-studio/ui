@@ -6,7 +6,9 @@ describe(generateCSP.name, () => {
     const result = generateCSP();
 
     expect(result.nonce).not.toStrictEqual(undefined);
-    expect(result.contentSecurityPolicy).toStrictEqual(`script-src-elem 'nonce-${result.nonce}'; script-src 'none'`);
+    expect(result.contentSecurityPolicy).toStrictEqual(
+      `script-src-elem 'nonce-${result.nonce}'; script-src 'none'`,
+    );
   });
 
   test("should append nonce to existing script-src-elem", () => {
@@ -17,25 +19,23 @@ describe(generateCSP.name, () => {
 
     expect(result.nonce).not.toStrictEqual(undefined);
     expect(result.contentSecurityPolicy).toContain("default-src 'self'");
-    expect(result.contentSecurityPolicy).toContain("script-src-elem 'self' https://cdn.example.com " +
-        `'nonce-${result.nonce}'`);
+    expect(result.contentSecurityPolicy).toContain(
+      "script-src-elem 'self' https://cdn.example.com " + `'nonce-${result.nonce}'`,
+    );
     expect(result.contentSecurityPolicy).toContain(`script-src 'none'`);
   });
 
-  test(
-    "should preserve existing script-src when nonce is enabled",
-    () => {
-      const result = generateCSP({
-        "script-src": ["'self'"],
-        "style-src": ["'unsafe-inline'"],
-      });
+  test("should preserve existing script-src when nonce is enabled", () => {
+    const result = generateCSP({
+      "script-src": ["'self'"],
+      "style-src": ["'unsafe-inline'"],
+    });
 
-      expect(result.nonce).not.toStrictEqual(undefined);
-      expect(result.contentSecurityPolicy).toContain("script-src 'self'");
-      expect(result.contentSecurityPolicy).toContain("style-src 'unsafe-inline'");
-      expect(result.contentSecurityPolicy).toContain(`script-src-elem 'nonce-${result.nonce}'`);
-    },
-  );
+    expect(result.nonce).not.toStrictEqual(undefined);
+    expect(result.contentSecurityPolicy).toContain("script-src 'self'");
+    expect(result.contentSecurityPolicy).toContain("style-src 'unsafe-inline'");
+    expect(result.contentSecurityPolicy).toContain(`script-src-elem 'nonce-${result.nonce}'`);
+  });
 
   test("should not generate nonce when disabled", () => {
     const result = generateCSP({
@@ -48,13 +48,10 @@ describe(generateCSP.name, () => {
     expect(result.contentSecurityPolicy).toStrictEqual("default-src 'self'; img-src 'self' data:");
   });
 
-  test(
-    "should return empty policy string when nonce is disabled and no directives are provided",
-    () => {
-      const result = generateCSP({ nonce: false });
+  test("should return empty policy string when nonce is disabled and no directives are provided", () => {
+    const result = generateCSP({ nonce: false });
 
-      expect(result.nonce).toStrictEqual(undefined);
-      expect(result.contentSecurityPolicy).toStrictEqual("");
-    },
-  );
+    expect(result.nonce).toStrictEqual(undefined);
+    expect(result.contentSecurityPolicy).toStrictEqual("");
+  });
 });

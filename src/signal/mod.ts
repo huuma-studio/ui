@@ -32,10 +32,7 @@ interface ComputedScope extends SubscriberScope {
 const subscriberScopes: SubscriberScope[] = [];
 let scopeCount = 0;
 
-export function setSubscriber<T, S>(
-  callback: () => T,
-  subscriber: Subscriber<S>,
-): T {
+export function setSubscriber<T, S>(callback: () => T, subscriber: Subscriber<S>): T {
   return track({ id: scopeCount++, subscriber, signals: [] }, callback);
 }
 
@@ -105,16 +102,13 @@ function notify(source: Signal<unknown>, readers: Set<SubscriberScope>): void {
     }
     // Checked when it runs: an earlier subscriber may have canceled some
     // or all of its subscriptions.
-    const from = lastRead(scope, changed) ??
-      (pending.has(scope)
-        ? scope.signals[scope.signals.length - 1]
-        : undefined);
+    const from =
+      lastRead(scope, changed) ??
+      (pending.has(scope) ? scope.signals[scope.signals.length - 1] : undefined);
     if (!from) continue;
     pending.delete(scope);
     try {
-      (<Subscriber<unknown>> scope.subscriber).update(
-        untracked(() => from.get()),
-      );
+      (<Subscriber<unknown>>scope.subscriber).update(untracked(() => from.get()));
     } catch (error) {
       errors.push(error);
     }
@@ -126,10 +120,7 @@ function notify(source: Signal<unknown>, readers: Set<SubscriberScope>): void {
   }
 }
 
-function mark(
-  marked: Set<SubscriberScope>,
-  readers: Set<SubscriberScope>,
-): void {
+function mark(marked: Set<SubscriberScope>, readers: Set<SubscriberScope>): void {
   for (const scope of readers) {
     if (marked.has(scope)) continue;
     marked.add(scope);

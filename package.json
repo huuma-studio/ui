@@ -1,9 +1,8 @@
 {
   "name": "@huuma/ui",
   "private": true,
-  "type": "module",
   "description": "Development tooling only. @huuma/ui is published to JSR from jsr.json.",
-  "packageManager": "pnpm@12.11.2",
+  "type": "module",
   "exports": {
     ".": "./src/mod.ts",
     "./v-node": "./src/v-node/mod.ts",
@@ -33,5 +32,6 @@
     "@types/node": "^24",
     "jsr": "0.14.3",
     "vite-plus": "1.1.0"
-  }
+  },
+  "packageManager": "pnpm@12.11.2"
 }

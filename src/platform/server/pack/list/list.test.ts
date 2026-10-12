@@ -47,18 +47,12 @@ describe("sortPages: root page is first regardless of initial order", () => {
 
 describe("sortPages: 404 catch-all sorts last", () => {
   test("when 404 is first in input", () => {
-    const sorted = sortPages(
-      [page("app/!404"), page("app"), page("app/about")],
-      BASE,
-    );
+    const sorted = sortPages([page("app/!404"), page("app"), page("app/about")], BASE);
     expect(sorted[sorted.length - 1].filePath).toStrictEqual("app/!404");
   });
 
   test("when 404 is last in input", () => {
-    const sorted = sortPages(
-      [page("app"), page("app/about"), page("app/!404")],
-      BASE,
-    );
+    const sorted = sortPages([page("app"), page("app/about"), page("app/!404")], BASE);
     expect(sorted[sorted.length - 1].filePath).toStrictEqual("app/!404");
   });
 
@@ -72,52 +66,29 @@ describe("sortPages: 404 catch-all sorts last", () => {
   });
 });
 
-test(
-  "sortPages: result is identical across all input permutations (deterministic)",
-  () => {
-    const pages = [
-      page("app"),
-      page("app/about"),
-      page("app/blog"),
-      page(
-        "app/!404",
-      ),
-    ];
-    const permutations: FileImport[][] = [
-      [pages[0], pages[1], pages[2], pages[3]],
-      [pages[3], pages[2], pages[1], pages[0]],
-      [pages[1], pages[3], pages[0], pages[2]],
-      [pages[2], pages[0], pages[3], pages[1]],
-    ];
-    const results = permutations.map((p) =>
-      sortPages([...p], BASE).map((x) => x.filePath)
-    );
-    // All permutations must yield the same order.
-    for (let i = 1; i < results.length; i++) {
-      expect(results[i]).toStrictEqual(results[0]);
-    }
-  },
-);
+test("sortPages: result is identical across all input permutations (deterministic)", () => {
+  const pages = [page("app"), page("app/about"), page("app/blog"), page("app/!404")];
+  const permutations: FileImport[][] = [
+    [pages[0], pages[1], pages[2], pages[3]],
+    [pages[3], pages[2], pages[1], pages[0]],
+    [pages[1], pages[3], pages[0], pages[2]],
+    [pages[2], pages[0], pages[3], pages[1]],
+  ];
+  const results = permutations.map((p) => sortPages([...p], BASE).map((x) => x.filePath));
+  // All permutations must yield the same order.
+  for (let i = 1; i < results.length; i++) {
+    expect(results[i]).toStrictEqual(results[0]);
+  }
+});
 
 test("sortPages: without basePath, sorts descending alphabetically", () => {
-  const sorted = sortPages([
-    page("app/about"),
-    page("app/blog"),
-    page("app/!404"),
-  ]);
+  const sorted = sortPages([page("app/about"), page("app/blog"), page("app/!404")]);
   // Descending: blog > about > !404
-  expect(sorted.map((x) => x.filePath)).toStrictEqual([
-    "app/blog",
-    "app/about",
-    "app/!404",
-  ]);
+  expect(sorted.map((x) => x.filePath)).toStrictEqual(["app/blog", "app/about", "app/!404"]);
 });
 
 test("sortPages: case-insensitive comparison", () => {
-  const sorted = sortPages(
-    [page("app/About"), page("app/about")],
-    BASE,
-  );
+  const sorted = sortPages([page("app/About"), page("app/about")], BASE);
   expect(sorted[0].filePath).toStrictEqual("app/About");
   expect(sorted[1].filePath).toStrictEqual("app/about");
 });
@@ -148,7 +119,9 @@ describe(writeListFrom.name, () => {
 
   test("creates the list when it does not exist yet", async () => {
     expect(await writeListFrom(emptyPack, packPath)).toStrictEqual(listPath);
-    expect(await readFile(listPath, "utf8")).toStrictEqual("// Huuma UI generated code - Do not modify!");
+    expect(await readFile(listPath, "utf8")).toStrictEqual(
+      "// Huuma UI generated code - Do not modify!",
+    );
   });
 
   test("does not rewrite an unchanged list", async () => {
@@ -162,8 +135,8 @@ describe(writeListFrom.name, () => {
     await writeFile(listPath, "// stale");
     await writeListFrom(islandPack, packPath);
     const content = await readFile(listPath, "utf8");
-    expect(content.includes(
-        'import * as I0 from "../components/a.client.tsx";',
-      )).toStrictEqual(true);
+    expect(content.includes('import * as I0 from "../components/a.client.tsx";')).toStrictEqual(
+      true,
+    );
   });
 });

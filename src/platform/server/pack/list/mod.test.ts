@@ -1,21 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import process from "node:process";
 import { join } from "node:path";
 
-import {
-  createDirectory,
-  deleteDirectory,
-  shimPublicEnvVars,
-} from "./mod.ts";
+import { createDirectory, deleteDirectory, shimPublicEnvVars } from "./mod.ts";
 
 async function exists(path: string): Promise<boolean> {
   try {

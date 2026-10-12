@@ -8,18 +8,14 @@ import { update } from "./update.ts";
 
 const attachmentRef = (): AttachmentRef => ({
   type: AttachmentType.Sibling,
-  node: <Node> {},
+  node: <Node>{},
 });
 
-const asSignal = (value: string): JSX.SignalLike =>
-  <JSX.SignalLike> <unknown> signal(value);
+const asSignal = (value: string): JSX.SignalLike => <JSX.SignalLike>(<unknown>signal(value));
 
 // Commit a subscription for the signal, the way the browser diff's
 // create/replace handlers do.
-const bind = (
-  vNode: ReturnType<typeof vText<Node>>,
-  sig: { get: () => unknown },
-) =>
+const bind = (vNode: ReturnType<typeof vText<Node>>, sig: { get: () => unknown }) =>
   setSubscriber(() => sig.get(), {
     update: () => {},
     cleanupCallback: (cleanup) => vNode[VNodeProps.CLEANUP].push(cleanup),
@@ -41,7 +37,7 @@ describe("update text changesets", () => {
   });
 
   test("replace the node when the signal identity changes", () => {
-    const node = <Node> {};
+    const node = <Node>{};
     const previousVNode = vText<Node>(asSignal("A"));
     previousVNode[VNodeProps.NODE_REF] = node;
     const vNode = vText<Node>(asSignal("B"));
@@ -55,18 +51,15 @@ describe("update text changesets", () => {
     assert(vNode[VNodeProps.NODE_REF] === node);
   });
 
-  test(
-    "replace the node when signals swap with equal values",
-    () => {
-      const previousVNode = vText<Node>(asSignal("same"));
-      const vNode = vText<Node>(asSignal("same"));
+  test("replace the node when signals swap with equal values", () => {
+    const previousVNode = vText<Node>(asSignal("same"));
+    const vNode = vText<Node>(asSignal("same"));
 
-      const changeSets = update(vNode, previousVNode, attachmentRef());
+    const changeSets = update(vNode, previousVNode, attachmentRef());
 
-      expect(changeSets.length).toStrictEqual(1);
-      expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
-    },
-  );
+    expect(changeSets.length).toStrictEqual(1);
+    expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
+  });
 
   test("replace the node when a string becomes a signal", () => {
     const previousVNode = vText<Node>("static");
@@ -80,7 +73,7 @@ describe("update text changesets", () => {
 
   test("replace the node when a signal becomes a string", () => {
     const sig = signal("reactive");
-    const previousVNode = vText<Node>(<JSX.SignalLike> <unknown> sig);
+    const previousVNode = vText<Node>(<JSX.SignalLike>(<unknown>sig));
     const vNode = vText<Node>("static");
     // The in-place vNode update keeps the old signal's subscription
     // alive until the diff commits.
@@ -92,23 +85,20 @@ describe("update text changesets", () => {
     expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
   });
 
-  test(
-    "rebind when the subscription does not match the binding",
-    () => {
-      const oldSig = signal("old");
-      const vNode = vText<Node>(asSignal("new"));
-      // An aborted pass already recorded the new signal while the old
-      // subscription stayed committed - the snapshot shows no delta, so
-      // only the subscription itself can reveal the needed rebind.
-      bind(vNode, oldSig);
-      const previousVNode = snapshot(vNode);
+  test("rebind when the subscription does not match the binding", () => {
+    const oldSig = signal("old");
+    const vNode = vText<Node>(asSignal("new"));
+    // An aborted pass already recorded the new signal while the old
+    // subscription stayed committed - the snapshot shows no delta, so
+    // only the subscription itself can reveal the needed rebind.
+    bind(vNode, oldSig);
+    const previousVNode = snapshot(vNode);
 
-      const changeSets = update(vNode, previousVNode, attachmentRef());
+    const changeSets = update(vNode, previousVNode, attachmentRef());
 
-      expect(changeSets.length).toStrictEqual(1);
-      expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
-    },
-  );
+    expect(changeSets.length).toStrictEqual(1);
+    expect(changeSets[0][Props.Action]).toStrictEqual(Action.Replace);
+  });
 
   test("patch the text content for plain string changes", () => {
     const previousVNode = vText<Node>("Hello World");

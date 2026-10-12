@@ -18,14 +18,15 @@ describe("manifests", () => {
 
   test("declare the same JSR dependencies", () => {
     const fromDeno = Object.fromEntries(
-      Object.entries(deno.imports as Record<string, string>).map((
-        [name, specifier],
-      ) => [name, specifier.replace(/^jsr:@([^/]+)\/([^@]+)@/, "npm:@jsr/$1__$2@")]),
+      Object.entries(deno.imports as Record<string, string>).map(([name, specifier]) => [
+        name,
+        specifier.replace(/^jsr:@([^/]+)\/([^@]+)@/, "npm:@jsr/$1__$2@"),
+      ]),
     );
     const fromPackage = Object.fromEntries(
-      Object.entries(pkg.dependencies as Record<string, string>).filter((
-        [, version],
-      ) => version.startsWith("npm:@jsr/")),
+      Object.entries(pkg.dependencies as Record<string, string>).filter(([, version]) =>
+        version.startsWith("npm:@jsr/"),
+      ),
     );
     expect(fromPackage).toStrictEqual(fromDeno);
   });

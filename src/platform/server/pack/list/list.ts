@@ -34,10 +34,13 @@ type CreateListOptions = {
   remoteFunctionsList: FileImport[];
 };
 
-export async function createList(
-  { pagesList, islandsList, scriptsList, remoteFunctionsList, huumaDirectory }:
-    CreateListOptions,
-): Promise<List> {
+export async function createList({
+  pagesList,
+  islandsList,
+  scriptsList,
+  remoteFunctionsList,
+  huumaDirectory,
+}: CreateListOptions): Promise<List> {
   return (
     await import(
       join(
@@ -91,9 +94,11 @@ export async function listPages(
 
   const paths: FileImport[] = [];
 
-  for await (
-    const file of walkFiles(path, [/(page\.tsx)$/, /(layout\.tsx)$/, /(middleware\.ts)$/])
-  ) {
+  for await (const file of walkFiles(path, [
+    /(page\.tsx)$/,
+    /(layout\.tsx)$/,
+    /(middleware\.ts)$/,
+  ])) {
     if (/\/(layout\.tsx)$/.exec(file.path)?.length) {
       paths.push({
         name: "_",
@@ -167,9 +172,7 @@ export async function listIslands(path: string): Promise<FileImport[]> {
   const islands: FileImport[] = [];
   let i = 0;
 
-  for await (
-    const file of walkFiles(path, [/(.+\.client\.tsx)$/])
-  ) {
+  for await (const file of walkFiles(path, [/(.+\.client\.tsx)$/])) {
     islands.push({
       filePath: dirname(file.path),
       fileName: file.name,
@@ -184,9 +187,7 @@ export async function listRemoteFunctions(path: string): Promise<FileImport[]> {
   const remoteFunctions: FileImport[] = [];
   let i = 0;
 
-  for await (
-    const file of walkFiles(path, [/(.+\.remote\.ts)$/])
-  ) {
+  for await (const file of walkFiles(path, [/(.+\.remote\.ts)$/])) {
     remoteFunctions.push({
       filePath: dirname(file.path),
       fileName: file.name,
@@ -205,53 +206,40 @@ export async function listRemoteFunctions(path: string): Promise<FileImport[]> {
  * Writes the generated `list.ts` into `packPath` and returns its path. The
  * file is only rewritten when its content changed.
  */
-export async function writeListFrom(
-  pack: Pack,
-  packPath: string,
-): Promise<string> {
+export async function writeListFrom(pack: Pack, packPath: string): Promise<string> {
   const content = [
     "// Huuma UI generated code - Do not modify!",
     ...(pack.pages.length
       ? [
-        'import type { List } from "@huuma/ui/server/pack";',
-        imports(
-          pack.pages.map((page) => page.page),
-          "Page",
-        ),
-      ]
+          'import type { List } from "@huuma/ui/server/pack";',
+          imports(
+            pack.pages.map((page) => page.page),
+            "Page",
+          ),
+        ]
       : []),
     ...(pack.layouts.length ? [imports(pack.layouts, "Layout")] : []),
-    ...(pack.middlewares.length
-      ? [imports(pack.middlewares, "Middleware")]
-      : []),
+    ...(pack.middlewares.length ? [imports(pack.middlewares, "Middleware")] : []),
     ...(pack.islands.length ? [imports(pack.islands, "Islands")] : []),
-    ...(pack.remoteFunctions.length
-      ? [imports(pack.remoteFunctions, "Remote Functions")]
-      : []),
+    ...(pack.remoteFunctions.length ? [imports(pack.remoteFunctions, "Remote Functions")] : []),
     ...(pack.pages.length
       ? [
-        "",
-        "export default {",
-        ...(pack.pages.length
-          ? ["  pages: {", pagesExports(pack.pages), "  },"]
-          : []),
-        ...(pack.islands.length
-          ? ["  islands: {", fileExports(pack.islands), "  },"]
-          : []),
-        ...(pack.remoteFunctions.length
-          ? ["  remoteFunctions: {", fileExports(pack.remoteFunctions), "  },"]
-          : []),
-        [
-          "  scripts: [",
-          pack.scripts.map((script) =>
-            `    ["${script[0]}","${script[1]}",${JSON.stringify(script[2])}]`
-          ).join(
-            `,${EOL}`,
-          ),
-          "  ]",
-        ].join(EOL),
-        "} as List;",
-      ]
+          "",
+          "export default {",
+          ...(pack.pages.length ? ["  pages: {", pagesExports(pack.pages), "  },"] : []),
+          ...(pack.islands.length ? ["  islands: {", fileExports(pack.islands), "  },"] : []),
+          ...(pack.remoteFunctions.length
+            ? ["  remoteFunctions: {", fileExports(pack.remoteFunctions), "  },"]
+            : []),
+          [
+            "  scripts: [",
+            pack.scripts
+              .map((script) => `    ["${script[0]}","${script[1]}",${JSON.stringify(script[2])}]`)
+              .join(`,${EOL}`),
+            "  ]",
+          ].join(EOL),
+          "} as List;",
+        ]
       : []),
   ].join(EOL);
 
@@ -274,11 +262,11 @@ export async function writeListFrom(
 function imports(entries: FileImport[], type: string): string {
   return entries.length
     ? [
-      `// ${type} imports`,
-      ...entries.map((entry) => {
-        return `import * as ${entry.name} from "../${entry.filePath}/${entry.fileName}";`;
-      }),
-    ].join(EOL)
+        `// ${type} imports`,
+        ...entries.map((entry) => {
+          return `import * as ${entry.name} from "../${entry.filePath}/${entry.fileName}";`;
+        }),
+      ].join(EOL)
     : "";
 }
 
@@ -295,9 +283,9 @@ function pagesExports(pages: Page[]): string {
 }
 
 function fileExports(files: FileImport[]): string {
-  return files.map(
-    (file) => `    "${join(file.filePath, file.fileName)}": ${file.name},`,
-  ).join(EOL);
+  return files
+    .map((file) => `    "${join(file.filePath, file.fileName)}": ${file.name},`)
+    .join(EOL);
 }
 
 /**
@@ -310,10 +298,7 @@ function fileExports(files: FileImport[]): string {
  * first-match-wins, so registration order determines which route wins
  * when patterns overlap (e.g. `/` vs `/*`).
  */
-export function sortPages(
-  imports: FileImport[],
-  basePath?: string,
-): FileImport[] {
+export function sortPages(imports: FileImport[], basePath?: string): FileImport[] {
   return imports.sort((a, b) => {
     const al = a.filePath.toLowerCase();
     const bl = b.filePath.toLowerCase();

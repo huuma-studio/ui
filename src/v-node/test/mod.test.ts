@@ -24,5 +24,5 @@ test(keyFromNode.name, () => {
   };
   expect(keyFromNode(templateNode)).toStrictEqual(undefined);
   expect(keyFromNode([])).toStrictEqual(undefined);
-  expect(keyFromNode(<JSX.Element> { type: "div", key: 1 })).toStrictEqual(1);
+  expect(keyFromNode(<JSX.Element>{ type: "div", key: 1 })).toStrictEqual(1);
 });

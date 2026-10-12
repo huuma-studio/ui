@@ -87,9 +87,8 @@ test("should create vFragment from a TemplateNode without nodes", () => {
   expect(create(templateNodeWithoutNodes)).toStrictEqual(expectedVFragmentWithoutNodes);
 });
 
-test(
-  "should create async vFragment from a TemplateNode without nodes",
-  async () => {
-    expect(await createAsync(templateNodeWithoutNodes, {})).toStrictEqual(expectedVFragmentWithoutNodes);
-  },
-);
+test("should create async vFragment from a TemplateNode without nodes", async () => {
+  expect(await createAsync(templateNodeWithoutNodes, {})).toStrictEqual(
+    expectedVFragmentWithoutNodes,
+  );
+});

@@ -31,13 +31,11 @@ export namespace JSX {
     | Element[] // ComponentNode<0> and Element[] are handled as fragment
     | TemplateNode;
 
-  export type IntrinsicElements =
-    & {
-      [K in keyof HTMLElementTagNameMap]: Attributes;
-    }
-    & {
-      [K in keyof SVGElementTagNameMap]: Attributes;
-    };
+  export type IntrinsicElements = {
+    [K in keyof HTMLElementTagNameMap]: Attributes;
+  } & {
+    [K in keyof SVGElementTagNameMap]: Attributes;
+  };
 
   export type Attributes = {
     [key: string]: unknown;
@@ -87,7 +85,7 @@ export function jsx(
       } else if (isEventName(prop)) {
         eventRefs.push({
           name: eventName(prop),
-          listener: <() => void> props[prop],
+          listener: <() => void>props[prop],
         });
         delete props[prop];
       }
@@ -96,9 +94,7 @@ export function jsx(
 
   if (!Array.isArray(props.children)) {
     props.children =
-      typeof props.children !== "boolean" && props.children != null
-        ? [props.children]
-        : undefined;
+      typeof props.children !== "boolean" && props.children != null ? [props.children] : undefined;
   }
 
   return {
@@ -116,15 +112,9 @@ export function jsxAttr(name: string, value: unknown): JSX.Element {
     // must be omitted, a truthy value must emit the bare name.
     return value ? { templates: [escape(name)], nodes: [""] } : "";
   }
-  if (
-    typeof value === "string" || typeof value === "number" || value === true
-  ) {
+  if (typeof value === "string" || typeof value === "number" || value === true) {
     return {
-      templates: [
-        value === true
-          ? escape(name)
-          : `${escape(name)}="${escape(`${value}`)}"`,
-      ],
+      templates: [value === true ? escape(name) : `${escape(name)}="${escape(`${value}`)}"`],
       nodes: [""],
     };
   }
@@ -136,10 +126,7 @@ export function jsxEscape(node: JSX.Element): JSX.Element {
   return node;
 }
 
-export function jsxTemplate(
-  templates: string[],
-  ...nodes: JSX.Element[]
-): JSX.TemplateNode {
+export function jsxTemplate(templates: string[], ...nodes: JSX.Element[]): JSX.TemplateNode {
   return { templates, nodes };
 }
 

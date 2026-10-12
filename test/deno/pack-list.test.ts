@@ -43,9 +43,7 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
-    const config = JSON.parse(
-      await readFile(join(repoRoot, "deno.json"), "utf8"),
-    );
+    const config = JSON.parse(await readFile(join(repoRoot, "deno.json"), "utf8"));
 
     await inTempDir(async (dir) => {
       // Resolve "@huuma/ui" to this repository so the fixture app and the
@@ -56,10 +54,7 @@ Deno.test({
           imports: {
             ...config.imports,
             "@huuma/ui/jsx-runtime": join(repoRoot, "src/jsx-runtime/mod.ts"),
-            "@huuma/ui/server/pack": join(
-              repoRoot,
-              "src/platform/server/pack/mod.ts",
-            ),
+            "@huuma/ui/server/pack": join(repoRoot, "src/platform/server/pack/mod.ts"),
           },
           compilerOptions: { jsx: "react-jsx", jsxImportSource: "@huuma/ui" },
         }),
@@ -71,7 +66,7 @@ Deno.test({
       );
 
       const app = createUIApp(({ children }) =>
-        jsx("html", { children: [jsx("body", { children: [children] })] })
+        jsx("html", { children: [jsx("body", { children: [children] })] }),
       );
       await list(app, { isProd: false });
       const handle = app.deliver();
@@ -79,25 +74,16 @@ Deno.test({
 
       // Without the upgrade header the route answers 400; an unregistered
       // route would answer 404.
-      const websocket = await handle(
-        new Request("http://localhost/_websocket"),
-        connection,
-      );
+      const websocket = await handle(new Request("http://localhost/_websocket"), connection);
       await websocket.body?.cancel();
       assert.equal(websocket.status, 400);
 
-      const page = await handle(
-        new Request("http://localhost/"),
-        connection,
-      );
+      const page = await handle(new Request("http://localhost/"), connection);
       assert.equal(page.status, 200);
       assert.equal((await page.text()).includes("Hello"), true);
 
       assert.equal(await exists(join(dir, ".huuma", "list.ts")), true);
-      assert.equal(
-        await exists(join(dir, ".huuma", "scripts", "huuma_ui_launch.js")),
-        true,
-      );
+      assert.equal(await exists(join(dir, ".huuma", "scripts", "huuma_ui_launch.js")), true);
       // The env shim is only needed while bundling.
       assert.equal(await exists(join(dir, ".huuma", "shims")), false);
     });

@@ -70,14 +70,11 @@ describe("jsxAttr non-boolean attributes", () => {
     });
   });
 
-  test(
-    "omits values that are neither strings, numbers nor true",
-    () => {
-      expect(jsxAttr("class", false)).toStrictEqual("");
-      expect(jsxAttr("class", undefined)).toStrictEqual("");
-      expect(jsxAttr("class", null)).toStrictEqual("");
-    },
-  );
+  test("omits values that are neither strings, numbers nor true", () => {
+    expect(jsxAttr("class", false)).toStrictEqual("");
+    expect(jsxAttr("class", undefined)).toStrictEqual("");
+    expect(jsxAttr("class", null)).toStrictEqual("");
+  });
 
   test("emits numbers as attribute values", () => {
     expect(jsxAttr("tabindex", 0)).toStrictEqual({

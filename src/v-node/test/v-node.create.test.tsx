@@ -80,9 +80,7 @@ describe(create.name, () => {
   });
 
   test("should create VComponent", () => {
-    const vComponent = create(
-      <ComponentA>Hello World!</ComponentA>,
-    );
+    const vComponent = create(<ComponentA>Hello World!</ComponentA>);
     expect(vComponent).toStrictEqual({
       type: VType.COMPONENT,
       [VNodeProps.FN]: ComponentA,

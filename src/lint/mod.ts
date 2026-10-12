@@ -35,24 +35,25 @@ export interface LintPlugin {
   meta: { name: string };
   rules: Record<string, Rule>;
   /** ESLint flat config presets. */
-  configs: Record<string, {
-    plugins: Record<string, LintPlugin>;
-    rules: Record<string, "error">;
-  }>;
+  configs: Record<
+    string,
+    {
+      plugins: Record<string, LintPlugin>;
+      rules: Record<string, "error">;
+    }
+  >;
 }
 
 function isAsyncFunction(node: AstNode | null | undefined): boolean {
   return (
-    node?.type === "FunctionDeclaration" ||
-    node?.type === "FunctionExpression" ||
-    node?.type === "ArrowFunctionExpression"
-  ) && !!node.async;
+    (node?.type === "FunctionDeclaration" ||
+      node?.type === "FunctionExpression" ||
+      node?.type === "ArrowFunctionExpression") &&
+    !!node.async
+  );
 }
 
-const TYPE_DECLARATIONS = new Set([
-  "TSTypeAliasDeclaration",
-  "TSInterfaceDeclaration",
-]);
+const TYPE_DECLARATIONS = new Set(["TSTypeAliasDeclaration", "TSInterfaceDeclaration"]);
 
 const asyncRemoteFunctions: Rule = {
   meta: {

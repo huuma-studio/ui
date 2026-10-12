@@ -20,9 +20,12 @@ describe(setSubscriber.name, () => {
 
     assert.throws(
       () =>
-        setSubscriber((): void => {
-          throw new Error("render failed");
-        }, { update: (value: number) => updates.push(value) }),
+        setSubscriber(
+          (): void => {
+            throw new Error("render failed");
+          },
+          { update: (value: number) => updates.push(value) },
+        ),
       Error,
       "render failed",
     );
@@ -38,19 +41,25 @@ describe(setSubscriber.name, () => {
     const count = signal(0);
     const outerUpdates: number[] = [];
 
-    setSubscriber(() => {
-      assert.throws(
-        () =>
-          setSubscriber((): void => {
-            throw new Error("inner failed");
-          }, { update: () => {} }),
-        Error,
-        "inner failed",
-      );
+    setSubscriber(
+      () => {
+        assert.throws(
+          () =>
+            setSubscriber(
+              (): void => {
+                throw new Error("inner failed");
+              },
+              { update: () => {} },
+            ),
+          Error,
+          "inner failed",
+        );
 
-      // The outer scope must be active again after the failed nested call.
-      count.get();
-    }, { update: (value: number) => outerUpdates.push(value) });
+        // The outer scope must be active again after the failed nested call.
+        count.get();
+      },
+      { update: (value: number) => outerUpdates.push(value) },
+    );
 
     count.set(1);
     expect(outerUpdates).toStrictEqual([1]);
@@ -63,10 +72,13 @@ describe("notify", () => {
     const isOdd = computed(() => count.get() % 2 === 1);
     const updates: number[] = [];
 
-    setSubscriber(() => {
-      count.get();
-      isOdd.get();
-    }, { update: () => updates.push(count.get()) });
+    setSubscriber(
+      () => {
+        count.get();
+        isOdd.get();
+      },
+      { update: () => updates.push(count.get()) },
+    );
 
     // isOdd stays true: only the direct dependency reaches the subscriber.
     count.set(3);
@@ -78,42 +90,47 @@ describe("notify", () => {
     const isOdd = computed(() => count.get() % 2 === 1);
     const updates: [number, boolean][] = [];
 
-    setSubscriber(() => {
-      count.get();
-      isOdd.get();
-    }, { update: () => updates.push([count.get(), isOdd.get()]) });
+    setSubscriber(
+      () => {
+        count.get();
+        isOdd.get();
+      },
+      { update: () => updates.push([count.get(), isOdd.get()]) },
+    );
 
     count.set(2);
     expect(updates).toStrictEqual([[2, false]]);
   });
 
-  test(
-    "update a subscriber once with settled values of two computed signals",
-    () => {
-      const count = signal(1);
-      const double = computed(() => count.get() * 2);
-      const triple = computed(() => count.get() * 3);
-      const withSource: number[][] = [];
-      const computedOnly: number[][] = [];
+  test("update a subscriber once with settled values of two computed signals", () => {
+    const count = signal(1);
+    const double = computed(() => count.get() * 2);
+    const triple = computed(() => count.get() * 3);
+    const withSource: number[][] = [];
+    const computedOnly: number[][] = [];
 
-      setSubscriber(() => {
+    setSubscriber(
+      () => {
         count.get();
         double.get();
         triple.get();
-      }, {
-        update: () =>
-          withSource.push([count.get(), double.get(), triple.get()]),
-      });
-      setSubscriber(() => {
+      },
+      {
+        update: () => withSource.push([count.get(), double.get(), triple.get()]),
+      },
+    );
+    setSubscriber(
+      () => {
         double.get();
         triple.get();
-      }, { update: () => computedOnly.push([double.get(), triple.get()]) });
+      },
+      { update: () => computedOnly.push([double.get(), triple.get()]) },
+    );
 
-      count.set(2);
-      expect(withSource).toStrictEqual([[2, 4, 6]]);
-      expect(computedOnly).toStrictEqual([[4, 6]]);
-    },
-  );
+    count.set(2);
+    expect(withSource).toStrictEqual([[2, 4, 6]]);
+    expect(computedOnly).toStrictEqual([[4, 6]]);
+  });
 
   test("compute once from settled values in a deeper diamond", () => {
     const count = signal(1);
@@ -132,7 +149,10 @@ describe("notify", () => {
     });
 
     count.set(2);
-    expect(seen).toStrictEqual([[2, 10], [3, 20]]);
+    expect(seen).toStrictEqual([
+      [2, 10],
+      [3, 20],
+    ]);
     expect(values).toStrictEqual([23]);
   });
 
@@ -200,13 +220,16 @@ describe("notify", () => {
     setSubscriber(() => a.get(), {
       update: () => cleanups.get(a)?.cleanup(),
     });
-    setSubscriber(() => {
-      a.get();
-      b.get();
-    }, {
-      update: (value: number) => values.push(value),
-      cleanupCallback: (cleanup) => cleanups.set(cleanup.signal, cleanup),
-    });
+    setSubscriber(
+      () => {
+        a.get();
+        b.get();
+      },
+      {
+        update: (value: number) => values.push(value),
+        cleanupCallback: (cleanup) => cleanups.set(cleanup.signal, cleanup),
+      },
+    );
 
     a.set(1);
     expect(values).toStrictEqual([]);
@@ -225,13 +248,16 @@ describe("notify", () => {
       update: () => cleanups.get(count)?.cleanup(),
     });
     const double = computed(() => count.get() * 2);
-    setSubscriber(() => {
-      count.get();
-      double.get();
-    }, {
-      update: (value: number) => values.push(value),
-      cleanupCallback: (cleanup) => cleanups.set(cleanup.signal, cleanup),
-    });
+    setSubscriber(
+      () => {
+        count.get();
+        double.get();
+      },
+      {
+        update: (value: number) => values.push(value),
+        cleanupCallback: (cleanup) => cleanups.set(cleanup.signal, cleanup),
+      },
+    );
 
     count.set(5);
     expect(values).toStrictEqual([10]);
@@ -270,10 +296,13 @@ describe("notify", () => {
     setSubscriber(() => c.get(), {
       update: (value: number) => sums.push(value),
     });
-    setSubscriber(() => {
-      a.get();
-      c.get();
-    }, { update: () => mixed.push([a.get(), c.get()]) });
+    setSubscriber(
+      () => {
+        a.get();
+        c.get();
+      },
+      { update: () => mixed.push([a.get(), c.get()]) },
+    );
     setSubscriber(() => a.get(), {
       update: (value: number) => unrelated.push(value),
     });
@@ -322,10 +351,13 @@ describe("notify", () => {
       return a.get() - a.get();
     });
     const seen: number[] = [];
-    setSubscriber(() => {
-      a.get();
-      zero.get();
-    }, { update: () => seen.push(a.get()) });
+    setSubscriber(
+      () => {
+        a.get();
+        zero.get();
+      },
+      { update: () => seen.push(a.get()) },
+    );
 
     assert.throws(() => broken.set(true), Error, "zero failed");
     assert.throws(() => a.set(1), Error, "zero failed");
@@ -367,11 +399,14 @@ describe("notify", () => {
     const seen: number[] = [];
 
     // Updated in a's pass, and deferred in b's pass behind bIsPositive.
-    setSubscriber(() => {
-      a.get();
-      b.get();
-      bIsPositive.get();
-    }, { update: () => seen.push(b.get()) });
+    setSubscriber(
+      () => {
+        a.get();
+        b.get();
+        bIsPositive.get();
+      },
+      { update: () => seen.push(b.get()) },
+    );
     setSubscriber(() => a.get(), {
       update: (value: number) => b.set(value * 10),
     });

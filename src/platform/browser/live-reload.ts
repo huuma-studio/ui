@@ -97,9 +97,7 @@ function manageWebSocket(isReconnectAttempt = false) {
 
   if (isReconnectAttempt) {
     console.log(
-      `Attempting to reconnect WebSocket... Attempt: ${
-        attempts + 1
-      }, Delay factor: ${slowdown}`,
+      `Attempting to reconnect WebSocket... Attempt: ${attempts + 1}, Delay factor: ${slowdown}`,
     );
   } else {
     console.log("Attempting initial WebSocket connection to:", wsUrl);
@@ -117,11 +115,7 @@ function manageWebSocket(isReconnectAttempt = false) {
     if (activeConnection !== connection) return;
 
     hasOpened = true;
-    console.log(
-      `WebSocket connection ${
-        isReconnectAttempt ? "re-established" : "established"
-      }.`,
-    );
+    console.log(`WebSocket connection ${isReconnectAttempt ? "re-established" : "established"}.`);
     attempts = 0;
     slowdown = 1;
 
@@ -149,9 +143,7 @@ function manageWebSocket(isReconnectAttempt = false) {
         `WebSocket failed to connect initially or closed before opening (code: ${event.code}).`,
       );
     } else {
-      console.warn(
-        `WebSocket connection closed (code: ${event.code}, reason: '${event.reason}').`,
-      );
+      console.warn(`WebSocket connection closed (code: ${event.code}, reason: '${event.reason}').`);
     }
 
     // Teardown in progress — a successful reconnect would force a reload.
