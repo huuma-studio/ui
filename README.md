@@ -137,7 +137,7 @@ What the dev server does:
 - **Server-only code:** importing a `*.server.*` module (any extension) from browser code fails, naming the importer. Use it from server code, e.g. a remote function.
 - **Environment variables:** `PUBLIC_*` variables (from the environment and `.env` files) are available as `import.meta.env.PUBLIC_*`, in the browser and on the server. Other variables stay on the server. `Deno.env.get()` still works for one more minor version, with a deprecation warning. Declare your variables' types yourself, e.g. with `/// <reference types="vite/client" />` and an `ImportMetaEnv` interface.
 - **Decorators:** standard decorators, e.g. `@inject()` from `@huuma/inject`, are compiled with Babel in the modules that use them. Install it in your app: `pnpm add -D @babel/core @babel/plugin-proposal-decorators`.
-- **Updates:** an edited island updates in place, without reloading the page. It starts over with its initial state (its signals aren't kept). Other edits, e.g. to pages, layouts or an island's helper modules, reload the page.
+- **Updates:** an edited island updates in place, without reloading the page, and keeps its state: signals keep their values, and typed input and focus stay. If you add, remove or reorder hooks (`$signal`, `$computed`, …) or change their arguments, the island starts over with its initial state. Components defined in the island's module next to it start over too. Other edits, e.g. to pages, layouts or an island's helper modules, reload the page.
 
 Options of `huuma()`:
 
