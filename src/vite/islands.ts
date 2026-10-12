@@ -1,4 +1,5 @@
-import type { Plugin } from "vite";
+import type { ESTree, Plugin } from "vite";
+import { createHash } from "node:crypto";
 import { join, relative } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
@@ -45,7 +46,7 @@ export function islandsPlugin(options: () => IslandsOptions): Plugin {
         if (this.environment.config.consumer !== "client" || this.environment.mode !== "dev") {
           return;
         }
-        return { code: code + HOT_UPDATE, map: null };
+        return { code: code + hotUpdate(hookSignature(this.parse(code), code)), map: null };
       },
     },
     resolveId: {
@@ -79,20 +80,71 @@ export function islandsPlugin(options: () => IslandsOptions): Plugin {
   };
 }
 
-// Appended to island modules in the dev server. The runtime finds the
-// page's islands by the module's browser path; if it can't replace the
-// component (or the new module has none), Vite reloads the page.
-const HOT_UPDATE = `
+/**
+ * Appended to island modules in the dev server. The runtime finds the
+ * page's islands by the module's browser path; if it can't replace the
+ * component (or the new module has none), Vite reloads the page.
+ *
+ * Each version stores its hook signature in `import.meta.hot.data`, which
+ * all versions of a module share. When the previous version's accept
+ * callback runs, the new version has already stored its signature: if
+ * they're equal, the islands keep their state.
+ */
+function hotUpdate(signature: string): string {
+  return `
 import { hotReplaceIsland as $huuma$hotReplaceIsland } from "${RUNTIME_ID}";
 if (import.meta.hot) {
+  const hooks = ${JSON.stringify(signature)};
+  import.meta.hot.data.hooks = hooks;
   import.meta.hot.accept((next) => {
     const path = new URL(import.meta.url).pathname;
-    if (typeof next?.default !== "function" || !$huuma$hotReplaceIsland(path, next.default)) {
+    const keepState = import.meta.hot.data.hooks === hooks;
+    if (
+      typeof next?.default !== "function" ||
+      !$huuma$hotReplaceIsland(path, next.default, { keepState })
+    ) {
       import.meta.hot.invalidate("Huuma can't replace this island in place.");
     }
   });
 }
 `;
+}
+
+/**
+ * A hash of the hook calls in a module (calls of `$`-prefixed functions,
+ * like `$signal(0)`), in order and with their arguments. An island keeps
+ * its state over a hot update only if it's unchanged: hooks keep their
+ * values by call order, and a `$computed` or `$effect` keeps the function
+ * it was created with.
+ */
+export function hookSignature(program: ESTree.Program, code: string): string {
+  const calls: string[] = [];
+  const pending: unknown[] = [program];
+  while (pending.length) {
+    // A stack, children pushed in reverse: calls come out in source order.
+    const node = pending.pop();
+    if (Array.isArray(node)) {
+      pending.push(...[...node].reverse());
+    } else if (node && typeof node === "object") {
+      const { type, callee, start, end } = node as {
+        type?: string;
+        callee?: { type: string; name?: string };
+        start: number;
+        end: number;
+      };
+      if (
+        type === "CallExpression" &&
+        callee?.type === "Identifier" &&
+        callee.name?.startsWith("$")
+      ) {
+        calls.push(code.slice(start, end));
+      }
+      const children = Object.values(node).filter((child) => child && typeof child === "object");
+      pending.push(...children.reverse());
+    }
+  }
+  return createHash("sha256").update(calls.join("\n")).digest("hex").slice(0, 16);
+}
 
 /** Generates the source of `virtual:huuma/islands`. */
 export function islandsModule(islands: { name: string; file: string; path: string }[]): string {

@@ -1,12 +1,47 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { createServer, isRunnableDevEnvironment, type ViteDevServer } from "vite";
+import { createServer, isRunnableDevEnvironment, parseSync, type ViteDevServer } from "vite";
 import { fileURLToPath } from "node:url";
 
 import type { JSX } from "../jsx-runtime/mod.ts";
 import { huuma } from "./mod.ts";
-import { ISLANDS_ID, islandPath, RUNTIME_ID, runtimePath } from "./islands.ts";
+import { hookSignature, ISLANDS_ID, islandPath, RUNTIME_ID, runtimePath } from "./islands.ts";
 
 const fixture = fileURLToPath(new URL("../../test/fixtures/basic", import.meta.url));
+
+describe(hookSignature.name, () => {
+  const signature = (code: string) => hookSignature(parseSync("island.js", code).program, code);
+  const counter = (body: string) => `export default function Counter() { ${body} }`;
+
+  test("stays the same when only other code changes", () => {
+    expect(signature(counter("const n = $signal(0); return n;"))).toStrictEqual(
+      signature(
+        "import { x } from './x.ts';\n" +
+          counter("const n = $signal(0);\nconsole.log(n);\nreturn [n, x];"),
+      ),
+    );
+  });
+
+  test("changes when a hook is added, removed, reordered or gets other arguments", () => {
+    const base = signature(counter("const a = $signal(0); const b = $ref(null);"));
+    for (const body of [
+      "const a = $signal(0); const b = $ref(null); const c = $signal(1);",
+      "const a = $signal(0);",
+      "const b = $ref(null); const a = $signal(0);",
+      "const a = $signal(1); const b = $ref(null);",
+    ]) {
+      expect(signature(counter(body)), body).not.toStrictEqual(base);
+    }
+  });
+
+  test("changes when a $computed or $effect function changes", () => {
+    expect(signature(counter("$computed(() => a.get() * 2);"))).not.toStrictEqual(
+      signature(counter("$computed(() => a.get() * 3);")),
+    );
+    expect(signature(counter("$effect(() => log(a));"))).not.toStrictEqual(
+      signature(counter("$effect(() => log(b));")),
+    );
+  });
+});
 
 describe("browser paths", () => {
   test("are relative to the root and start with the base", () => {
@@ -71,6 +106,11 @@ describe("island modules", () => {
   test("island modules accept their own hot updates in the browser", async () => {
     const client = await server.environments.client.transformRequest("/app/counter.client.tsx");
     expect(client?.code).toContain("import.meta.hot.accept((next) =>");
+    // With the module's hook signature, to keep the islands' state.
+    expect(client?.code).toMatch(
+      /const hooks = "[0-9a-f]{16}";\s*import\.meta\.hot\.data\.hooks = hooks;/,
+    );
+    expect(client?.code).toContain("$huuma$hotReplaceIsland(path, next.default, { keepState })");
     expect(client?.code).toMatch(
       /import \{ hotReplaceIsland as \$huuma\$hotReplaceIsland \} from "\/@id\/__x00__virtual:huuma\/runtime"/,
     );
