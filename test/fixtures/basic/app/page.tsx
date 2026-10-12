@@ -1,3 +1,4 @@
+import Greeting from "../components/greeting.client.tsx";
 import Counter from "./counter.client.tsx";
 
 export default function Home() {
@@ -5,6 +6,7 @@ export default function Home() {
     <>
       <h1>Home</h1>
       <Counter start={1} />
+      <Greeting name="Ada" />
     </>
   );
 }

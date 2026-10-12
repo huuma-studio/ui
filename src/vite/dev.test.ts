@@ -132,6 +132,19 @@ describe("dev server", () => {
     });
   });
 
+  test("exposes PUBLIC_* env vars from .env, and only those", async () => {
+    expect(server.config.env.PUBLIC_GREETING).toStrictEqual("Hello");
+    expect(server.config.env.SECRET_TOKEN).toStrictEqual(undefined);
+
+    // Rendered on the server…
+    const html = await (await fetch(`${origin}/`)).text();
+    expect(html).toMatch(/<p>Hello.*Ada<\/p>/);
+    // …and readable in the browser, without the other variables.
+    const island = await (await fetch(`${origin}/components/greeting.client.tsx`)).text();
+    expect(island).toContain('"PUBLIC_GREETING": "Hello"');
+    expect(island).not.toContain("SECRET_TOKEN");
+  });
+
   test("serves remote functions", async () => {
     const response = await fetch(origin + (await remoteEndpoint("app/sum.remote.ts")), {
       method: "POST",

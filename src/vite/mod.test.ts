@@ -32,4 +32,24 @@ describe(huuma.name, () => {
       development: true,
     });
   });
+
+  test("exposes PUBLIC_* env vars, in addition to an app's own prefixes", async () => {
+    server = await createServer({
+      configFile: false,
+      logLevel: "silent",
+      server: { middlewareMode: true, ws: false },
+      plugins: [huuma()],
+    });
+    expect(server.config.envPrefix).toStrictEqual(["PUBLIC_"]);
+    await server.close();
+
+    server = await createServer({
+      configFile: false,
+      logLevel: "silent",
+      envPrefix: "VITE_",
+      server: { middlewareMode: true, ws: false },
+      plugins: [huuma()],
+    });
+    expect(server.config.envPrefix).toStrictEqual(["VITE_", "PUBLIC_"]);
+  });
 });

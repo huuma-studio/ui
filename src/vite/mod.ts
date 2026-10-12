@@ -71,6 +71,9 @@ function configPlugin(onResolved: (config: { root: string; base: string }) => vo
       return {
         // Huuma renders its own HTML: no index.html, no SPA fallback.
         appType: "custom",
+        // `import.meta.env.PUBLIC_*` in browser code, as with the Deno
+        // pipeline. An array, so Vite adds it to an app's own prefixes.
+        envPrefix: ["PUBLIC_"],
         oxc: {
           jsx: { runtime: "automatic", importSource: "@huuma/ui" },
         },
