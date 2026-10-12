@@ -19,4 +19,10 @@ export default defineConfig({
       "huuma/no-async-client-jsx": "error",
     },
   },
+  run: {
+    tasks: {
+      // Runs every check JSR publish runs, including slow types.
+      "jsr:dry-run": { command: "jsr publish --dry-run", cache: false },
+    },
+  },
 });

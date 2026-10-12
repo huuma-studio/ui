@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^24",
+    "jsr": "0.14.3",
     "vite-plus": "1.1.0"
   }
 }

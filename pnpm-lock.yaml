@@ -186,6 +186,9 @@ importers:
       '@types/node':
         specifier: ^24
         version: 24.19.2
+      jsr:
+        specifier: 0.14.3
+        version: 0.14.3
       vite-plus:
         specifier: 1.1.0
         version: 1.1.0(@types/node@24.19.2)(@vitest/ui@5.0.3)(esbuild@0.28.1)
@@ -1251,6 +1254,10 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
+  jsr@0.14.3:
+    resolution: {integrity: sha512-PGxnDepx7vwJoZQe2SHbyBiFfpGwsOKmX4kn/wZZqfMafV7fjXqTxSaX6lp9QHYkSTLKkER+P/wmrZY3gVJNzg==}
+    hasBin: true
+
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
     engines: {node: '>= 12.0.0'}
@@ -1341,6 +1348,10 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  node-stream-zip@1.16.0:
+    resolution: {integrity: sha512-ObaRrRoR8T68wF6suxHd7R4XQNamij6ZQHrwG7Dx1D2zeHcDNLsIOBcWrIwtDm7AsCXBguaPHgXhcjxDa2szrg==}
+    engines: {node: '>=0.12.0'}
+
   obug@2.2.1:
     resolution: {integrity: sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==}
     engines: {node: '>=12.20.0'}
@@ -1399,6 +1410,10 @@ packages:
 
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
+
+  semiver@1.1.0:
+    resolution: {integrity: sha512-QNI2ChmuioGC1/xjyYwyZYADILWyW6AmS1UH6gDj/SFUUUS4MBAWs/7mxnkRPc/F4iHezDP+O8t0dO8WHiEOdg==}
+    engines: {node: '>=6'}
 
   sirv@3.0.2:
     resolution: {integrity: sha512-2wcC/oGxHis/BoHkkPwldgiPSYcpZK3JU28WoMVv55yHJgcZ8rlXvuG9iZggz+sU1d4bRgIGASwyWqjxu3FM0g==}
@@ -2239,6 +2254,11 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
+  jsr@0.14.3:
+    dependencies:
+      node-stream-zip: 1.16.0
+      semiver: 1.1.0
+
   lightningcss-android-arm64@1.33.0:
     optional: true
 
@@ -2297,6 +2317,8 @@ snapshots:
   mrmime@2.0.1: {}
 
   nanoid@3.3.20: {}
+
+  node-stream-zip@1.16.0: {}
 
   obug@2.2.1: {}
 
@@ -2379,6 +2401,8 @@ snapshots:
       react-is: 17.0.2
 
   react-is@17.0.2: {}
+
+  semiver@1.1.0: {}
 
   sirv@3.0.2:
     dependencies:
