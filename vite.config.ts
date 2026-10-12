@@ -19,6 +19,10 @@ export default defineConfig({
       "huuma/no-async-client-jsx": "error",
     },
   },
+  fmt: {
+    // Prose: formatting it would bury content changes in blame.
+    ignorePatterns: ["**/*.md"],
+  },
   run: {
     tasks: {
       // Runs every check JSR publish runs, including slow types.
