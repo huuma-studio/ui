@@ -113,7 +113,7 @@ describe("dev server", () => {
 
     const runtimeModule = await fetch(origin + runtime);
     expect(runtimeModule.headers.get("content-type")).toContain("javascript");
-    expect(await runtimeModule.text()).toContain("export { launch }");
+    expect(await runtimeModule.text()).toContain("export { hotReplaceIsland, launch }");
 
     const islandModule = await fetch(origin + island);
     expect(islandModule.headers.get("content-type")).toContain("javascript");

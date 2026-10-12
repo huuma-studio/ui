@@ -64,8 +64,19 @@ describe("island modules", () => {
   test(`${RUNTIME_ID} exports the browser runtime to the client`, async () => {
     const result = await server.environments.client.transformRequest(RUNTIME_ID);
     expect(result?.code).toMatch(
-      /export \{ launch \} from "[^"]*\/src\/platform\/browser\/mod\.ts"/,
+      /export \{ hotReplaceIsland, launch \} from "[^"]*\/src\/platform\/browser\/mod\.ts"/,
     );
+  });
+
+  test("island modules accept their own hot updates in the browser", async () => {
+    const client = await server.environments.client.transformRequest("/app/counter.client.tsx");
+    expect(client?.code).toContain("import.meta.hot.accept((next) =>");
+    expect(client?.code).toMatch(
+      /import \{ hotReplaceIsland as \$huuma\$hotReplaceIsland \} from "\/@id\/__x00__virtual:huuma\/runtime"/,
+    );
+    // The server renders them without.
+    const ssr = await server.environments.ssr.transformRequest("/app/counter.client.tsx");
+    expect(ssr?.code).not.toContain("hotReplaceIsland");
   });
 
   test("each stays in its environment", async () => {

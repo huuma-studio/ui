@@ -13,6 +13,7 @@ import { ROUTES_ID } from "./routes.ts";
 // The files discovery finds: adding or deleting one changes the routes,
 // islands or remote modules, which the generated modules list.
 const DISCOVERED = /(\/page\.tsx|\/layout\.tsx|\/middleware\.ts|\.client\.tsx|\.remote\.ts)$/;
+const ISLAND = /\.client\.tsx$/;
 const GENERATED = [ROUTES_ID, ISLANDS_ID, REMOTE_ID, SERVER_ID].map((id) => `\0${id}`);
 
 /** What `virtual:huuma/server` exports: `UIApp.deliver()`. */
@@ -52,7 +53,13 @@ export function devPlugin(serverEntry: () => string): Plugin {
         }
       }
       app.stale = true;
-      server.environments.client.hot.send({ type: "full-reload" });
+      // An island the browser loaded updates itself (see `islandsPlugin`);
+      // everything else reloads the page.
+      const island =
+        type === "update" &&
+        ISLAND.test(file) &&
+        !!server.environments.client.moduleGraph.getModulesByFile(file)?.size;
+      if (!island) server.environments.client.hot.send({ type: "full-reload" });
       // Handled: the ModuleRunner gets no HMR update of its own.
       return [];
     },

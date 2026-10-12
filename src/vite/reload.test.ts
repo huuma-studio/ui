@@ -78,6 +78,39 @@ describe("dev server after changes", () => {
     expect(messages.map((message) => message.type)).toContain("full-reload");
   });
 
+  test("an edited island updates itself in the browser, without a reload", async () => {
+    // The browser loaded the page and its island.
+    await page("/");
+    await fetch(`${origin}/app/counter.client.tsx`);
+    messages.length = 0;
+
+    await writeFile(
+      join(root, "app/counter.client.tsx"),
+      [
+        'import { $signal } from "@huuma/ui/hooks/signal";',
+        "",
+        "export default function Counter({ start = 0 }: { start?: number }) {",
+        "  const count = $signal(start);",
+        "  return <button on-click={() => count.set(count.get() + 1)}>Count: {count}</button>;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    await eventually(async () => {
+      expect((await page("/")).html).toContain("<button>Count: 1</button>");
+    });
+    await eventually(async () => {
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          type: "update",
+          updates: [expect.objectContaining({ path: "/app/counter.client.tsx" })],
+        }),
+      );
+    });
+    expect(messages.map((message) => message.type)).not.toContain("full-reload");
+  });
+
   test("an added page is served, a deleted one isn't", async () => {
     expect((await page("/contact")).status).toStrictEqual(404);
 
