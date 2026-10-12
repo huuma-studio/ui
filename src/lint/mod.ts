@@ -9,10 +9,10 @@
 interface AstNode {
   type: string;
   async?: boolean;
+  generator?: boolean;
   name?: string;
   exportKind?: string;
   declaration?: AstNode | null;
-  declarations?: { id: AstNode; init?: AstNode | null }[];
   id?: AstNode | null;
   init?: AstNode | null;
 }
@@ -44,15 +44,6 @@ export interface LintPlugin {
   >;
 }
 
-function isAsyncFunction(node: AstNode | null | undefined): boolean {
-  return (
-    (node?.type === "FunctionDeclaration" ||
-      node?.type === "FunctionExpression" ||
-      node?.type === "ArrowFunctionExpression") &&
-    !!node.async
-  );
-}
-
 const TYPE_DECLARATIONS = new Set(["TSTypeAliasDeclaration", "TSInterfaceDeclaration"]);
 
 const asyncRemoteFunctions: Rule = {
@@ -68,12 +59,14 @@ const asyncRemoteFunctions: Rule = {
         if (node.exportKind === "type") return;
         const declaration = node.declaration;
         if (declaration && TYPE_DECLARATIONS.has(declaration.type)) return;
-        if (isAsyncFunction(declaration)) return;
-        // `export const f = async () => {}`; the client stub generator does
-        // not handle `export { f }` yet, so that is still reported.
+        // Only the form the client stub generator reliably finds. Its regex
+        // misses `export const` with a type annotation, several declarators
+        // or a multi-line parameter list, and `export { f }`, so those would
+        // lose their browser stub. Relax with the Oxc-based generator.
         if (
-          declaration?.type === "VariableDeclaration" &&
-          declaration.declarations?.every((d) => isAsyncFunction(d.init))
+          declaration?.type === "FunctionDeclaration" &&
+          declaration.async &&
+          !declaration.generator
         ) {
           return;
         }

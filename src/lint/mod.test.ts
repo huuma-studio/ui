@@ -33,8 +33,7 @@ const remoteError = (code: string) => ({
 tester.run("async-remote-functions", rule("async-remote-functions"), {
   valid: [
     remote("export async function save() {}"),
-    remote("export const save = async () => {};"),
-    remote("export const save = async function () {};"),
+    remote("export async function save<T>(\n  input: T,\n): Promise<T> {\n  return input;\n}"),
     remote("export type Input = { email: string };"),
     remote("export interface Input { email: string }"),
     remote('export type { Input } from "./input.ts";'),
@@ -42,9 +41,15 @@ tester.run("async-remote-functions", rule("async-remote-functions"), {
   ],
   invalid: [
     remoteError("export function save() {}"),
-    remoteError("export const save = () => {};"),
     remoteError("export const limit = 10;"),
-    // The client stub generator does not handle this form yet.
+    remoteError("export async function* stream() {}"),
+    // The client stub generator misses these forms, so they would have no
+    // browser stub: only `export async function` is accepted for now.
+    remoteError("export const save = async () => {};"),
+    remoteError("export const save = async function () {};"),
+    remoteError("export const save: Handler = async () => {};"),
+    remoteError("export const first = async () => {}, second = async () => {};"),
+    remoteError("export let save = async () => {};"),
     remoteError("const save = async () => {}; export { save };"),
   ],
 });
