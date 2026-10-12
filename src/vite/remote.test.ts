@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { createServer, parseSync, type ViteDevServer } from "vite";
+import { createServer, parseSync, type RunnableDevEnvironment, type ViteDevServer } from "vite";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -141,6 +141,23 @@ describe("remote modules", () => {
     const result = await server.environments.ssr.transformRequest("/app/sum.remote.ts");
     expect(result?.code).toContain("hostname");
     expect(result?.code).not.toContain("$huuma$call");
+  });
+
+  test("are listed by endpoint for the server", async () => {
+    const { runner } = server.environments.ssr as RunnableDevEnvironment;
+    const { default: remote } = (await runner.import("virtual:huuma/remote")) as {
+      default: Record<string, Record<string, (...args: number[]) => Promise<number>>>;
+    };
+
+    const endpoint = await remoteEndpoint("app/sum.remote.ts");
+    expect(Object.keys(remote)).toStrictEqual([endpoint]);
+    expect(await remote[endpoint].add(1, 2)).toStrictEqual(3);
+  });
+
+  test("aren't listed for the browser", async () => {
+    await expect(
+      server.environments.client.pluginContainer.load("\0virtual:huuma/remote"),
+    ).rejects.toThrow("virtual:huuma/remote imports every remote module and is server only.");
   });
 
   test("fail with exports the stub can't name", async () => {

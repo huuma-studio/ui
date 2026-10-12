@@ -50,6 +50,7 @@ describe("island modules", () => {
     // Project-wide, including islands outside the routes directory.
     expect(Object.keys(islands).sort()).toStrictEqual([
       "app/counter.client.tsx",
+      "app/remote/sum.client.tsx",
       "components/greeting.client.tsx",
     ]);
     // The same module instance a page gets when it imports the island:

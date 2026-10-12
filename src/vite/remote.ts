@@ -1,28 +1,61 @@
 import type { ESTree, Plugin } from "vite";
-import { relative } from "node:path";
+import { join, relative } from "node:path";
 
+import { listRemoteFunctions } from "../platform/server/discover.ts";
 import { remoteEndpoint, remoteStub } from "../platform/server/remote.ts";
+
+/**
+ * Every remote module by its endpoint. Server only: the server registers
+ * a route per module, the browser gets stubs instead.
+ */
+export const REMOTE_ID = "virtual:huuma/remote";
+const RESOLVED_REMOTE_ID = `\0${REMOTE_ID}`;
 
 // A remote module, e.g. `app/todo.remote.ts`, with an optional query.
 const REMOTE_MODULE = /\.remote\.ts(\?.*)?$/;
 
 /**
- * Replaces each remote module (`*.remote.ts`) in the browser with a stub
- * that calls its functions on the server. Its source, and everything it
- * imports, never reaches the browser. `root()` is Vite's resolved root:
- * the endpoints are named by the module's path below it.
+ * Serves `virtual:huuma/remote` for the remote modules (`*.remote.ts`)
+ * below Vite's root `root()`, and replaces each remote module in the
+ * browser with a stub that calls its functions on the server. A remote
+ * module's source, and everything it imports, never reaches the browser.
+ * The endpoints are named by the module's path below the root.
  */
 export function remotePlugin(root: () => string): Plugin {
   return {
     name: "huuma:remote",
     // Before Oxc strips the types: type-only exports aren't remote functions.
     enforce: "pre",
-    applyToEnvironment(environment) {
-      return environment.config.consumer === "client";
+    resolveId: {
+      filter: { id: new RegExp(`^${REMOTE_ID}$`) },
+      handler() {
+        return RESOLVED_REMOTE_ID;
+      },
+    },
+    load: {
+      filter: { id: new RegExp(`^\0${REMOTE_ID}$`) },
+      async handler() {
+        if (this.environment.config.consumer !== "server") {
+          this.error(`${REMOTE_ID} imports every remote module and is server only.`);
+        }
+        const modules = await Promise.all(
+          (await listRemoteFunctions(root())).map(async (module) => {
+            const file = join(module.filePath, module.fileName);
+            return {
+              name: module.name,
+              file,
+              endpoint: await remoteEndpoint(relative(root(), file)),
+            };
+          }),
+        );
+        return { code: remoteModule(modules), moduleType: "js" };
+      },
     },
     transform: {
       filter: { id: REMOTE_MODULE },
       async handler(code, id) {
+        // The server runs the module itself.
+        if (this.environment.config.consumer !== "client") return;
         const file = id.replace(/\?.*$/, "");
         const { names, problems } = remoteExports(this.parse(code, { lang: "ts" }));
         if (problems.length) this.error(problems[0].message, problems[0].start);
@@ -35,6 +68,20 @@ export function remotePlugin(root: () => string): Plugin {
       },
     },
   };
+}
+
+/** Generates the source of `virtual:huuma/remote`. */
+export function remoteModule(modules: { name: string; file: string; endpoint: string }[]): string {
+  return [
+    ...modules.map(
+      ({ name, file }) => `import * as ${name} from ${JSON.stringify(file.replaceAll("\\", "/"))};`,
+    ),
+    "",
+    "export default {",
+    ...modules.map(({ name, endpoint }) => `  ${JSON.stringify(endpoint)}: ${name},`),
+    "};",
+    "",
+  ].join("\n");
 }
 
 /** What `remoteExports()` found in a remote module. */

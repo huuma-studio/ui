@@ -7,12 +7,13 @@ import type { Connect, DevEnvironment, Plugin, RunnableDevEnvironment, ViteDevSe
 import { SERVER_ID } from "./entry.ts";
 import { ISLANDS_ID } from "./islands.ts";
 import { toRequest, writeResponse } from "./node-http.ts";
+import { REMOTE_ID } from "./remote.ts";
 import { ROUTES_ID } from "./routes.ts";
 
-// The files discovery finds: adding or deleting one changes the routes or
-// islands, which the generated modules list.
-const DISCOVERED = /(\/page\.tsx|\/layout\.tsx|\/middleware\.ts|\.client\.tsx)$/;
-const GENERATED = [ROUTES_ID, ISLANDS_ID, SERVER_ID].map((id) => `\0${id}`);
+// The files discovery finds: adding or deleting one changes the routes,
+// islands or remote modules, which the generated modules list.
+const DISCOVERED = /(\/page\.tsx|\/layout\.tsx|\/middleware\.ts|\.client\.tsx|\.remote\.ts)$/;
+const GENERATED = [ROUTES_ID, ISLANDS_ID, REMOTE_ID, SERVER_ID].map((id) => `\0${id}`);
 
 /** What `virtual:huuma/server` exports: `UIApp.deliver()`. */
 type Handle = (

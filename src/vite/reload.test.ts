@@ -4,6 +4,7 @@ import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { remoteEndpoint } from "../platform/server/remote.ts";
 import { huuma } from "./mod.ts";
 
 const fixtures = fileURLToPath(new URL("../../test/fixtures", import.meta.url));
@@ -94,6 +95,26 @@ describe("dev server after changes", () => {
     await rm(join(root, "app/contact"), { recursive: true });
     await eventually(async () => {
       expect((await page("/contact")).status).toStrictEqual(404);
+    });
+  });
+
+  test("an added remote module is served", async () => {
+    const call = async () => {
+      const response = await fetch(origin + (await remoteEndpoint("app/greet.remote.ts")), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ remoteFunction: "greet", args: ["Ada"] }),
+      });
+      return { status: response.status, body: await response.text() };
+    };
+    expect((await call()).status).toStrictEqual(404);
+
+    await writeFile(
+      join(root, "app/greet.remote.ts"),
+      "export async function greet(name: string) {\n  return `Hello ${name}`;\n}\n",
+    );
+    await eventually(async () => {
+      expect(await call()).toStrictEqual({ status: 200, body: '"Hello Ada"' });
     });
   });
 });
