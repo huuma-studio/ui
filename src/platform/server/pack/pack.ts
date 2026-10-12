@@ -7,7 +7,8 @@ import process from "node:process";
 
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 
-import { generateHash, toCanonicalPath } from "./list/utils.ts";
+import { remoteEndpoint } from "../remote.ts";
+import { generateHash } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 
@@ -106,9 +107,7 @@ export async function packRemoteFunctions<T extends UIAppContext>(
   });
   if (_remoteFunctions) {
     for (const [key, remoteFunctions] of Object.entries(_remoteFunctions)) {
-      const fileName = parse(key).name;
-      const fileHash = await generateHash(toCanonicalPath(key));
-      app.post(`/_huuma/remote/${fileHash}/${fileName}`, async ({ request }) => {
+      app.post(await remoteEndpoint(key), async ({ request }) => {
         const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
         if (
           remoteFunction in remoteFunctions &&

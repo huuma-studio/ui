@@ -37,28 +37,33 @@ async function inTempDir(fn: (dir: string) => Promise<void>) {
   }
 }
 
+/**
+ * Resolves "@huuma/ui" to this repository, so the fixture app and the
+ * bundled browser runtime use the code under test.
+ */
+async function writeDenoConfig(dir: string) {
+  const config = JSON.parse(await readFile(join(repoRoot, "jsr.json"), "utf8"));
+  await writeFile(
+    join(dir, "deno.json"),
+    JSON.stringify({
+      imports: {
+        ...config.imports,
+        "@huuma/ui/jsx-runtime": join(repoRoot, "src/jsx-runtime/mod.ts"),
+        "@huuma/ui/server/pack": join(repoRoot, "src/platform/server/pack/mod.ts"),
+      },
+      compilerOptions: { jsx: "react-jsx", jsxImportSource: "@huuma/ui" },
+    }),
+  );
+}
+
 Deno.test({
   name: `${list.name}: bundles the app and registers the live reload route`,
   // esbuild keeps its service process alive across builds.
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
-    const config = JSON.parse(await readFile(join(repoRoot, "jsr.json"), "utf8"));
-
     await inTempDir(async (dir) => {
-      // Resolve "@huuma/ui" to this repository so the fixture app and the
-      // bundled browser runtime use the code under test.
-      await writeFile(
-        join(dir, "deno.json"),
-        JSON.stringify({
-          imports: {
-            ...config.imports,
-            "@huuma/ui/jsx-runtime": join(repoRoot, "src/jsx-runtime/mod.ts"),
-            "@huuma/ui/server/pack": join(repoRoot, "src/platform/server/pack/mod.ts"),
-          },
-          compilerOptions: { jsx: "react-jsx", jsxImportSource: "@huuma/ui" },
-        }),
-      );
+      await writeDenoConfig(dir);
       await mkdir(join(dir, "app"));
       await writeFile(
         join(dir, "app", "page.tsx"),
@@ -86,6 +91,65 @@ Deno.test({
       assert.equal(await exists(join(dir, ".huuma", "scripts", "huuma_ui_launch.js")), true);
       // The env shim is only needed while bundling.
       assert.equal(await exists(join(dir, ".huuma", "shims")), false);
+    });
+  },
+});
+
+Deno.test({
+  name: `${list.name}: stubs remote functions in the browser and serves them`,
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    await inTempDir(async (dir) => {
+      await writeDenoConfig(dir);
+      await mkdir(join(dir, "app"));
+      await writeFile(join(dir, "app", "page.tsx"), "export default () => null;");
+      await writeFile(
+        join(dir, "app", "todo.remote.ts"),
+        [
+          'import { readFile } from "node:fs/promises";',
+          "export async function add(a: number, b: number) { return a + b; }",
+          "export default async function reset() {}",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(dir, "app", "counter.client.tsx"),
+        [
+          'import reset, { add } from "./todo.remote.ts";',
+          "export default function Counter() { add(1, 2); reset(); return null; }",
+        ].join("\n"),
+      );
+
+      const app = createUIApp(({ children }) => jsx("html", { children: [children] }));
+      await list(app, { isProd: false, enableLiveReload: false });
+      const handle = app.deliver();
+      const connection = { remoteAddr: { transport: "tcp" } };
+
+      // The island's bundle calls the endpoint instead of the server code.
+      const scripts = join(dir, ".huuma", "scripts");
+      const island = (await Array.fromAsync(Deno.readDir(scripts))).find((entry) =>
+        entry.name.endsWith("-counter.client.js"),
+      );
+      assert.ok(island);
+      const bundle = await readFile(join(scripts, island.name), "utf8");
+      const endpoint = /"(\/_huuma\/remote\/[0-9a-f]{8}\/todo\.remote)"/.exec(bundle)?.[1];
+      assert.ok(endpoint);
+      assert.equal(bundle.includes("node:fs"), false);
+
+      const call = (remoteFunction: string, args: unknown[]) =>
+        handle(
+          new Request(`http://localhost${endpoint}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ remoteFunction, args }),
+          }),
+          connection,
+        );
+      const sum = await call("add", [1, 2]);
+      assert.equal(sum.status, 200);
+      assert.equal(await sum.json(), 3);
+      const reset = await call("default", []);
+      assert.equal(reset.status, 204);
     });
   },
 });
