@@ -1,4 +1,5 @@
 import { defineConfig } from "vite-plus";
+import jsr from "./jsr.json" with { type: "json" };
 
 export default defineConfig({
   oxc: {
@@ -23,10 +24,23 @@ export default defineConfig({
     // Prose: formatting it would bury content changes in blame.
     ignorePatterns: ["**/*.md"],
   },
+  // A native npm build (spec #126, D7), checked in CI but not published. It
+  // mirrors src/ so each jsr.json export maps to one file in dist/.
+  pack: {
+    entry: Object.values(jsr.exports),
+    root: "src",
+    unbundle: true,
+    platform: "neutral",
+    // Server code imports Node built-ins, which "neutral" doesn't know.
+    deps: { neverBundle: [/^node:/] },
+    dts: true,
+    failOnWarn: true,
+  },
   run: {
     tasks: {
       // Runs every check JSR publish runs, including slow types.
       "jsr:dry-run": { command: "jsr publish --dry-run", cache: false },
+      pack: { command: ["vp pack", "node scripts/check-pack.ts"], cache: false },
     },
   },
 });

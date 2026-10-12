@@ -11,13 +11,14 @@
     "strict": true,
     "jsx": "react-jsx",
     "jsxImportSource": "@huuma/ui",
-    // JSR rejects slow types: exports need explicit types.
+    // JSR rejects slow types: exports need explicit types. `vp check`
+    // doesn't report these errors; `vp run pack` does.
     "declaration": true,
     "isolatedDeclarations": true,
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["src", "test", "vite.config.ts"],
+  "include": ["src", "test", "scripts", "vite.config.ts"],
   // Deno-only smoke tests, checked by `deno test`.
   "exclude": ["test/deno"]
 }
