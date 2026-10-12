@@ -82,7 +82,8 @@ function bindings(program: AstNode): Map<string, Binding> {
         if (specifier.local?.name) names.set(specifier.local.name, type ? "type" : "import");
       }
     } else if (TYPE_DECLARATIONS.has(node.type)) {
-      if (node.id?.name) names.set(node.id.name, "type");
+      // A type can share its name with a value, which is what's exported.
+      if (node.id?.name && !names.has(node.id.name)) names.set(node.id.name, "type");
     } else if (node.type === "FunctionDeclaration" || node.type === "ClassDeclaration") {
       if (node.id?.name)
         names.set(node.id.name, isAsyncFunction(node) ? "async-function" : "other");
