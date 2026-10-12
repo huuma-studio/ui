@@ -63,6 +63,58 @@ describe(`launch() and hotReplaceIsland()`, () => {
     expect(document.querySelector("button")!.textContent).toStrictEqual("Count: 2");
   });
 
+  test("keep the island's state if asked to", () => {
+    launch(`<main><h1>Home</h1>${island("a1", "<button>1</button>")}<p>Footer</p></main>`, [
+      { id: "a1", fn: Counter, path: COUNTER },
+    ]);
+    click("button", 2);
+    const button = document.querySelector("button");
+
+    expect(runtime.hotReplaceIsland(COUNTER, EditedCounter, { keepState: true })).toStrictEqual(
+      true,
+    );
+
+    // The same signal, rendered by the new component into the same element.
+    expect(document.querySelector("button")).toBe(button);
+    expect(button!.textContent).toStrictEqual("Count: 3");
+    click("button");
+    expect(button!.textContent).toStrictEqual("Count: 4");
+    // A second update keeps it too.
+    runtime.hotReplaceIsland(COUNTER, Counter, { keepState: true });
+    expect(button!.textContent).toStrictEqual("4");
+  });
+
+  test("keep typed input and focus if asked to", () => {
+    function Form(): JSX.Element {
+      return (
+        <form>
+          <input name="title" />
+        </form>
+      );
+    }
+    function EditedForm(): JSX.Element {
+      return (
+        <form>
+          <input name="title" />
+          <button>Save</button>
+        </form>
+      );
+    }
+    launch(`<main>${island("f1", '<form><input name="title"></form>')}</main>`, [
+      { id: "f1", fn: Form, path: "/app/form.client.tsx" },
+    ]);
+    const input = document.querySelector("input")!;
+    input.value = "Milk";
+    input.focus();
+
+    runtime.hotReplaceIsland("/app/form.client.tsx", EditedForm, { keepState: true });
+
+    expect(document.querySelector("input")).toBe(input);
+    expect(input.value).toStrictEqual("Milk");
+    expect(document.activeElement).toBe(input);
+    expect(document.querySelector("form button")!.textContent).toStrictEqual("Save");
+  });
+
   test("leave islands of other modules alone", () => {
     function Other(): JSX.Element {
       const count = hooks.$signal(1);

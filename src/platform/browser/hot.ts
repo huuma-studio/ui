@@ -16,8 +16,8 @@ import { diff } from "./diff/diff.ts";
 import { dispatch } from "./diff/dispatch.ts";
 
 // Hot updates of islands in a dev server: an island module that changed
-// replaces its component in the page's islands. They're mounted again, so
-// their state (signals) starts over.
+// replaces its component in the page's islands, keeping their state if
+// the caller says the hooks didn't change.
 
 interface MountedIsland {
   /** The element the island was hydrated from: its component, props and children. */
@@ -40,11 +40,23 @@ export function registerMountedIsland(island: MountedIsland): void {
   mounted.push(island);
 }
 
+/** Options of {@link hotReplaceIsland}. */
+export interface HotReplaceOptions {
+  /**
+   * Keeps each island's state: its component instance re-renders with
+   * `next` instead of being mounted again, so its hooks (`$signal`,
+   * `$computed`, `$ref`, …) return what they returned before, by call
+   * order, and the DOM is patched instead of replaced (typed input and
+   * focus stay). Only safe if `next` calls the same hooks in the same
+   * order; otherwise the island starts over with its initial state.
+   */
+  keepState?: boolean;
+}
+
 /**
  * Replaces the component of the island module at `path` (its browser
- * path, as in the `Launch` script) with `next`: each island of the page
- * with that component is mounted again, with the same props and
- * children.
+ * path, as in the `Launch` script) with `next`, in each island of the
+ * page with that component, keeping props and children.
  *
  * Returns `false` if the component is used anywhere else: inside another
  * island, which renders it from its own code, or gets it as children.
@@ -54,7 +66,11 @@ export function registerMountedIsland(island: MountedIsland): void {
  * @internal Used by the Vite plugin's island hot updates; not part of the
  * public API.
  */
-export function hotReplaceIsland(path: string, next: JSX.Component): boolean {
+export function hotReplaceIsland(
+  path: string,
+  next: JSX.Component,
+  options: HotReplaceOptions = {},
+): boolean {
   const previous = components.get(path);
   // From now on, the module's component is `next`, whatever happens here.
   components.set(path, next);
@@ -69,6 +85,11 @@ export function hotReplaceIsland(path: string, next: JSX.Component): boolean {
 
   for (const island of islands) {
     const element = { ...island.element, type: next };
+    // The same component instance then renders `next` like any update,
+    // reusing its hooks, and the diff patches its DOM. Otherwise
+    // `update()` replaces it. (Before the snapshot: the diff compares
+    // the components.)
+    if (options.keepState) island.vNode[VNodeProps.FN] = next;
     const previousVNode = snapshot(island.vNode);
     const attachmentRef = attachmentRefFrom(island.vNode);
     const vNode = update<Node>(element, island.vNode, island.options);
