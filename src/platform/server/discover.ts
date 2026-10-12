@@ -166,6 +166,9 @@ export async function listRemoteFunctions(path: string): Promise<FileImport[]> {
  * when patterns overlap (e.g. `/` vs `/*`).
  */
 export function sortPages(imports: FileImport[], basePath?: string): FileImport[] {
+  // Compared with the lowercased paths below: a routes path with capitals
+  // (e.g. an absolute path under /Users) must still find the root page.
+  const base = basePath?.toLowerCase();
   return imports.sort((a, b) => {
     const al = a.filePath.toLowerCase();
     const bl = b.filePath.toLowerCase();
@@ -176,9 +179,9 @@ export function sortPages(imports: FileImport[], basePath?: string): FileImport[
     // dependent on the initial array order from `walk()`, which is
     // filesystem-dependent — so the root page "randomly" ended up after the
     // catch-all and `/` returned 404.
-    if (typeof basePath !== "undefined") {
-      if (al === basePath) return -1;
-      if (bl === basePath) return 1;
+    if (typeof base !== "undefined") {
+      if (al === base) return -1;
+      if (bl === base) return 1;
     }
 
     if (al > bl) {

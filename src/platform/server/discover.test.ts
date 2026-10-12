@@ -1,5 +1,8 @@
-import { describe, expect, test } from "vite-plus/test";
-import { type FileImport, sortPages } from "./discover.ts";
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type FileImport, listIslands, listPages, sortPages } from "./discover.ts";
 
 // Helper: build a FileImport with just the filePath (the only field sortPages
 // reads). name/fileName are irrelevant to the sort.
@@ -83,8 +86,72 @@ test("sortPages: without basePath, sorts descending alphabetically", () => {
   expect(sorted.map((x) => x.filePath)).toStrictEqual(["app/blog", "app/about", "app/!404"]);
 });
 
+test("sortPages: finds the root page when the base path has capitals", () => {
+  const sorted = sortPages([page("/Users/me/app/!404"), page("/Users/me/app")], "/Users/me/app");
+  expect(sorted[0].filePath).toStrictEqual("/Users/me/app");
+});
+
 test("sortPages: case-insensitive comparison", () => {
   const sorted = sortPages([page("app/About"), page("app/about")], BASE);
   expect(sorted[0].filePath).toStrictEqual("app/About");
   expect(sorted[1].filePath).toStrictEqual("app/about");
+});
+
+describe("discovery in a routes tree", () => {
+  let root: string;
+  const files = [
+    "App/layout.tsx",
+    "App/page.tsx",
+    "App/middleware.ts",
+    "App/about/page.tsx",
+    "App/(marketing)/pricing/page.tsx",
+    "App/blog/layout.tsx",
+    "App/blog/[slug]/page.tsx",
+    "App/!404/page.tsx",
+    "App/counter.client.tsx",
+    "components/nested/like.client.tsx",
+    "App/notes.md",
+  ];
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "huuma-discover-"));
+    for (const file of files) {
+      await mkdir(join(root, file, ".."), { recursive: true });
+      await writeFile(join(root, file), "");
+    }
+  });
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("listPages maps pages to routes with their layouts and middlewares", async () => {
+    // Capitals in the routes path, as in an absolute path under /Users.
+    const app = join(root, "App");
+    const routes = await listPages(app);
+    const byRoute = Object.fromEntries(
+      routes.pages.map(({ page, layouts, middlewares }) => [
+        page.routePath,
+        { layouts: layouts.length, middlewares: middlewares.length },
+      ]),
+    );
+
+    expect(byRoute).toStrictEqual({
+      "/": { layouts: 1, middlewares: 1 },
+      "/about": { layouts: 1, middlewares: 1 },
+      // Route groups in parentheses don't appear in the path.
+      "/pricing": { layouts: 1, middlewares: 1 },
+      "/blog/[slug]": { layouts: 2, middlewares: 1 },
+      "/!404": { layouts: 1, middlewares: 1 },
+    });
+    // The root page registers first and the 404 catch-all last.
+    expect(routes.pages[0].page.routePath).toStrictEqual("/");
+    expect(routes.pages[routes.pages.length - 1].page.routePath).toStrictEqual("/!404");
+  });
+
+  test("listIslands finds every .client.tsx file below the path", async () => {
+    const islands = await listIslands(root);
+    expect(
+      islands.map(({ filePath, fileName }) => join(filePath, fileName).slice(root.length + 1)),
+    ).toStrictEqual(["App/counter.client.tsx", "components/nested/like.client.tsx"]);
+  });
 });
