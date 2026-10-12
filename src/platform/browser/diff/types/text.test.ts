@@ -116,7 +116,7 @@ describe("text replace changeset", () => {
     globals.Text = class {
       textContent: string;
       constructor(value: unknown) {
-        this.textContent = `${value}`;
+        this.textContent = String(value);
       }
     };
     try {

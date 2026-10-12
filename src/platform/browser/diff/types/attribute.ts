@@ -67,15 +67,18 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, "");
     return;
   }
+  if (typeof value === "object" && value !== null) {
+    // Only dangerouslySetInnerHTML takes an object; never "[object Object]".
+    if (name === "dangerouslySetInnerHTML" && value.__html) {
+      (<HTMLElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
+    }
+    return;
+  }
   if (name === "value" && value != null) {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = value != null ? `${value}` : "";
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = String(value);
     return;
   }
-  if (name === "dangerouslySetInnerHTML" && typeof value === "object" && value.__html) {
-    (<HTMLElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
-    return;
-  }
-  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, value != null ? `${value}` : "");
+  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, value != null ? String(value) : "");
 }
 
 function remove({ name, vNode }: DeleteAttributePayload): void {

@@ -1,8 +1,10 @@
+import type { JSX } from "../../../../jsx-runtime/jsx.ts";
 import { setSubscriber } from "../../../../signal/mod.ts";
 import { flushCleanups, VNodeProps, type VText } from "../../../../v-node/mod.ts";
 import { type AttachmentRef, AttachmentType, moveAttachmentRef } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import { isSignal } from "../update.ts";
+import { toText } from "../../../../utils/text.ts";
 
 interface BaseTextChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Text;
@@ -92,11 +94,11 @@ function createBoundNode(vText: VText<Node>): Text {
     const signal = vText[VNodeProps.TEXT];
     node = setSubscriber(
       () => {
-        return new Text(`${signal.get()}`);
+        return new Text(toText(signal));
       },
       {
-        update: (value: string | number) => {
-          node.textContent = `${value}`;
+        update: (value: JSX.SignalValue) => {
+          node.textContent = String(value);
         },
         cleanupCallback(cleanup) {
           vText[VNodeProps.CLEANUP].push(cleanup);
@@ -104,7 +106,7 @@ function createBoundNode(vText: VText<Node>): Text {
       },
     );
   } else {
-    node = new Text(`${vText[VNodeProps.TEXT]}`);
+    node = new Text(toText(vText[VNodeProps.TEXT]));
   }
 
   return node;
@@ -162,11 +164,11 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
     const signal = vText[VNodeProps.TEXT];
     setSubscriber(
       () => {
-        node.textContent = `${signal.get()}`;
+        node.textContent = toText(signal);
       },
       {
-        update: (value: string | number) => {
-          node.textContent = `${value}`;
+        update: (value: JSX.SignalValue) => {
+          node.textContent = String(value);
         },
         cleanupCallback: (cleanup) => {
           vText[VNodeProps.CLEANUP].push(cleanup);
@@ -174,7 +176,7 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
       },
     );
   } else {
-    node.textContent = `${vText[VNodeProps.TEXT]}`;
+    node.textContent = toText(vText[VNodeProps.TEXT]);
   }
 
   moveAttachmentRef(attachmentRef, node);
@@ -183,9 +185,7 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
 function update({ vText }: UpdateTextPayload): void {
   const node = vText[VNodeProps.NODE_REF];
   if (!node) return;
-  node.textContent = isSignal(vText)
-    ? `${vText[VNodeProps.TEXT].get()}`
-    : `${vText[VNodeProps.TEXT]}`;
+  node.textContent = toText(vText[VNodeProps.TEXT]);
 }
 
 function remove({ vText }: DeleteTextPayload): void {

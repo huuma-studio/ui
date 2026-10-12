@@ -1,4 +1,5 @@
 import { escape } from "../../utils/escape.ts";
+import { toText } from "../../utils/text.ts";
 
 import { create as createSync } from "../../v-node/sync.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
@@ -102,7 +103,5 @@ function stringFrom(attributes: JSX.Attributes): string {
 }
 
 function textFromVText<T>(vText: VText<T>): string {
-  return typeof vText[VNodeProps.TEXT] === "object" && "get" in vText[VNodeProps.TEXT]
-    ? `${vText[VNodeProps.TEXT].get()}`
-    : `${vText[VNodeProps.TEXT]}`;
+  return toText(vText[VNodeProps.TEXT]);
 }

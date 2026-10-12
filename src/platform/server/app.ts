@@ -258,7 +258,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
         const auth = ctx.auth;
 
         const resolved = (
-          await Promise.all(props.resolvers.map((resolver) => resolver(ctx)))
+          await Promise.all(props.resolvers.map(async (resolver) => resolver(ctx)))
         ).reduce((acc, value) => {
           return { ...acc, ...value };
         }, {});

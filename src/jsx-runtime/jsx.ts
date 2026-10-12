@@ -7,7 +7,8 @@ import { Ref } from "../ref/mod.ts";
 
 // deno-lint-ignore no-namespace
 export namespace JSX {
-  export type SignalLike = Signal<EmptyNode | TextNode>;
+  export type SignalValue = EmptyNode | string | number;
+  export type SignalLike = Signal<SignalValue>;
   export type TextNode = string | number | SignalLike;
   export type EmptyNode = undefined | null | boolean;
 
@@ -15,7 +16,7 @@ export namespace JSX {
     type: T; // Element = string, Component = Component, Fragment = 0;
     eventRefs: EventRef[];
     props: ComponentProps;
-    bind?: Ref<null | unknown>;
+    bind?: Ref<unknown>;
     key?: string | number;
   };
 
@@ -40,7 +41,7 @@ export namespace JSX {
   export type Attributes = {
     [key: string]: unknown;
     key?: unknown;
-    bind?: Ref<unknown | null>;
+    bind?: Ref<unknown>;
     dangerouslySetInnerHTML?: { __html: string };
   };
 
@@ -49,8 +50,9 @@ export namespace JSX {
   }
 
   export type Component = (
+    // `any` (not ComponentProps) so components can declare their own props.
     // deno-lint-ignore no-explicit-any
-    props: ComponentProps & any,
+    props: any,
   ) => Element | Promise<Element>;
 
   export type ElementType = Component | keyof IntrinsicElements;
