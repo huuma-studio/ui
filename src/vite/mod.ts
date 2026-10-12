@@ -10,6 +10,7 @@
 import type { Plugin } from "vite";
 import { resolve } from "node:path";
 
+import { islandsPlugin } from "./islands.ts";
 import { routesPlugin } from "./routes.ts";
 
 /** Options of the Huuma UI plugin. */
@@ -33,22 +34,24 @@ export interface HuumaOptions {
  * ```
  */
 export function huuma(options: HuumaOptions = {}): Plugin[] {
-  // Vite's resolved root, known once the config is resolved.
-  let root = "";
+  // Vite's resolved config, known once Vite resolved it.
+  const app = { root: "", base: "/" };
   return [
-    configPlugin((resolvedRoot) => {
-      root = resolvedRoot;
+    configPlugin((config) => {
+      app.root = config.root;
+      app.base = config.base;
     }),
-    routesPlugin(() => resolve(root, options.routes ?? "app")),
+    routesPlugin(() => resolve(app.root, options.routes ?? "app")),
+    islandsPlugin(() => app),
   ];
 }
 
 /** Settings every Huuma app needs. */
-function configPlugin(onRoot: (root: string) => void): Plugin {
+function configPlugin(onResolved: (config: { root: string; base: string }) => void): Plugin {
   return {
     name: "huuma:config",
     configResolved(config) {
-      onRoot(config.root);
+      onResolved(config);
     },
     config() {
       return {
