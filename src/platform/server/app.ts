@@ -209,7 +209,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     });
   }
 
-  addStylesheet(stylesheet: Stylesheet) {
+  addStylesheet(stylesheet: Stylesheet): void {
     const existing = this.#stylesheets.find((s) => s.name === stylesheet.name);
     if (!existing) {
       if (stylesheet.entrypoint) {
@@ -232,7 +232,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     }
   }
 
-  addTransferState(key: string, state: TransferStateItem) {
+  addTransferState(key: string, state: TransferStateItem): void {
     this.#transferState[key] = state;
   }
 

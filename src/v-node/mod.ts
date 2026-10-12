@@ -187,7 +187,7 @@ export function isVSignal(node: JSX.Element): node is VSignal {
   return node instanceof Signal;
 }
 
-export function flushCleanups(vNode: HasVCleanup) {
+export function flushCleanups(vNode: HasVCleanup): void {
   for (const cleanup of vNode[VNodeProps.CLEANUP]) {
     cleanup.cleanup();
   }
@@ -201,7 +201,7 @@ export function flushCleanups(vNode: HasVCleanup) {
  * component re-render subscriptions are drained per update pass by
  * cleanup().
  */
-export function flushSubtreeCleanups(vNode: VNode<unknown>) {
+export function flushSubtreeCleanups(vNode: VNode<unknown>): void {
   if (isVText(vNode)) {
     flushCleanups(vNode);
   }
@@ -213,7 +213,7 @@ export function flushSubtreeCleanups(vNode: VNode<unknown>) {
   }
 }
 
-export function cleanup(vNode: VNode<unknown>) {
+export function cleanup(vNode: VNode<unknown>): void {
   if (isVComponent(vNode)) {
     flushCleanups(vNode);
     cleanup(vNode[VNodeProps.AST]);

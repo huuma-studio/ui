@@ -11,7 +11,7 @@ import { generateHash, toCanonicalPath } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 
-export function packPages<T extends UIAppContext>(pages: List["pages"], app: UIApp<T>) {
+export function packPages<T extends UIAppContext>(pages: List["pages"], app: UIApp<T>): UIApp<T> {
   for (const route in pages) {
     const _route = pages[route];
     const resolvers: Resolver<unknown>[] = [];
@@ -55,7 +55,7 @@ export async function packIslands<T extends UIAppContext>(
   scripts: List["scripts"],
   scriptsDirectory: string,
   app: UIApp<T>,
-) {
+): Promise<UIApp<T>> {
   if (islands) {
     for (const [islandPath, island] of Object.entries(islands)) {
       const islandHash = await generateHash(islandPath);

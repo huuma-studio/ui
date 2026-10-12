@@ -17,7 +17,7 @@ export interface ParentAttachmentRef {
   vNode: HasVNodeRef<Node>;
 }
 
-export function moveAttachmentRef(attachmentRef: AttachmentRef, node: Node) {
+export function moveAttachmentRef(attachmentRef: AttachmentRef, node: Node): void {
   attachmentRef.type = AttachmentType.Sibling;
   (<SiblingAttachmentRef>attachmentRef).node = node;
   (<Partial<ParentAttachmentRef>>attachmentRef).vNode = undefined;
@@ -62,7 +62,10 @@ function skipCommentNodes(node?: Node | null): Node | undefined | null {
   return node;
 }
 
-export function copyAttachmentRefTo(vComponent: VComponent<Node>, attachmentRef: AttachmentRef) {
+export function copyAttachmentRefTo(
+  vComponent: VComponent<Node>,
+  attachmentRef: AttachmentRef,
+): void {
   if (attachmentRef.type === AttachmentType.Parent) {
     vComponent[VNodeProps.OPTIONS].ATTACHMENT_REF = <ParentAttachmentRef>{
       type: attachmentRef.type,

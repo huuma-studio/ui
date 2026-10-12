@@ -79,8 +79,8 @@ export function T(props: TProps): JSX.Element {
   return jsx(Fragment, { children: [t(i18n, name, _p)] });
 }
 
-export const Translation = T;
-export const I18n = T;
+export const Translation: typeof T = T;
+export const I18n: typeof T = T;
 
 export class LanguageNotSupportedException extends NotFoundException {
   constructor() {
@@ -99,14 +99,14 @@ export function $activeLang(): string {
   return langFrom(url.pathname, i18n.config.pattern) ?? i18n.config.defaultLanguage;
 }
 /** @deprecated Use $activeLang */
-export const getActiveLang = $activeLang;
+export const getActiveLang: typeof $activeLang = $activeLang;
 
 export function $languages(): string[] {
   return $config().i18n.availableLanguages;
 }
 
 /** @deprecated Use $languages */
-export const getLanguages = $languages;
+export const getLanguages: typeof $languages = $languages;
 
 export function langFrom(
   url: string,
