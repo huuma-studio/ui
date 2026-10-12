@@ -111,6 +111,9 @@ describe("discovery in a routes tree", () => {
     "App/counter.client.tsx",
     "components/nested/like.client.tsx",
     "App/notes.md",
+    // Not part of the app.
+    "node_modules/ui-kit/button.client.tsx",
+    ".git/hooks/legacy.client.tsx",
   ];
 
   beforeAll(async () => {
@@ -148,7 +151,7 @@ describe("discovery in a routes tree", () => {
     expect(routes.pages[routes.pages.length - 1].page.routePath).toStrictEqual("/!404");
   });
 
-  test("listIslands finds every .client.tsx file below the path", async () => {
+  test("listIslands finds the .client.tsx files below the path, but not in dependencies or hidden directories", async () => {
     const islands = await listIslands(root);
     expect(
       islands.map(({ filePath, fileName }) => join(filePath, fileName).slice(root.length + 1)),

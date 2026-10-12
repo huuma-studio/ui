@@ -28,6 +28,10 @@ export interface Routes {
  * Yields the files below `root` whose path matches one of `patterns`, depth
  * first in directory order, like `walk()` from @std/fs: island and remote
  * function names follow this order.
+ *
+ * Skips `node_modules` and hidden directories (`.git`, `.huuma`, `.vite`):
+ * islands are discovered across the whole project, and a Vite app's root
+ * contains its dependencies.
  */
 async function* walkFiles(
   root: string,
@@ -36,6 +40,7 @@ async function* walkFiles(
   for (const entry of await readdir(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
     if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
       yield* walkFiles(path, patterns);
     } else if (patterns.some((pattern) => pattern.test(path))) {
       yield { path, name: entry.name };
