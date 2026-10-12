@@ -141,11 +141,16 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     return this.#entryPoints ? [...this.#entryPoints] : [];
   }
 
+  /**
+   * Registers an island component and its client script. Without
+   * `contents`, something else serves the script, such as the Vite dev
+   * server (see `addScript`).
+   */
   addIsland(
     island: JSX.Component,
     script: {
       path: string;
-      contents: Uint8Array<ArrayBuffer>;
+      contents?: Uint8Array<ArrayBuffer>;
       imports?: string[];
     },
   ): void {
@@ -156,10 +161,19 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     this.#islands.push({ path: script.path, island });
   }
 
-  addScript(path: string, content: Uint8Array<ArrayBuffer>, options?: ScriptWithImports): void;
+  /**
+   * Registers a script for the page's script tags, loaded from `/${path}`.
+   * With `content`, the app serves it at that path; without it, something
+   * else does, such as the Vite dev server.
+   */
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
+    options?: ScriptWithImports,
+  ): void;
+  addScript(
+    path: string,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: {
       isEntryPoint: boolean;
       head?: boolean;
@@ -167,21 +181,21 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
   ): void;
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: {
       isIsland: boolean;
     } & ScriptWithImports,
   ): void;
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: {
       isRuntime: boolean;
     } & ScriptWithImports,
   ): void;
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: {
       isEntryPoint?: boolean;
       isIsland?: boolean;
@@ -199,6 +213,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
       imports: options?.imports,
       head: options?.head,
     });
+    if (!content) return;
     this.get(`/${path}`, () => {
       return new Response(content, {
         headers: {
@@ -386,10 +401,12 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
         _scripts.body.runtime = script;
         continue;
       }
+      // By path: island file names repeat across directories when nothing
+      // (such as the Deno pipeline's hash prefix) makes them unique.
       if (
         this.#islands.length &&
         script.isIsland &&
-        !!islands.filter((island) => parse(island.path).name === script.name).length
+        islands.some((island) => island.path === script.path)
       ) {
         _scripts.body.islands.push(script);
         continue;
