@@ -101,24 +101,39 @@ export async function packRemoteFunctions<T extends UIAppContext>(
   _remoteFunctions: List["remoteFunctions"],
   app: UIApp<T>,
 ): Promise<UIApp<T>> {
-  const remoteFunctionsSchema = object({
-    remoteFunction: string(),
-    args: array(unknown()).optional(),
-  });
   if (_remoteFunctions) {
     for (const [key, remoteFunctions] of Object.entries(_remoteFunctions)) {
-      app.post(await remoteEndpoint(key), async ({ request }) => {
-        const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
-        if (
-          remoteFunction in remoteFunctions &&
-          typeof remoteFunctions[remoteFunction] === "function"
-        ) {
-          return await executeRemoteFunction(remoteFunctions, remoteFunction, args);
-        }
-        throw new NotFoundException(`Remote function "${remoteFunction}" not found`);
-      });
+      serveRemoteFunctions(app, await remoteEndpoint(key), remoteFunctions);
     }
   }
+  return app;
+}
+
+const remoteFunctionsSchema = object({
+  remoteFunction: string(),
+  args: array(unknown()).optional(),
+});
+
+/**
+ * Serves the functions of one remote module at `endpoint`: the browser
+ * stub posts the function's name and arguments.
+ */
+export function serveRemoteFunctions<T extends UIAppContext>(
+  app: UIApp<T>,
+  endpoint: string,
+  // deno-lint-ignore no-explicit-any
+  remoteFunctions: Record<string, (...args: any[]) => Promise<any>>,
+): UIApp<T> {
+  app.post(endpoint, async ({ request }) => {
+    const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
+    if (
+      remoteFunction in remoteFunctions &&
+      typeof remoteFunctions[remoteFunction] === "function"
+    ) {
+      return await executeRemoteFunction(remoteFunctions, remoteFunction, args);
+    }
+    throw new NotFoundException(`Remote function "${remoteFunction}" not found`);
+  });
   return app;
 }
 
