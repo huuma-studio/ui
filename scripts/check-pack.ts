@@ -2,7 +2,7 @@
 // export has its JavaScript and declaration file in dist/ and loads in Node,
 // and every file a module opens by `new URL(..., import.meta.url)` exists.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const jsr = JSON.parse(readFileSync("jsr.json", "utf8")) as {
@@ -30,9 +30,11 @@ for (const [name, source] of Object.entries(jsr.exports)) {
   }
 }
 
+// Forward slashes on every OS (readdirSync returns backslashes on
+// Windows), so paths match DENO_ONLY; Node opens them on Windows too.
 const files = readdirSync("dist", { recursive: true, encoding: "utf8" })
   .filter((file) => file.endsWith(".js"))
-  .map((file) => relative(".", join("dist", file)));
+  .map((file) => `dist/${file.split(sep).join("/")}`);
 const fileUrl = /new URL\(\s*["']([^"']+)["']\s*,\s*import\.meta\.url\s*\)/g;
 const unused = new Set(DENO_ONLY);
 for (const file of files) {
