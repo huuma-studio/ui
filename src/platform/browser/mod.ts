@@ -12,6 +12,8 @@ import { hydrate } from "./diff/hydrate.ts";
 
 type Island = {
   fn: JSX.Component;
+  /** The browser path of the island's module (`Launch` adds it). */
+  path?: string;
   // TODO: Define types of the props after Signals values are handled.
   props: Record<string, unknown>;
   islandId: string;

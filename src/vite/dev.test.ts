@@ -107,7 +107,9 @@ describe("dev server", () => {
 
     expect(runtime).toStrictEqual("/@id/__x00__virtual:huuma/runtime");
     expect(island).toStrictEqual("/app/counter.client.tsx");
-    expect(html).toContain('{fn: $I1, props: {"start":1}, islandId: "');
+    expect(html).toContain(
+      '{fn: $I1, path: "/app/counter.client.tsx", props: {"start":1}, islandId: "',
+    );
 
     const runtimeModule = await fetch(origin + runtime);
     expect(runtimeModule.headers.get("content-type")).toContain("javascript");
