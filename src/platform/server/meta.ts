@@ -15,10 +15,11 @@ export function Meta({ metadata }: MetaProps): JSX.Element {
         content: "width=device-width, initial-scale=1",
       }),
       metadata?.title && jsx("title", { children: [metadata.title] }),
-      metadata?.description && jsx("meta", {
-        name: "description",
-        content: metadata.description,
-      }),
+      metadata?.description &&
+        jsx("meta", {
+          name: "description",
+          content: metadata.description,
+        }),
     ],
   });
 }

@@ -1,8 +1,4 @@
-import {
-  type HasVNodeRef,
-  type VComponent,
-  VNodeProps,
-} from "../../../v-node/mod.ts";
+import { type HasVNodeRef, type VComponent, VNodeProps } from "../../../v-node/mod.ts";
 
 export enum AttachmentType {
   Parent,
@@ -23,14 +19,15 @@ export interface ParentAttachmentRef {
 
 export function moveAttachmentRef(attachmentRef: AttachmentRef, node: Node) {
   attachmentRef.type = AttachmentType.Sibling;
-  (<SiblingAttachmentRef> attachmentRef).node = node;
-  (<Partial<ParentAttachmentRef>> attachmentRef).vNode = undefined;
+  (<SiblingAttachmentRef>attachmentRef).node = node;
+  (<Partial<ParentAttachmentRef>>attachmentRef).vNode = undefined;
 }
 
 export function parentFromAttachmentRef(attachmentRef: AttachmentRef): Node {
-  const parentNode = attachmentRef.type === AttachmentType.Parent
-    ? attachmentRef.vNode[VNodeProps.NODE_REF]
-    : attachmentRef.node.parentNode;
+  const parentNode =
+    attachmentRef.type === AttachmentType.Parent
+      ? attachmentRef.vNode[VNodeProps.NODE_REF]
+      : attachmentRef.node.parentNode;
   if (!parentNode) throw RangeError("No dom node parent found");
   return parentNode;
 }
@@ -38,18 +35,18 @@ export function parentFromAttachmentRef(attachmentRef: AttachmentRef): Node {
 export function createRootAttachmentRef(node?: Node | null): AttachmentRef {
   const previousSibling = skipCommentNodes(node?.previousSibling);
   const attachmentRef = previousSibling
-    ? <SiblingAttachmentRef> {
-      type: AttachmentType.Sibling,
-      node: previousSibling,
-    }
+    ? <SiblingAttachmentRef>{
+        type: AttachmentType.Sibling,
+        node: previousSibling,
+      }
     : node?.parentNode
-    ? <ParentAttachmentRef> {
-      type: AttachmentType.Parent,
-      vNode: {
-        [VNodeProps.NODE_REF]: node.parentNode,
-      },
-    }
-    : undefined;
+      ? <ParentAttachmentRef>{
+          type: AttachmentType.Parent,
+          vNode: {
+            [VNodeProps.NODE_REF]: node.parentNode,
+          },
+        }
+      : undefined;
 
   if (!attachmentRef) {
     throw new Error("Not parent node found for given node.");
@@ -65,12 +62,9 @@ function skipCommentNodes(node?: Node | null): Node | undefined | null {
   return node;
 }
 
-export function copyAttachmentRefTo(
-  vComponent: VComponent<Node>,
-  attachmentRef: AttachmentRef,
-) {
+export function copyAttachmentRefTo(vComponent: VComponent<Node>, attachmentRef: AttachmentRef) {
   if (attachmentRef.type === AttachmentType.Parent) {
-    vComponent[VNodeProps.OPTIONS].ATTACHMENT_REF = <ParentAttachmentRef> {
+    vComponent[VNodeProps.OPTIONS].ATTACHMENT_REF = <ParentAttachmentRef>{
       type: attachmentRef.type,
       vNode: { ...attachmentRef.vNode },
     };
@@ -82,13 +76,7 @@ export function copyAttachmentRefTo(
   }
 }
 
-export function attachmentRefFrom(
-  vComponent: VComponent<Node>,
-): AttachmentRef | undefined {
-  const attachmentRef = <
-    | AttachmentRef
-    | undefined
-  > vComponent[VNodeProps.OPTIONS]
-    .ATTACHMENT_REF;
+export function attachmentRefFrom(vComponent: VComponent<Node>): AttachmentRef | undefined {
+  const attachmentRef = <AttachmentRef | undefined>vComponent[VNodeProps.OPTIONS].ATTACHMENT_REF;
   return attachmentRef ? { ...attachmentRef } : undefined;
 }

@@ -1,8 +1,4 @@
-import {
-  type HasVNodeRef,
-  type VElement,
-  VNodeProps,
-} from "../../../../v-node/mod.ts";
+import { type HasVNodeRef, type VElement, VNodeProps } from "../../../../v-node/mod.ts";
 import { BOOLEAN_ATTRIBUTES } from "../../../../jsx-runtime/boolean-attributes.ts";
 import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
 
@@ -27,18 +23,15 @@ export interface DeleteAttributePayload {
   name: string;
 }
 
-export interface CreateAttributeChangeSet
-  extends BaseAttributeChangeSet<CreateAttributePayload> {
+export interface CreateAttributeChangeSet extends BaseAttributeChangeSet<CreateAttributePayload> {
   [Props.Action]: Action.Create;
 }
 
-export interface UpdateAttributeChangeSet
-  extends BaseAttributeChangeSet<UpdateAttributePayload> {
+export interface UpdateAttributeChangeSet extends BaseAttributeChangeSet<UpdateAttributePayload> {
   [Props.Action]: Action.Update;
 }
 
-export interface DeleteAttributeChangeSet
-  extends BaseAttributeChangeSet<DeleteAttributePayload> {
+export interface DeleteAttributeChangeSet extends BaseAttributeChangeSet<DeleteAttributePayload> {
   [Props.Action]: Action.Delete;
 }
 
@@ -75,22 +68,14 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     return;
   }
   if (name === "value" && value != null) {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] =
-      value != null ? `${value}` : "";
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = value != null ? `${value}` : "";
     return;
   }
-  if (
-    name === "dangerouslySetInnerHTML" &&
-    typeof value === "object" &&
-    value.__html
-  ) {
+  if (name === "dangerouslySetInnerHTML" && typeof value === "object" && value.__html) {
     (<HTMLElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
     return;
   }
-  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(
-    name,
-    value != null ? `${value}` : "",
-  );
+  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, value != null ? `${value}` : "");
 }
 
 function remove({ name, vNode }: DeleteAttributePayload): void {
@@ -100,9 +85,7 @@ function remove({ name, vNode }: DeleteAttributePayload): void {
   if (name === "value") {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = "";
   }
-  (<HTMLElement>(
-    (<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]
-  )).removeAttribute(name);
+  (<HTMLElement>(<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]).removeAttribute(name);
 }
 
 export function compareAttributes(
@@ -125,9 +108,7 @@ export function compareAttributes(
     }
 
     // Existence is checked by key: "" and false are valid previous values.
-    if (
-      hasOwn(previousProps, prop) && props[prop] === previousProps[prop]
-    ) {
+    if (hasOwn(previousProps, prop) && props[prop] === previousProps[prop]) {
       continue;
     }
     changes.push(...setAttribute(prop, props[prop], vNode));
@@ -162,10 +143,12 @@ function isAttribute(prop: string, value: unknown): boolean {
   if (prop === "children") return false;
   if (prop === "dangerouslySetInnerHTML") return value != null;
   // Boolean attributes are diffed for any value: falsy ones are removed.
-  return BOOLEAN_ATTRIBUTES.has(prop) ||
+  return (
+    BOOLEAN_ATTRIBUTES.has(prop) ||
     typeof value === "string" ||
     typeof value === "number" ||
-    typeof value === "boolean";
+    typeof value === "boolean"
+  );
 }
 
 export function setAttribute(
@@ -200,9 +183,7 @@ export function setAttribute(
       },
     ];
   }
-  if (
-    typeof value === "string" || typeof value === "number" || value === true
-  ) {
+  if (typeof value === "string" || typeof value === "number" || value === true) {
     return [
       {
         [Props.Action]: Action.Create,

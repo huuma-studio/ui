@@ -2,19 +2,25 @@ name: ci
 run-name: change request by ${{ github.actor }}
 on: [pull_request]
 jobs:
-  type-check:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: denoland/setup-deno@v2
+      - uses: actions/checkout@v4
+      # Pinned: the floating v1 tag is frozen at v1.15.0.
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
-          deno-version: v2.5
-      - run: deno task check
-  test:
+          node-version: "24"
+          cache: true
+      - run: vp check
+      - run: vp test
+      - run: vp run jsr:dry-run
+  deno-smoke:
+    # Deno is best effort (spec #126, D4): this job never blocks a merge.
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.5
-      - run: deno task test
+          deno-version: v2.x
+      - run: deno test --allow-all --no-check --node-modules-dir=none test/deno/

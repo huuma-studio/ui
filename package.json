@@ -1,0 +1,37 @@
+{
+  "name": "@huuma/ui",
+  "private": true,
+  "description": "Development tooling only. @huuma/ui is published to JSR from jsr.json.",
+  "type": "module",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./v-node": "./src/v-node/mod.ts",
+    "./v-node/sync": "./src/v-node/sync.ts",
+    "./browser": "./src/platform/browser/mod.ts",
+    "./server": "./src/platform/server/mod.ts",
+    "./server/pack": "./src/platform/server/pack/mod.ts",
+    "./server/pack/list": "./src/platform/server/pack/list/mod.ts",
+    "./ref": "./src/ref/mod.ts",
+    "./signal": "./src/signal/mod.ts",
+    "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
+    "./hooks/signal": "./src/hooks/signal.ts",
+    "./hooks/ref": "./src/hooks/ref/mod.ts",
+    "./hooks/scope": "./src/hooks/scope.ts",
+    "./jsx-runtime": "./src/jsx-runtime/mod.ts",
+    "./i18n": "./src/i18n/mod.ts",
+    "./i18n/middleware": "./src/i18n/middleware/mod.ts",
+    "./lint": "./src/lint/mod.ts"
+  },
+  "dependencies": {
+    "@deno/esbuild-plugin": "npm:@jsr/deno__esbuild-plugin@^1.2.1",
+    "@huuma/route": "npm:@jsr/huuma__route@^0.2.0",
+    "@huuma/validate": "npm:@jsr/huuma__validate@^0.2.0",
+    "esbuild": "0.28.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "jsr": "0.14.3",
+    "vite-plus": "1.1.0"
+  },
+  "packageManager": "pnpm@12.11.2"
+}

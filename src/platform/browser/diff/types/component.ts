@@ -1,9 +1,4 @@
-import {
-  type VComponent,
-  VHook,
-  VMode,
-  VNodeProps,
-} from "../../../../v-node/mod.ts";
+import { type VComponent, VHook, VMode, VNodeProps } from "../../../../v-node/mod.ts";
 import { type AttachmentRef, copyAttachmentRefTo } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 
@@ -16,8 +11,7 @@ export interface LinkComponentPayload {
   attachmentRef: AttachmentRef;
 }
 
-export interface LinkComponentChangeSet
-  extends BaseComponentChangeSet<LinkComponentPayload> {
+export interface LinkComponentChangeSet extends BaseComponentChangeSet<LinkComponentPayload> {
   [Props.Action]: Action.Link;
 }
 
@@ -25,19 +19,16 @@ export interface MountComponentPayload {
   vComponent: VComponent<Node>;
 }
 
-export interface MountComponentChangeSet
-  extends BaseComponentChangeSet<MountComponentPayload> {
+export interface MountComponentChangeSet extends BaseComponentChangeSet<MountComponentPayload> {
   [Props.Action]: Action.Mount;
 }
 
-export type ComponentChangeSet =
-  | LinkComponentChangeSet
-  | MountComponentChangeSet;
+export type ComponentChangeSet = LinkComponentChangeSet | MountComponentChangeSet;
 
 export function component(change: ComponentChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Link: {
-      return link(<LinkComponentPayload> change[Props.Payload]);
+      return link(<LinkComponentPayload>change[Props.Payload]);
     }
     case Action.Mount: {
       return mount(change[Props.Payload]);

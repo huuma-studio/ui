@@ -1,8 +1,7 @@
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
 import { array, object, string, unknown } from "@huuma/validate";
 import { info } from "@huuma/route/utils/logger";
-import { parse } from "@std/path/parse";
-import { join } from "@std/path/join";
+import { join, parse } from "node:path";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 
@@ -12,10 +11,7 @@ import { generateHash, toCanonicalPath } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 
-export function packPages<T extends UIAppContext>(
-  pages: List["pages"],
-  app: UIApp<T>,
-) {
+export function packPages<T extends UIAppContext>(pages: List["pages"], app: UIApp<T>) {
   for (const route in pages) {
     const _route = pages[route];
     const resolvers: Resolver<unknown>[] = [];
@@ -27,14 +23,12 @@ export function packPages<T extends UIAppContext>(
       resolvers.push(_route.page.resolver);
     }
 
-    const layouts: PageLike<unknown>[] = _route.layouts.map(
-      (layout) => {
-        if (typeof layout.resolver === "function") {
-          resolvers.push(layout.resolver);
-        }
-        return layout.default;
-      },
-    );
+    const layouts: PageLike<unknown>[] = _route.layouts.map((layout) => {
+      if (typeof layout.resolver === "function") {
+        resolvers.push(layout.resolver);
+      }
+      return layout.default;
+    });
 
     const middleware = _route.middleware
       .map((module) => {
@@ -65,19 +59,13 @@ export async function packIslands<T extends UIAppContext>(
   if (islands) {
     for (const [islandPath, island] of Object.entries(islands)) {
       const islandHash = await generateHash(islandPath);
-      const script = scripts.find((s) =>
-        parse(s[1]).name === `${islandHash}-${parse(islandPath).name}`
+      const script = scripts.find(
+        (s) => parse(s[1]).name === `${islandHash}-${parse(islandPath).name}`,
       );
       if (script) {
         app.addIsland(island.default, {
-          path: join(
-            "_huuma",
-            script[0],
-            script[1],
-          ),
-          contents: await readScript(
-            join(scriptsDirectory, script[1]),
-          ),
+          path: join("_huuma", script[0], script[1]),
+          contents: await readScript(join(scriptsDirectory, script[1])),
           imports: script[2].imports,
         });
       } else {
@@ -100,10 +88,7 @@ export async function packScripts<T extends UIAppContext>(
     for (const script of scripts) {
       app.addScript(
         join("_huuma", script[0], script[1]),
-        await readScript(join(
-          scriptsDirectory,
-          script[1],
-        )),
+        await readScript(join(scriptsDirectory, script[1])),
         script[2],
       );
     }
@@ -111,9 +96,7 @@ export async function packScripts<T extends UIAppContext>(
   return app;
 }
 
-export async function packRemoteFunctions<
-  T extends UIAppContext,
->(
+export async function packRemoteFunctions<T extends UIAppContext>(
   _remoteFunctions: List["remoteFunctions"],
   app: UIApp<T>,
 ): Promise<UIApp<T>> {
@@ -131,15 +114,9 @@ export async function packRemoteFunctions<
           remoteFunction in remoteFunctions &&
           typeof remoteFunctions[remoteFunction] === "function"
         ) {
-          return await executeRemoteFunction(
-            remoteFunctions,
-            remoteFunction,
-            args,
-          );
+          return await executeRemoteFunction(remoteFunctions, remoteFunction, args);
         }
-        throw new NotFoundException(
-          `Remote function "${remoteFunction}" not found`,
-        );
+        throw new NotFoundException(`Remote function "${remoteFunction}" not found`);
       });
     }
   }
@@ -147,18 +124,13 @@ export async function packRemoteFunctions<
 }
 
 async function readScript(path: string): Promise<Uint8Array<ArrayBuffer>> {
-  return new Uint8Array(
-    await readFile(join(
-      process.cwd(),
-      path,
-    )),
-  );
+  return new Uint8Array(await readFile(join(process.cwd(), path)));
 }
 
 /**
  * @internal Not part of the public `@huuma/ui` API. Exported only so it can
  * be unit-tested directly; `mod.ts` does not re-export it and `pack.ts` is
- * not an entry point in `deno.json`'s exports map.
+ * not an entry point in `jsr.json`'s exports map.
  *
  * Invokes a single remote function and produces the HTTP response. Extracted
  * from the route handler so the return-value normalization and serialization
@@ -182,9 +154,7 @@ export async function executeRemoteFunction(
   remoteFunction: string,
   args: unknown[] | undefined,
 ): Promise<Response> {
-  const res = await remoteFunctions[remoteFunction](
-    ...(args?.length ? args : []),
-  );
+  const res = await remoteFunctions[remoteFunction](...(args?.length ? args : []));
 
   // void / undefined return → 204 No Content. JSON has no `undefined`, so
   // an empty 204 body lets the client resolve to a real `undefined` instead
@@ -210,10 +180,9 @@ export async function executeRemoteFunction(
     return new Response(
       JSON.stringify({
         name: "RemoteFunctionSerializationError",
-        message:
-          `Remote function "${remoteFunction}" returned a value that cannot be JSON-serialized: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+        message: `Remote function "${remoteFunction}" returned a value that cannot be JSON-serialized: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
       }),
       { status: 500, headers: { "content-type": "application/json" } },
     );

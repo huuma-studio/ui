@@ -1,17 +1,12 @@
 import type { Middleware } from "@huuma/route/middleware";
-import { join } from "@std/path/join";
+import { join } from "node:path";
 
 import type { ContentSecurityPolicy } from "../content-security-policy.ts";
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 import type { Metadata, MetadataGenerator } from "../metadata.ts";
 import type { JSX } from "../../../jsx-runtime/mod.ts";
 
-import {
-  packIslands,
-  packPages,
-  packRemoteFunctions,
-  packScripts,
-} from "./pack.ts";
+import { packIslands, packPages, packRemoteFunctions, packScripts } from "./pack.ts";
 
 export type PageRoute = {
   page: Renderable;
@@ -59,10 +54,7 @@ export const shimsDirectory: string = join(huumaDirectory, "shims");
  * @param {List} list - Object containing pages, islands, and scripts to add to the application
  * @returns {Promise<UIApp<T>>} A promise that resolves with the configured Huuma UIApp instance
  */
-export async function pack<T extends UIAppContext>(
-  app: UIApp<T>,
-  list: List,
-): Promise<UIApp<T>> {
+export async function pack<T extends UIAppContext>(app: UIApp<T>, list: List): Promise<UIApp<T>> {
   const islandsScripts: List["scripts"] = [];
   const scripts: List["scripts"] = [];
 
@@ -75,28 +67,13 @@ export async function pack<T extends UIAppContext>(
     scripts.push(script);
   }
 
-  await packScripts(
-    scripts,
-    scriptsDirectory,
-    app,
-  );
+  await packScripts(scripts, scriptsDirectory, app);
 
-  await packIslands(
-    list.islands,
-    islandsScripts,
-    scriptsDirectory,
-    app,
-  );
+  await packIslands(list.islands, islandsScripts, scriptsDirectory, app);
 
-  await packRemoteFunctions(
-    list.remoteFunctions,
-    app,
-  );
+  await packRemoteFunctions(list.remoteFunctions, app);
 
-  packPages(
-    list.pages,
-    app,
-  );
+  packPages(list.pages, app);
 
   return app;
 }

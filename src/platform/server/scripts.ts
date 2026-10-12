@@ -1,4 +1,4 @@
-import { join } from "@std/path/join";
+import { join } from "node:path";
 
 import { Fragment, type JSX, jsx } from "../../jsx-runtime/mod.ts";
 import type { Island } from "../../islands/islands.ts";
@@ -13,9 +13,7 @@ interface ScriptsProps extends JSX.ComponentProps {
 }
 // TODO: change to proper jsx as soon jsr supports it
 // Preload, attach csp nonce and load head scripts
-export function Scripts(
-  { scripts, nonce }: ScriptsProps,
-): JSX.Element {
+export function Scripts({ scripts, nonce }: ScriptsProps): JSX.Element {
   if (!scripts?.entryPoints?.length) return null;
 
   const templates: string[] = [];
@@ -23,18 +21,22 @@ export function Scripts(
 
   for (const script of scripts.entryPoints) {
     templates.push("");
-    nodes.push(jsx("script", {
-      src: `/${script.path}`,
-      type: "module",
-      nonce,
-    }));
+    nodes.push(
+      jsx("script", {
+        src: `/${script.path}`,
+        type: "module",
+        nonce,
+      }),
+    );
   }
 
   return jsx(Fragment, {
-    children: [{
-      templates,
-      nodes,
-    }],
+    children: [
+      {
+        templates,
+        nodes,
+      },
+    ],
   });
 }
 
@@ -44,9 +46,7 @@ interface LaunchProps extends JSX.ComponentProps {
   islands?: Island[];
   transferState?: TransferState;
 }
-export function Launch(
-  { body, nonce, islands, transferState }: LaunchProps,
-): JSX.Element {
+export function Launch({ body, nonce, islands, transferState }: LaunchProps): JSX.Element {
   if (!body?.runtime || !islands?.length) return null;
 
   const templates: string[] = [];
@@ -62,18 +62,13 @@ export function Launch(
     nodes.push("\n");
 
     // Remove children.
-    const { children: _, ...props } =
-      (<JSX.ComponentNode<JSX.Component>> island.node).props;
-    _islands.push(
-      `{fn: $I${i}, props: ${inlineJSON(props)}, islandId: "${island.id}"}`,
-    );
+    const { children: _, ...props } = (<JSX.ComponentNode<JSX.Component>>island.node).props;
+    _islands.push(`{fn: $I${i}, props: ${inlineJSON(props)}, islandId: "${island.id}"}`);
 
     i++;
   }
 
-  templates.push(
-    `const transferState = ${inlineJSON(transferState ?? {})};`,
-  );
+  templates.push(`const transferState = ${inlineJSON(transferState ?? {})};`);
   nodes.push("\n");
 
   templates.push(`launch([${_islands.join()}], transferState);`);
@@ -82,10 +77,12 @@ export function Launch(
   return jsx(Fragment, {
     children: [
       jsx("script", {
-        children: [{
-          templates,
-          nodes,
-        }],
+        children: [
+          {
+            templates,
+            nodes,
+          },
+        ],
         type: "module",
         nonce,
       }),
@@ -98,10 +95,12 @@ interface PreloadProps extends JSX.ComponentProps {
 }
 
 export function Preload(props: PreloadProps): JSX.Element | null {
-  return props.preloadScripts &&
+  return (
+    props.preloadScripts &&
     jsx(Fragment, {
       children: props.preloadScripts.map((script) =>
-        jsx("link", { rel: "preload", href: join("/", script), as: "script" })
+        jsx("link", { rel: "preload", href: join("/", script), as: "script" }),
       ),
-    });
+    })
+  );
 }

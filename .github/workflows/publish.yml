@@ -15,5 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Installs the dependencies: JSR publish resolves npm packages
+      # through node_modules.
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version: "24"
+
       - name: Publish package
-        run: npx jsr publish
+        run: vp exec jsr publish

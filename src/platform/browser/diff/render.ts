@@ -8,28 +8,15 @@ import {
   type VText,
   VType,
 } from "../../../v-node/mod.ts";
-import {
-  type AttachmentRef,
-  AttachmentType,
-  type ParentAttachmentRef,
-} from "./attachment-ref.ts";
+import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import type { CreateAttributeChangeSet } from "./types/attribute.ts";
-import type {
-  LinkComponentChangeSet,
-  MountComponentChangeSet,
-} from "./types/component.ts";
-import type {
-  AttachElementChangeSet,
-  CreateElementChangeSet,
-} from "./types/element.ts";
+import type { LinkComponentChangeSet, MountComponentChangeSet } from "./types/component.ts";
+import type { AttachElementChangeSet, CreateElementChangeSet } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
 import type { TextChangeSet } from "./types/text.ts";
 
-export function render(
-  vNode: VNode<Node>,
-  attachmentRef: AttachmentRef,
-): ChangeSet<unknown>[] {
+export function render(vNode: VNode<Node>, attachmentRef: AttachmentRef): ChangeSet<unknown>[] {
   if (!vNode) {
     return [];
   }
@@ -53,12 +40,9 @@ export function render(
   return [];
 }
 
-function component(
-  vComponent: VComponent<Node>,
-  attachmentRef: AttachmentRef,
-) {
+function component(vComponent: VComponent<Node>, attachmentRef: AttachmentRef) {
   const changeSet: ChangeSet<unknown>[] = [
-    <LinkComponentChangeSet> {
+    <LinkComponentChangeSet>{
       [Props.Type]: Type.Component,
       [Props.Action]: Action.Link,
       [Props.Payload]: {
@@ -69,27 +53,22 @@ function component(
   ];
   changeSet.push(...render(vComponent[VNodeProps.AST], attachmentRef));
   if (vComponent[VNodeProps.MODE] === VMode.Created) {
-    changeSet.push(
-      <MountComponentChangeSet> {
-        [Props.Type]: Type.Component,
-        [Props.Action]: Action.Mount,
-        [Props.Payload]: {
-          vComponent,
-        },
+    changeSet.push(<MountComponentChangeSet>{
+      [Props.Type]: Type.Component,
+      [Props.Action]: Action.Mount,
+      [Props.Payload]: {
+        vComponent,
       },
-    );
+    });
   }
   return changeSet;
 }
 
-function element(
-  vElement: VElement<Node>,
-  attachmentRef: AttachmentRef,
-): ChangeSet<unknown>[] {
+function element(vElement: VElement<Node>, attachmentRef: AttachmentRef): ChangeSet<unknown>[] {
   const changeSets: ChangeSet<unknown>[] = [];
 
   changeSets.push(
-    <CreateElementChangeSet> {
+    <CreateElementChangeSet>{
       [Props.Type]: Type.Element,
       [Props.Action]: Action.Create,
       [Props.Payload]: {
@@ -97,7 +76,7 @@ function element(
         attachmentRef,
       },
     },
-    <AttachElementChangeSet> {
+    <AttachElementChangeSet>{
       [Props.Type]: Type.Element,
       [Props.Action]: Action.Attach,
       [Props.Payload]: {
@@ -109,33 +88,29 @@ function element(
 
   // Attach events
   vElement[VNodeProps.EVENT_REFS].forEach((event) => {
-    changeSets.push(
-      <CreateEventChangeSet> {
-        [Props.Type]: Type.Event,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: {
-          vNode: vElement,
-          name: event.name,
-          listener: event.listener,
-        },
+    changeSets.push(<CreateEventChangeSet>{
+      [Props.Type]: Type.Event,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: {
+        vNode: vElement,
+        name: event.name,
+        listener: event.listener,
       },
-    );
+    });
   });
 
   // Add attributes
   for (const prop in vElement[VNodeProps.PROPS]) {
     if (prop === "children") continue;
-    changeSets.push(
-      <CreateAttributeChangeSet> {
-        [Props.Type]: Type.Attribute,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: {
-          vNode: vElement,
-          name: prop,
-          value: <string> vElement[VNodeProps.PROPS][prop],
-        },
+    changeSets.push(<CreateAttributeChangeSet>{
+      [Props.Type]: Type.Attribute,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: {
+        vNode: vElement,
+        name: prop,
+        value: <string>vElement[VNodeProps.PROPS][prop],
       },
-    );
+    });
   }
   const childrenAttachmentRef: ParentAttachmentRef = {
     type: AttachmentType.Parent,
@@ -143,18 +118,13 @@ function element(
   };
 
   vElement[VNodeProps.CHILDREN]?.forEach((child) => {
-    changeSets.push(
-      ...render(child, childrenAttachmentRef),
-    );
+    changeSets.push(...render(child, childrenAttachmentRef));
   });
 
   return changeSets;
 }
 
-function text(
-  vText: VText<Node>,
-  attachmentRef: AttachmentRef,
-): TextChangeSet[] {
+function text(vText: VText<Node>, attachmentRef: AttachmentRef): TextChangeSet[] {
   return [
     {
       [Props.Type]: Type.Text,
@@ -174,10 +144,7 @@ function text(
   ];
 }
 
-function fragment(
-  vFragement: VFragment<Node>,
-  attachmentRef: AttachmentRef,
-) {
+function fragment(vFragement: VFragment<Node>, attachmentRef: AttachmentRef) {
   const changes: ChangeSet<unknown>[] = [];
   vFragement[VNodeProps.CHILDREN]?.forEach((vNode) => {
     changes.push(...render(vNode, attachmentRef));

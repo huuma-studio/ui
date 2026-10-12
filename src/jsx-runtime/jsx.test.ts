@@ -1,90 +1,87 @@
-import { assertEquals } from "@std/assert";
+import { describe, expect, test } from "vite-plus/test";
 import { jsxAttr } from "./jsx.ts";
 
-Deno.test("jsxAttr boolean attributes", async (t) => {
-  await t.step("omits falsy boolean attributes", () => {
-    assertEquals(jsxAttr("disabled", false), "");
-    assertEquals(jsxAttr("disabled", undefined), "");
-    assertEquals(jsxAttr("disabled", null), "");
-    assertEquals(jsxAttr("disabled", 0), "");
-    assertEquals(jsxAttr("disabled", ""), "");
-    assertEquals(jsxAttr("disabled", NaN), "");
+describe("jsxAttr boolean attributes", () => {
+  test("omits falsy boolean attributes", () => {
+    expect(jsxAttr("disabled", false)).toStrictEqual("");
+    expect(jsxAttr("disabled", undefined)).toStrictEqual("");
+    expect(jsxAttr("disabled", null)).toStrictEqual("");
+    expect(jsxAttr("disabled", 0)).toStrictEqual("");
+    expect(jsxAttr("disabled", "")).toStrictEqual("");
+    expect(jsxAttr("disabled", NaN)).toStrictEqual("");
   });
 
-  await t.step("emits the bare attribute name for true", () => {
-    assertEquals(jsxAttr("disabled", true), {
+  test("emits the bare attribute name for true", () => {
+    expect(jsxAttr("disabled", true)).toStrictEqual({
       templates: ["disabled"],
       nodes: [""],
     });
-    assertEquals(jsxAttr("readonly", true), {
+    expect(jsxAttr("readonly", true)).toStrictEqual({
       templates: ["readonly"],
       nodes: [""],
     });
   });
 
-  await t.step("covers media and embed boolean attributes", () => {
-    assertEquals(jsxAttr("disablepictureinpicture", false), "");
-    assertEquals(jsxAttr("disableremoteplayback", false), "");
-    assertEquals(jsxAttr("disablepictureinpicture", true), {
+  test("covers media and embed boolean attributes", () => {
+    expect(jsxAttr("disablepictureinpicture", false)).toStrictEqual("");
+    expect(jsxAttr("disableremoteplayback", false)).toStrictEqual("");
+    expect(jsxAttr("disablepictureinpicture", true)).toStrictEqual({
       templates: ["disablepictureinpicture"],
       nodes: [""],
     });
-    assertEquals(jsxAttr("muted", true), {
+    expect(jsxAttr("muted", true)).toStrictEqual({
       templates: ["muted"],
       nodes: [""],
     });
   });
 
-  await t.step("emits the bare attribute name for any truthy value", () => {
-    assertEquals(jsxAttr("checked", 1), {
+  test("emits the bare attribute name for any truthy value", () => {
+    expect(jsxAttr("checked", 1)).toStrictEqual({
       templates: ["checked"],
       nodes: [""],
     });
-    assertEquals(jsxAttr("open", "yes"), {
+    expect(jsxAttr("open", "yes")).toStrictEqual({
       templates: ["open"],
       nodes: [""],
     });
   });
 });
 
-Deno.test("jsxAttr non-boolean attributes", async (t) => {
-  await t.step("emits string values verbatim", () => {
-    assertEquals(jsxAttr("class", "btn primary"), {
+describe("jsxAttr non-boolean attributes", () => {
+  test("emits string values verbatim", () => {
+    expect(jsxAttr("class", "btn primary")).toStrictEqual({
       templates: [`class="btn primary"`],
       nodes: [""],
     });
-    assertEquals(jsxAttr("aria-busy", "false"), {
+    expect(jsxAttr("aria-busy", "false")).toStrictEqual({
       templates: [`aria-busy="false"`],
       nodes: [""],
     });
-    assertEquals(jsxAttr("value", ""), {
+    expect(jsxAttr("value", "")).toStrictEqual({
       templates: [`value=""`],
       nodes: [""],
     });
   });
 
-  await t.step("emits the bare name for static true", () => {
-    assertEquals(jsxAttr("data-active", true), {
+  test("emits the bare name for static true", () => {
+    expect(jsxAttr("data-active", true)).toStrictEqual({
       templates: ["data-active"],
       nodes: [""],
     });
   });
 
-  await t.step(
-    "omits values that are neither strings, numbers nor true",
-    () => {
-      assertEquals(jsxAttr("class", false), "");
-      assertEquals(jsxAttr("class", undefined), "");
-      assertEquals(jsxAttr("class", null), "");
-    },
-  );
+  test("omits values that are neither strings, numbers nor true", () => {
+    expect(jsxAttr("class", false)).toStrictEqual("");
+    expect(jsxAttr("class", undefined)).toStrictEqual("");
+    expect(jsxAttr("class", null)).toStrictEqual("");
+  });
 
-  await t.step("emits numbers as attribute values", () => {
-    assertEquals(jsxAttr("tabindex", 0), {
+  test("emits numbers as attribute values", () => {
+    expect(jsxAttr("tabindex", 0)).toStrictEqual({
       templates: [`tabindex="0"`],
       nodes: [""],
     });
-    assertEquals(jsxAttr("colspan", 2), {
+    expect(jsxAttr("colspan", 2)).toStrictEqual({
       templates: [`colspan="2"`],
       nodes: [""],
     });
