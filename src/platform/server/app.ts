@@ -3,7 +3,7 @@ import { isProd } from "@huuma/route/utils/environment";
 import type { Route } from "@huuma/route/http/route";
 import { App, type AppOptions } from "@huuma/route";
 import { info } from "@huuma/route/utils/logger";
-import { parse } from "@std/path/parse";
+import { parse } from "node:path";
 import type {
   Handler,
   RequestContext,

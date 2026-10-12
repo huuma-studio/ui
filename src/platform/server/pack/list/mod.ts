@@ -1,7 +1,6 @@
 import { info, log } from "@huuma/route/utils/logger";
-import { parseArgs } from "@std/cli/parse-args";
-import { parse } from "@std/path/parse";
-import { join } from "@std/path/join";
+import { join, parse } from "node:path";
+import { parseArgs } from "node:util";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import process from "node:process";
 
@@ -28,11 +27,26 @@ import { generateHash, isNodeError } from "./utils.ts";
 export interface PrepareOptions {
   routesPath?: string;
 }
+// Live reload runs on the Deno build pipeline only, until the Vite plugin
+// replaces it (spec #126). Typed locally: the repo has no Deno types.
+function deno(): {
+  upgradeWebSocket(request: Request): { response: Response };
+} {
+  return (globalThis as unknown as {
+    Deno: { upgradeWebSocket(request: Request): { response: Response } };
+  }).Deno;
+}
+
 export async function prepare<T extends UIAppContext>(
   app: UIApp<T>,
   { routesPath }: PrepareOptions = {},
 ): Promise<UIApp<T> | undefined> {
-  if (!parseArgs(process.argv.slice(2)).bundle) {
+  const { values } = parseArgs({
+    args: process.argv.slice(2),
+    options: { bundle: { type: "boolean" } },
+    strict: false,
+  });
+  if (!values.bundle) {
     await list(app, { isProd: false });
     return app;
   }
@@ -195,7 +209,7 @@ export async function enableLiveReload<T extends UIAppContext>(
     });
     app.get("/_websocket", (ctx) => {
       if (ctx.request.headers.get("upgrade") === "websocket") {
-        return Deno.upgradeWebSocket(ctx.request).response;
+        return deno().upgradeWebSocket(ctx.request).response;
       }
       return new Response(
         `Websocket connection failed to upgrade. Have you set the header 'upgrade=websocket' properly?`,

@@ -1,4 +1,4 @@
-import { escape } from "@std/html/entities";
+import { escape } from "../utils/escape.ts";
 
 import { eventName, isEventName } from "./event.ts";
 import { BOOLEAN_ATTRIBUTES } from "./boolean-attributes.ts";

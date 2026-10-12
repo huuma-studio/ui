@@ -1,4 +1,4 @@
-import { parse } from "@std/path/parse";
+import { parse } from "node:path";
 
 export interface PathMapping {
   path: string;

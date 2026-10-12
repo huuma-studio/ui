@@ -1,4 +1,4 @@
-import { join } from "@std/path/join";
+import { join } from "node:path";
 
 import { Fragment, type JSX, jsx } from "../../jsx-runtime/mod.ts";
 import type { Island } from "../../islands/islands.ts";

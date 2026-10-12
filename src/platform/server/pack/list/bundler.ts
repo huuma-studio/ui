@@ -1,8 +1,7 @@
-import * as esbuild from "@esbuild";
+import * as esbuild from "esbuild";
 import { denoPlugin } from "@deno/esbuild-plugin";
-import { parse } from "@std/path/parse";
-import { relative } from "@std/path/relative";
-import { EOL } from "@std/fs/eol";
+import { parse, relative } from "node:path";
+import { EOL } from "node:os";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { generateHash, toCanonicalPath } from "./utils.ts";

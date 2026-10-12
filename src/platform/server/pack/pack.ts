@@ -1,8 +1,7 @@
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
 import { array, object, string, unknown } from "@huuma/validate";
 import { info } from "@huuma/route/utils/logger";
-import { parse } from "@std/path/parse";
-import { join } from "@std/path/join";
+import { join, parse } from "node:path";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 

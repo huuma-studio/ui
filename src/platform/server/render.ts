@@ -1,4 +1,4 @@
-import { escape } from "@std/html/entities";
+import { escape } from "../../utils/escape.ts";
 
 import { create as createSync } from "../../v-node/sync.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";

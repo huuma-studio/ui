@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    // ES2021 matches the bundler's browser targets (Safari 15): newer
+    // APIs like at(), findLast() and Object.hasOwn() fail the type check.
+    "target": "es2021",
+    "lib": ["es2021", "dom", "dom.iterable"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "strict": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "@huuma/ui",
+    // JSR rejects slow types: exports need explicit types.
+    "declaration": true,
+    "isolatedDeclarations": true,
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": ["src", "test", "vite.config.ts"],
+  // Deno-only smoke tests, checked by `deno test`.
+  "exclude": ["test/deno"]
+}

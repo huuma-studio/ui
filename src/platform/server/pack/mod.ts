@@ -1,5 +1,5 @@
 import type { Middleware } from "@huuma/route/middleware";
-import { join } from "@std/path/join";
+import { join } from "node:path";
 
 import type { ContentSecurityPolicy } from "../content-security-policy.ts";
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";

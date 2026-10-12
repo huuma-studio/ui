@@ -1,8 +1,6 @@
-import { dirname } from "@std/path/dirname";
-import { join } from "@std/path/join";
-import { walk } from "@std/fs/walk";
-import { EOL } from "@std/fs/eol";
-import { readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { EOL } from "node:os";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
 import type { List } from "../mod.ts";
 import { isNodeError } from "./utils.ts";
@@ -61,6 +59,25 @@ export async function createList(
   ).default;
 }
 
+/**
+ * Yields the files below `root` whose path matches one of `patterns`, depth
+ * first in directory order, like `walk()` from @std/fs: island and remote
+ * function names follow this order.
+ */
+async function* walkFiles(
+  root: string,
+  patterns: RegExp[],
+): AsyncGenerator<{ path: string; name: string }> {
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) {
+      yield* walkFiles(path, patterns);
+    } else if (patterns.some((pattern) => pattern.test(path))) {
+      yield { path, name: entry.name };
+    }
+  }
+}
+
 export async function listPages(
   path: string,
 ): Promise<Omit<Pack, "islands" | "scripts" | "remoteFunctions">> {
@@ -75,9 +92,7 @@ export async function listPages(
   const paths: FileImport[] = [];
 
   for await (
-    const file of walk(path, {
-      match: [/(page\.tsx)$/, /(layout\.tsx)$/, /(middleware\.ts)$/],
-    })
+    const file of walkFiles(path, [/(page\.tsx)$/, /(layout\.tsx)$/, /(middleware\.ts)$/])
   ) {
     if (/\/(layout\.tsx)$/.exec(file.path)?.length) {
       paths.push({
@@ -153,10 +168,7 @@ export async function listIslands(path: string): Promise<FileImport[]> {
   let i = 0;
 
   for await (
-    const file of walk(path, {
-      includeDirs: false,
-      match: [/(.+\.client\.tsx)$/],
-    })
+    const file of walkFiles(path, [/(.+\.client\.tsx)$/])
   ) {
     islands.push({
       filePath: dirname(file.path),
@@ -173,10 +185,7 @@ export async function listRemoteFunctions(path: string): Promise<FileImport[]> {
   let i = 0;
 
   for await (
-    const file of walk(path, {
-      includeDirs: false,
-      match: [/(.+\.remote\.ts)$/],
-    })
+    const file of walkFiles(path, [/(.+\.remote\.ts)$/])
   ) {
     remoteFunctions.push({
       filePath: dirname(file.path),
