@@ -43,6 +43,7 @@ export interface HuumaOptions {
 export function huuma(options: HuumaOptions = {}): Plugin[] {
   // Vite's resolved config, known once Vite resolved it.
   const app = { root: "", base: "/" };
+  const serverEntry = () => resolve(app.root, options.server ?? "server.ts");
   return [
     configPlugin((config) => {
       app.root = config.root;
@@ -50,11 +51,8 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     }),
     routesPlugin(() => resolve(app.root, options.routes ?? "app")),
     islandsPlugin(() => app),
-    entryPlugin(() => ({
-      server: resolve(app.root, options.server ?? "server.ts"),
-      base: app.base,
-    })),
-    devPlugin(),
+    entryPlugin(() => ({ server: serverEntry(), base: app.base })),
+    devPlugin(serverEntry),
   ];
 }
 

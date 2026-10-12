@@ -10,3 +10,4 @@ example/*
 .huuma/
 node_modules/
 dist/
+test/fixtures/.tmp-*/

@@ -5,7 +5,14 @@
 import type { Connect, DevEnvironment, Plugin, RunnableDevEnvironment, ViteDevServer } from "vite";
 
 import { SERVER_ID } from "./entry.ts";
+import { ISLANDS_ID } from "./islands.ts";
 import { toRequest, writeResponse } from "./node-http.ts";
+import { ROUTES_ID } from "./routes.ts";
+
+// The files discovery finds: adding or deleting one changes the routes or
+// islands, which the generated modules list.
+const DISCOVERED = /(\/page\.tsx|\/layout\.tsx|\/middleware\.ts|\.client\.tsx)$/;
+const GENERATED = [ROUTES_ID, ISLANDS_ID, SERVER_ID].map((id) => `\0${id}`);
 
 /** What `virtual:huuma/server` exports: `UIApp.deliver()`. */
 type Handle = (
@@ -13,8 +20,13 @@ type Handle = (
   connection: { remoteAddr: { transport: string; hostname?: string; port?: number } },
 ) => Promise<Response>;
 
-/** Serves the app from Vite's dev server. */
-export function devPlugin(): Plugin {
+/**
+ * Serves the app from Vite's dev server, and rebuilds it when its server
+ * code changes. `serverEntry()` is the absolute path of the app's module.
+ */
+export function devPlugin(serverEntry: () => string): Plugin {
+  // Whether the app must be rebuilt before the next request.
+  const app = { stale: false };
   return {
     name: "huuma:dev",
     apply: "serve",
@@ -22,13 +34,31 @@ export function devPlugin(): Plugin {
       // Returned: runs after Vite's own middlewares, so Vite serves
       // modules and assets first and the app gets every other request.
       return () => {
-        server.middlewares.use(appMiddleware(server));
+        server.middlewares.use(appMiddleware(server, app));
       };
+    },
+    hotUpdate({ type, file, modules, server }) {
+      if (this.environment.name !== "ssr") return;
+      const discovered = type !== "update" && (DISCOVERED.test(file) || file === serverEntry());
+      // Not part of the app's server, e.g. client-only CSS.
+      if (!discovered && !modules.length) return;
+
+      if (discovered) {
+        const graph = this.environment.moduleGraph;
+        for (const id of GENERATED) {
+          const module = graph.getModuleById(id);
+          if (module) graph.invalidateModule(module);
+        }
+      }
+      app.stale = true;
+      server.environments.client.hot.send({ type: "full-reload" });
+      // Handled: the ModuleRunner gets no HMR update of its own.
+      return [];
     },
   };
 }
 
-function appMiddleware(server: ViteDevServer): Connect.NextHandleFunction {
+function appMiddleware(server: ViteDevServer, app: { stale: boolean }): Connect.NextHandleFunction {
   return async (req, res, next) => {
     const controller = new AbortController();
     res.once("close", () => {
@@ -36,7 +66,7 @@ function appMiddleware(server: ViteDevServer): Connect.NextHandleFunction {
     });
 
     try {
-      const handle = await loadApp(server);
+      const handle = await loadApp(server, app);
       let response = await handle(toRequest(req, controller.signal), {
         remoteAddr: {
           transport: "tcp",
@@ -56,14 +86,24 @@ function appMiddleware(server: ViteDevServer): Connect.NextHandleFunction {
   };
 }
 
-/** Imports the app's server entry through the ssr environment's ModuleRunner. */
-async function loadApp(server: ViteDevServer): Promise<Handle> {
+/**
+ * Imports the app's server entry through the ssr environment's
+ * ModuleRunner. After a change, it first clears the runner's cache, so the
+ * whole app is evaluated again: re-evaluating only the changed modules
+ * would mount the pages onto the old app instance, whose router rejects
+ * routes it already has.
+ */
+async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<Handle> {
   const ssr = server.environments.ssr;
   if (!isRunnable(ssr)) {
     throw new Error(
       "Huuma runs the app in Vite's ssr environment, which must be runnable in this " +
         "process (a RunnableDevEnvironment, Vite's default).",
     );
+  }
+  if (app.stale) {
+    app.stale = false;
+    ssr.runner.clearCache();
   }
   const entry = (await ssr.runner.import(SERVER_ID)) as { default: Handle };
   return entry.default;
