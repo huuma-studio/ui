@@ -11,6 +11,7 @@ import type { Plugin } from "vite";
 import { resolve } from "node:path";
 
 import { devPlugin } from "./dev.ts";
+import { type DecoratorsOption, decoratorsPlugin } from "./decorators.ts";
 import { entryPlugin } from "./entry.ts";
 import { denoEnvPlugin } from "./env.ts";
 import { islandsPlugin } from "./islands.ts";
@@ -30,6 +31,14 @@ export interface HuumaOptions {
    * relative to Vite's `root`. Defaults to `"server.ts"`.
    */
   server?: string;
+  /**
+   * Lowers standard decorators (e.g. `@inject()` from `@huuma/inject`)
+   * with Babel, in the modules that use them. Needs `@babel/core` and
+   * `@babel/plugin-proposal-decorators` in the app's dependencies.
+   * `"auto"` (the default) does it unless Oxc's legacy decorators are
+   * turned on; `false` leaves decorators alone.
+   */
+  decorators?: DecoratorsOption;
 }
 
 /**
@@ -57,6 +66,10 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     remotePlugin(() => app.root),
     serverOnlyPlugin(),
     denoEnvPlugin(),
+    decoratorsPlugin(
+      () => options.decorators ?? "auto",
+      () => app.root,
+    ),
     entryPlugin(() => ({ server: serverEntry(), base: app.base })),
     devPlugin(serverEntry),
   ];

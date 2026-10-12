@@ -32,6 +32,9 @@
     "esbuild": "0.28.1"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.7",
+    "@babel/plugin-proposal-decorators": "^8.0.2",
+    "@huuma/inject": "npm:@jsr/huuma__inject@^0.0.1",
     "@types/node": "^24",
     "jsr": "0.14.3",
     "vite": "^8",
