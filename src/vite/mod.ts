@@ -12,6 +12,7 @@ import { resolve } from "node:path";
 
 import { devPlugin } from "./dev.ts";
 import { entryPlugin } from "./entry.ts";
+import { denoEnvPlugin } from "./env.ts";
 import { islandsPlugin } from "./islands.ts";
 import { remotePlugin } from "./remote.ts";
 import { routesPlugin } from "./routes.ts";
@@ -55,6 +56,7 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     islandsPlugin(() => app),
     remotePlugin(() => app.root),
     serverOnlyPlugin(),
+    denoEnvPlugin(),
     entryPlugin(() => ({ server: serverEntry(), base: app.base })),
     devPlugin(serverEntry),
   ];
