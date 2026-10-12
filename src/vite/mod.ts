@@ -15,6 +15,7 @@ import { entryPlugin } from "./entry.ts";
 import { islandsPlugin } from "./islands.ts";
 import { remotePlugin } from "./remote.ts";
 import { routesPlugin } from "./routes.ts";
+import { serverOnlyPlugin } from "./server-only.ts";
 
 /** Options of the Huuma UI plugin. */
 export interface HuumaOptions {
@@ -53,6 +54,7 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     routesPlugin(() => resolve(app.root, options.routes ?? "app")),
     islandsPlugin(() => app),
     remotePlugin(() => app.root),
+    serverOnlyPlugin(),
     entryPlugin(() => ({ server: serverEntry(), base: app.base })),
     devPlugin(serverEntry),
   ];

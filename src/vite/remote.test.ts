@@ -134,12 +134,12 @@ describe("remote modules", () => {
     expect(code).toMatch(/async \["add"\]\(\.\.\.args\) \{\s*return \$huuma\$call\("add", args\);/);
     expect(code).toMatch(/async \["server"\]\(\.\.\.args\)/);
     // Neither the functions' code nor their imports.
-    expect(code).not.toContain("hostname");
+    expect(code).not.toContain("host.server");
   });
 
   test("keep their code on the server", async () => {
     const result = await server.environments.ssr.transformRequest("/app/sum.remote.ts");
-    expect(result?.code).toContain("hostname");
+    expect(result?.code).toContain("host.server");
     expect(result?.code).not.toContain("$huuma$call");
   });
 
