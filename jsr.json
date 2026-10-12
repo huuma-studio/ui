@@ -29,10 +29,5 @@
     "@deno/esbuild-plugin": "jsr:@deno/esbuild-plugin@^1.2.1",
     "@huuma/route": "jsr:@huuma/route@^0.2.0",
     "@huuma/validate": "jsr:@huuma/validate@^0.2.0"
-  },
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "@huuma/ui",
-    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
   }
 }

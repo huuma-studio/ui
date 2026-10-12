@@ -43,7 +43,7 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async () => {
-    const config = JSON.parse(await readFile(join(repoRoot, "deno.json"), "utf8"));
+    const config = JSON.parse(await readFile(join(repoRoot, "jsr.json"), "utf8"));
 
     await inTempDir(async (dir) => {
       // Resolve "@huuma/ui" to this repository so the fixture app and the

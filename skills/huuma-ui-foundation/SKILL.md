@@ -11,7 +11,7 @@ Use this skill when the agent is working anywhere in a Huuma UI project. It is t
 
 Huuma UI is a Deno, file-convention web framework: server-side rendering + selective hydration ("islands") + type-safe remote server functions + signal-based reactivity + built-in i18n. Status is Developer Preview (`v0.2.3`); APIs change.
 
-Clients consume it as `jsr:@huuma/ui` — you do **not** have the library's source in your project. To inspect any API, run `deno doc jsr:@huuma/ui/<subpath>` (e.g. `deno doc jsr:@huuma/ui/server`) or use "Go to Definition" in your editor; the public subpaths are listed in the package's `deno.json` exports (`.`, `/server`, `/server/pack`, `/server/pack/list`, `/browser`, `/ref`, `/signal`, `/hooks/lifecycle`, `/hooks/signal`, `/hooks/ref`, `/hooks/scope`, `/jsx-runtime`, `/i18n`, `/i18n/middleware`, `/lint`, `/v-node`, `/v-node/sync`).
+Clients consume it as `jsr:@huuma/ui` — you do **not** have the library's source in your project. To inspect any API, run `deno doc jsr:@huuma/ui/<subpath>` (e.g. `deno doc jsr:@huuma/ui/server`) or use "Go to Definition" in your editor; the public subpaths are listed in the package's `jsr.json` exports (`.`, `/server`, `/server/pack`, `/server/pack/list`, `/browser`, `/ref`, `/signal`, `/hooks/lifecycle`, `/hooks/signal`, `/hooks/ref`, `/hooks/scope`, `/jsx-runtime`, `/i18n`, `/i18n/middleware`, `/lint`, `/v-node`, `/v-node/sync`).
 
 **Source-of-truth rule:** when the README and the framework disagree, trust the lint plugin (`jsr:@huuma/ui/lint` configured in your `deno.json`) and the runtime error messages — not the README, which may lag behind releases.
 

@@ -291,7 +291,7 @@ function fileExports(files: FileImport[]): string {
 /**
  * @internal Not part of the public `@huuma/ui` API. Exported only for
  * unit-testing; `list/mod.ts` does not re-export it and `list.ts` is not an
- * entry point in `deno.json`'s exports map.
+ * entry point in `jsr.json`'s exports map.
  *
  * Sorts pages so the root page (filePath === basePath) is registered first
  * and the `!404` catch-all is registered last. The router resolves
