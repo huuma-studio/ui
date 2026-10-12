@@ -34,6 +34,11 @@ describe("Deno.env.get()", () => {
       join(root, "app/own.ts"),
       'const Deno = { env: { get: () => "own" } };\nexport const value = Deno.env.get("X");\n',
     );
+    await writeFile(
+      join(root, "app/destructured.ts"),
+      'const { Deno } = { Deno: { env: { get: () => "own" } } };\n' +
+        'export const value = Deno.env.get("X");\n',
+    );
     server = await createServer({
       root,
       configFile: false,
@@ -70,7 +75,9 @@ describe("Deno.env.get()", () => {
 
   test("leaves a module's own Deno alone", async () => {
     const { runner } = server.environments.ssr as RunnableDevEnvironment;
-    expect(((await runner.import("/app/own.ts")) as { value: string }).value).toStrictEqual("own");
-    expect(warnings.some((warning) => warning.includes("app/own.ts"))).toStrictEqual(false);
+    for (const module of ["app/own.ts", "app/destructured.ts"]) {
+      expect(((await runner.import(`/${module}`)) as { value: string }).value).toStrictEqual("own");
+      expect(warnings.some((warning) => warning.includes(module))).toStrictEqual(false);
+    }
   });
 });

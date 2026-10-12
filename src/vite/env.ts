@@ -1,5 +1,7 @@
-import type { ESTree, Plugin } from "vite";
+import type { Plugin } from "vite";
 import { relative } from "node:path";
+
+import { valueBindings } from "./bindings.ts";
 
 const DENO_ENV_GET = /\bDeno\.env\.get\b/;
 
@@ -22,7 +24,7 @@ export function denoEnvPlugin(): Plugin {
         code: DENO_ENV_GET,
       },
       handler(code, id) {
-        if (declaresDeno(this.parse(code))) return;
+        if (valueBindings(this.parse(code)).has("Deno")) return;
         const file = relative(this.environment.config.root, id.replace(/\?.*$/, ""));
         this.warn(
           `${file}: \`Deno.env.get()\` is deprecated and will be removed in the next minor ` +
@@ -40,25 +42,4 @@ export function denoEnvPlugin(): Plugin {
       },
     },
   };
-}
-
-/** Whether a module binds `Deno` at its top level. */
-function declaresDeno(program: ESTree.Program): boolean {
-  return program.body.some((node) => {
-    const declaration = node.type === "ExportNamedDeclaration" ? node.declaration : node;
-    if (!declaration) return false;
-    switch (declaration.type) {
-      case "ImportDeclaration":
-        return declaration.specifiers.some((specifier) => specifier.local.name === "Deno");
-      case "FunctionDeclaration":
-      case "ClassDeclaration":
-        return declaration.id?.name === "Deno";
-      case "VariableDeclaration":
-        return declaration.declarations.some(
-          (declarator) => declarator.id.type === "Identifier" && declarator.id.name === "Deno",
-        );
-      default:
-        return false;
-    }
-  });
 }
