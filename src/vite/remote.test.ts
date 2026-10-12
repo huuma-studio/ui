@@ -1,7 +1,13 @@
-import { describe, expect, test } from "vite-plus/test";
-import { parseSync } from "vite";
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { createServer, parseSync, type ViteDevServer } from "vite";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { remoteEndpoint } from "../platform/server/remote.ts";
+import { huuma } from "./mod.ts";
 import { remoteExports } from "./remote.ts";
+
+const fixture = fileURLToPath(new URL("../../test/fixtures/basic", import.meta.url));
 
 /** The exports of a remote module's source, as the plugin parses it. */
 function exportsOf(code: string) {
@@ -101,5 +107,51 @@ describe(remoteExports.name, () => {
       "A remote module can only export functions: a class can't be called from the browser.",
       "A remote module can only export functions: an enum can't be called from the browser.",
     ]);
+  });
+});
+
+describe("remote modules", () => {
+  let server: ViteDevServer;
+  beforeAll(async () => {
+    server = await createServer({
+      root: fixture,
+      configFile: false,
+      logLevel: "silent",
+      server: { middlewareMode: true, ws: false },
+      plugins: [huuma()],
+    });
+  });
+  afterAll(async () => {
+    await server.close();
+  });
+
+  test("are stubs in the browser, calling their endpoint", async () => {
+    const result = await server.environments.client.transformRequest("/app/sum.remote.ts");
+    const code = result?.code ?? "";
+
+    expect(code).toContain(JSON.stringify(await remoteEndpoint("app/sum.remote.ts")));
+    // Oxc formats the stub again.
+    expect(code).toMatch(/async \["add"\]\(\.\.\.args\) \{\s*return \$huuma\$call\("add", args\);/);
+    expect(code).toMatch(/async \["server"\]\(\.\.\.args\)/);
+    // Neither the functions' code nor their imports.
+    expect(code).not.toContain("hostname");
+  });
+
+  test("keep their code on the server", async () => {
+    const result = await server.environments.ssr.transformRequest("/app/sum.remote.ts");
+    expect(result?.code).toContain("hostname");
+    expect(result?.code).not.toContain("$huuma$call");
+  });
+
+  test("fail with exports the stub can't name", async () => {
+    const id = join(fixture, "app/broken.remote.ts");
+    const transform = server.environments.client.pluginContainer.transform(
+      "export async function ok() {}\nexport * from './all.ts';\n",
+      id,
+    );
+    await expect(transform).rejects.toThrow(
+      'A remote module can\'t re-export everything from "./all.ts"',
+    );
+    await expect(transform).rejects.toMatchObject({ id, loc: { line: 2, column: 0 } });
   });
 });

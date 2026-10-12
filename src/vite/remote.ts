@@ -1,4 +1,41 @@
-import type { ESTree } from "vite";
+import type { ESTree, Plugin } from "vite";
+import { relative } from "node:path";
+
+import { remoteEndpoint, remoteStub } from "../platform/server/remote.ts";
+
+// A remote module, e.g. `app/todo.remote.ts`, with an optional query.
+const REMOTE_MODULE = /\.remote\.ts(\?.*)?$/;
+
+/**
+ * Replaces each remote module (`*.remote.ts`) in the browser with a stub
+ * that calls its functions on the server. Its source, and everything it
+ * imports, never reaches the browser. `root()` is Vite's resolved root:
+ * the endpoints are named by the module's path below it.
+ */
+export function remotePlugin(root: () => string): Plugin {
+  return {
+    name: "huuma:remote",
+    // Before Oxc strips the types: type-only exports aren't remote functions.
+    enforce: "pre",
+    applyToEnvironment(environment) {
+      return environment.config.consumer === "client";
+    },
+    transform: {
+      filter: { id: REMOTE_MODULE },
+      async handler(code, id) {
+        const file = id.replace(/\?.*$/, "");
+        const { names, problems } = remoteExports(this.parse(code, { lang: "ts" }));
+        if (problems.length) this.error(problems[0].message, problems[0].start);
+        return {
+          code: remoteStub(await remoteEndpoint(relative(root(), file)), names),
+          // A new module: none of its code maps to the source.
+          map: { mappings: "" },
+          moduleType: "js",
+        };
+      },
+    },
+  };
+}
 
 /** What `remoteExports()` found in a remote module. */
 export interface RemoteExports {
