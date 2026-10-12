@@ -115,6 +115,29 @@ describe(`launch() and hotReplaceIsland()`, () => {
     expect(document.querySelector("form button")!.textContent).toStrictEqual("Save");
   });
 
+  test("replace adjacent islands of the same module", () => {
+    // Without whitespace between them, the second island hydrates attached
+    // after the first one's button, which replacing the first one removes.
+    launch(
+      "<main><!--start_island_a1--><button>1</button><!--end_island_a1-->" +
+        "<!--start_island_a2--><button>1</button><!--end_island_a2--></main>",
+      [
+        { id: "a1", fn: Counter, path: COUNTER },
+        { id: "a2", fn: Counter, path: COUNTER },
+      ],
+    );
+    click("button");
+    const texts = () =>
+      [...document.querySelectorAll("button")].map((button) => button.textContent);
+
+    expect(runtime.hotReplaceIsland(COUNTER, EditedCounter)).toStrictEqual(true);
+    expect(texts()).toStrictEqual(["Count: 1", "Count: 1"]);
+    // And again, attached after the first update's buttons.
+    click("button");
+    expect(runtime.hotReplaceIsland(COUNTER, Counter, { keepState: true })).toStrictEqual(true);
+    expect(texts()).toStrictEqual(["2", "1"]);
+  });
+
   test("leave islands of other modules alone", () => {
     function Other(): JSX.Element {
       const count = hooks.$signal(1);
