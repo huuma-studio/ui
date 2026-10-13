@@ -25,6 +25,8 @@ export function buildPlugin(root: () => string): Plugin {
   // The client build's files with a content hash in their name, which
   // `server.js` caches for good.
   const hashed = new Set<string>();
+  // The islands' files, which the client build emits as chunks.
+  const islands = new Set<string>();
   return {
     name: "huuma:build",
     config(config) {
@@ -91,10 +93,13 @@ export function buildPlugin(root: () => string): Plugin {
         return;
       }
       hashed.clear();
+      islands.clear();
       for (const island of await listIslands(root())) {
+        const id = join(island.filePath, island.fileName);
+        islands.add(id);
         this.emitFile({
           type: "chunk",
-          id: join(island.filePath, island.fileName),
+          id,
           name: parse(island.fileName).name,
           preserveSignature: "exports-only",
         });
@@ -103,7 +108,7 @@ export function buildPlugin(root: () => string): Plugin {
     generateBundle(options, bundle) {
       if (this.environment.config.consumer !== "client") return;
       for (const file of Object.values(bundle)) {
-        if (hasHash(file, options)) hashed.add(file.fileName);
+        if (hasHash(file, options, islands)) hashed.add(file.fileName);
       }
     },
   };
@@ -112,11 +117,13 @@ export function buildPlugin(root: () => string): Plugin {
 /**
  * Whether Rolldown named an output file with its content hash: by a
  * pattern with `[hash]`, e.g. Vite's `assets/[name]-[hash].js`, that
- * matches the file's name. Chunks are named by `entryFileNames` or
- * `chunkFileNames` (which Rolldown uses for emitted chunks, like the
- * islands), assets by `assetFileNames`. A file named otherwise, e.g. by a
- * pattern like `[name].js` or by the plugin that emitted it, keeps its
- * name when its content changes.
+ * matches the file's name. Entries are named by `entryFileNames`, other
+ * chunks by `chunkFileNames`, and so are the chunks in `emitted`, which
+ * a plugin emitted, like the islands: Rolldown names them by
+ * `chunkFileNames` although they're entries. Assets are named by
+ * `assetFileNames`. A file named otherwise, e.g. by a pattern like
+ * `[name].js` or by the plugin that emitted it, keeps its name when its
+ * content changes.
  */
 export function hasHash(
   file: Rolldown.OutputChunk | Rolldown.OutputAsset,
@@ -124,10 +131,11 @@ export function hasHash(
     Rolldown.NormalizedOutputOptions,
     "entryFileNames" | "chunkFileNames" | "assetFileNames"
   >,
+  emitted: ReadonlySet<string> = new Set(),
 ): boolean {
-  let patterns: string[];
+  let pattern: string;
   if (file.type === "asset") {
-    patterns = [
+    pattern =
       typeof options.assetFileNames === "function"
         ? options.assetFileNames({
             type: "asset",
@@ -137,18 +145,19 @@ export function hasHash(
             originalFileNames: file.originalFileNames,
             source: file.source,
           })
-        : options.assetFileNames,
-    ];
+        : options.assetFileNames;
   } else {
-    patterns = [options.entryFileNames, options.chunkFileNames].map((names) =>
-      typeof names === "function" ? names(file) : names,
-    );
+    const entry = file.isEntry && !(file.facadeModuleId && emitted.has(file.facadeModuleId));
+    const names = entry ? options.entryFileNames : options.chunkFileNames;
+    pattern = typeof names === "function" ? names(file) : names;
   }
-  return patterns.some((pattern) => fileNamePattern(pattern)?.test(file.fileName));
+  return fileNamePattern(pattern)?.test(file.fileName) ?? false;
 }
 
+// Rolldown's `[hash]` has 8 characters, `[hash:12]` 12.
+const HASH_LENGTH = 8;
+
 const PLACEHOLDERS: Record<string, string> = {
-  hash: "[\\w-]+",
   name: ".+",
   ext: "[^/]+",
   extname: "(?:\\.[^/]+)?",
@@ -161,7 +170,8 @@ function fileNamePattern(pattern: string): RegExp | undefined {
   const source = pattern
     .split(/(\[\w+(?::\d+)?\])/)
     .map((part) => {
-      const placeholder = /^\[(\w+)(?::\d+)?\]$/.exec(part)?.[1];
+      const [, placeholder, length] = /^\[(\w+)(?::(\d+))?\]$/.exec(part) ?? [];
+      if (placeholder === "hash") return `[\\w-]{${length ?? HASH_LENGTH}}`;
       return (
         (placeholder && PLACEHOLDERS[placeholder]) ?? part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
       );

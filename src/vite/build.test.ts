@@ -321,22 +321,46 @@ describe("a build with unhashed file names", () => {
 describe(hasHash.name, () => {
   const options = {
     entryFileNames: "assets/[name]-[hash].js",
-    chunkFileNames: "chunks/[name].js",
+    chunkFileNames: "assets/[name].js",
     assetFileNames: (asset: { names: string[] }) =>
-      asset.names[0] === "logo.svg" ? "[name][extname]" : "assets/[name]-[hash:8][extname]",
+      asset.names[0] === "logo.svg" ? "[name][extname]" : "assets/[name]-[hash:12][extname]",
   };
-  const chunk = (fileName: string, isEntry: boolean) =>
-    ({ type: "chunk", fileName, isEntry, name: "x" }) as Parameters<typeof hasHash>[0];
+  const chunk = (fileName: string, isEntry: boolean, facadeModuleId: string | null = null) =>
+    ({ type: "chunk", fileName, isEntry, facadeModuleId, name: "x" }) as Parameters<
+      typeof hasHash
+    >[0];
   const asset = (fileName: string, name: string) =>
     ({ type: "asset", fileName, names: [name] }) as unknown as Parameters<typeof hasHash>[0];
 
   test("by the pattern that named the file", () => {
     expect(hasHash(chunk("assets/app-B2x_9-aZ.js", true), options)).toStrictEqual(true);
-    expect(hasHash(chunk("chunks/jsx.js", false), options)).toStrictEqual(false);
-    // An emitted chunk, an entry named by `chunkFileNames`.
-    expect(hasHash(chunk("chunks/counter.js", true), options)).toStrictEqual(false);
-    expect(hasHash(asset("assets/app-1a2b3c4d.css", "app.css"), options)).toStrictEqual(true);
+    expect(hasHash(chunk("assets/jsx.js", false), options)).toStrictEqual(false);
+    expect(hasHash(asset("assets/app-1a2b3c4d5e6f.css", "app.css"), options)).toStrictEqual(true);
     expect(hasHash(asset("logo.svg", "logo.svg"), options)).toStrictEqual(false);
+    // An unhashed entry named like a hashed chunk.
+    const entries = { ...options, entryFileNames: "[name].js", chunkFileNames: "[name]-[hash].js" };
+    expect(hasHash(chunk("main-app1234.js", true), entries)).toStrictEqual(false);
+  });
+
+  test("by `chunkFileNames` for emitted entries, like the islands", () => {
+    const island = "/app/my-counter.client.tsx";
+    const emitted = new Set([island]);
+    // `chunkFileNames` has no hash, although the name would fit `entryFileNames`.
+    expect(hasHash(chunk("assets/my-counter1.js", true, island), options, emitted)).toStrictEqual(
+      false,
+    );
+    expect(hasHash(chunk("assets/my-counter1.js", true, island), options)).toStrictEqual(true);
+  });
+
+  test("only with a hash of its length", () => {
+    // An unhashed chunk whose name has a dash, e.g. `main-app`.
+    expect(
+      hasHash(chunk("assets/main-app.js", false), {
+        ...options,
+        chunkFileNames: "assets/[name]-[hash].js",
+      }),
+    ).toStrictEqual(false);
+    expect(hasHash(asset("assets/app-1a2b3c4d.css", "app.css"), options)).toStrictEqual(false);
   });
 
   test("not for a file named otherwise, e.g. by its plugin", () => {
