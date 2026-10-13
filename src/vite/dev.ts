@@ -3,10 +3,10 @@
  * release candidate, stays in this module (spec #126).
  */
 import type { Connect, DevEnvironment, Plugin, RunnableDevEnvironment, ViteDevServer } from "vite";
+import { toRequest, writeResponse } from "@huuma/route/node";
 
 import { SERVER_ID } from "./entry.ts";
 import { ISLANDS_ID } from "./islands.ts";
-import { toRequest, writeResponse } from "./node-http.ts";
 import { REMOTE_ID } from "./remote.ts";
 import { ROUTES_ID } from "./routes.ts";
 
@@ -16,11 +16,13 @@ const DISCOVERED = /(\/page\.tsx|\/layout\.tsx|\/middleware\.ts|\.client\.tsx|\.
 const ISLAND = /\.client\.tsx$/;
 const GENERATED = [ROUTES_ID, ISLANDS_ID, REMOTE_ID, SERVER_ID].map((id) => `\0${id}`);
 
-/** What `virtual:huuma/server` exports: `UIApp.deliver()`. */
-type Handle = (
-  request: Request,
-  connection: { remoteAddr: { transport: string; hostname?: string; port?: number } },
-) => Promise<Response>;
+/** What `virtual:huuma/server` exports: the app, with route's fetch handler. */
+interface App {
+  fetch(
+    request: Request,
+    connection: { remoteAddr: { transport: string; hostname?: string; port?: number } },
+  ): Promise<Response>;
+}
 
 /**
  * Serves the app from Vite's dev server, and rebuilds it when its server
@@ -73,9 +75,19 @@ function appMiddleware(server: ViteDevServer, app: { stale: boolean }): Connect.
       if (!res.writableFinished) controller.abort();
     });
 
+    let request: Request;
     try {
-      const handle = await loadApp(server, app);
-      let response = await handle(toRequest(req, controller.signal), {
+      request = toRequest(req, controller.signal);
+    } catch {
+      // A request a web Request can't represent, e.g. the method `TRACE`.
+      res.writeHead(400);
+      res.end();
+      return;
+    }
+
+    try {
+      const handler = await loadApp(server, app);
+      let response = await handler.fetch(request, {
         remoteAddr: {
           transport: "tcp",
           hostname: req.socket.remoteAddress,
@@ -111,7 +123,7 @@ function appMiddleware(server: ViteDevServer, app: { stale: boolean }): Connect.
  * would mount the pages onto the old app instance, whose router rejects
  * routes it already has.
  */
-async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<Handle> {
+async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<App> {
   const ssr = server.environments.ssr;
   if (!isRunnable(ssr)) {
     throw new Error(
@@ -123,7 +135,7 @@ async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<
     app.stale = false;
     ssr.runner.clearCache();
   }
-  const entry = (await ssr.runner.import(SERVER_ID)) as { default: Handle };
+  const entry = (await ssr.runner.import(SERVER_ID)) as { default: App };
   return entry.default;
 }
 

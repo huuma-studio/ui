@@ -10,6 +10,7 @@
 import type { Plugin } from "vite";
 import { resolve } from "node:path";
 
+import { buildPlugin } from "./build.ts";
 import { devPlugin } from "./dev.ts";
 import { type DecoratorsOption, decoratorsPlugin } from "./decorators.ts";
 import { entryPlugin } from "./entry.ts";
@@ -74,6 +75,7 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     ),
     entryPlugin(() => ({ server: serverEntry(), base: app.base })),
     devPlugin(serverEntry),
+    buildPlugin(() => app.root),
   ];
 }
 

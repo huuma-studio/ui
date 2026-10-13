@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { createLogger, createServer, type ViteDevServer } from "vite";
+import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 
 import { remoteEndpoint } from "../platform/server/remote.ts";
@@ -157,6 +158,23 @@ describe("dev server", () => {
     expect(await response.json()).toStrictEqual(3);
   });
 
+  test("answers a request a web Request can't represent with 400", async () => {
+    // `TRACE` reaches the app's middleware, but a web Request refuses it.
+    // `fetch()` can't send it either, so it goes over a socket.
+    const { hostname, port } = new URL(origin);
+    const status = await new Promise<string>((resolve, reject) => {
+      const socket = connect(Number(port), hostname, () => {
+        socket.write(`TRACE /about HTTP/1.1\r\nHost: ${hostname}\r\n\r\n`);
+      });
+      socket.once("data", (data) => {
+        resolve(data.toString().split("\r\n")[0]);
+        socket.destroy();
+      });
+      socket.once("error", reject);
+    });
+    expect(status).toStrictEqual("HTTP/1.1 400 Bad Request");
+  });
+
   test("serves other pages and the 404 page", async () => {
     const about = await fetch(`${origin}/about`);
     expect(about.status).toStrictEqual(200);
@@ -187,4 +205,48 @@ test("names a missing server entry", async () => {
   } finally {
     await server.close();
   }
+});
+
+describe("dev server with a base", () => {
+  // Vite strips the base before the app sees the request.
+  let server: ViteDevServer;
+  let origin: string;
+  beforeAll(async () => {
+    server = await createServer({
+      root: fixture,
+      base: "/shop/",
+      configFile: false,
+      logLevel: "silent",
+      server: { host: "127.0.0.1", port: 0 },
+      plugins: [huuma()],
+    });
+    await server.listen();
+    origin = new URL(server.resolvedUrls!.local[0]).origin;
+  });
+  afterAll(async () => {
+    await server.close();
+  });
+
+  test("serves pages and islands below the base", async () => {
+    const response = await fetch(`${origin}/shop/about`);
+    expect(response.status).toStrictEqual(200);
+    expect(await response.text()).toContain("<h1>About</h1>");
+
+    const home = await (await fetch(`${origin}/shop/`)).text();
+    expect(home).toContain('from "/shop/app/counter.client.tsx"');
+  });
+
+  test("calls remote functions below the base", async () => {
+    const stub = await (await fetch(`${origin}/shop/app/sum.remote.ts`)).text();
+    const endpoint = `/shop${await remoteEndpoint("app/sum.remote.ts")}`;
+    expect(stub).toContain(JSON.stringify(endpoint));
+
+    const response = await fetch(origin + endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ remoteFunction: "add", args: [1, 2] }),
+    });
+    expect(response.status).toStrictEqual(200);
+    expect(await response.json()).toStrictEqual(3);
+  });
 });

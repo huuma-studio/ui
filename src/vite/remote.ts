@@ -4,6 +4,7 @@ import { join, relative } from "node:path";
 import { listRemoteFunctions } from "../platform/server/discover.ts";
 import { remoteEndpoint, remoteStub } from "../platform/server/remote.ts";
 
+import { appBase } from "./base.ts";
 import { valueBindings } from "./bindings.ts";
 
 /**
@@ -61,8 +62,12 @@ export function remotePlugin(root: () => string): Plugin {
         const file = id.replace(/\?.*$/, "");
         const { names, problems } = remoteExports(this.parse(code, { lang: "ts" }));
         if (problems.length) this.error(problems[0].message, problems[0].start);
+        // The app lives below Vite's `base`, which the dev server and
+        // `server.js` strip before the app sees the request. Calls go to
+        // the app's server, not to a CDN in `base`.
+        const base = appBase(this.environment.config.base).replace(/\/$/, "");
         return {
-          code: remoteStub(await remoteEndpoint(relative(root(), file)), names),
+          code: remoteStub(base + (await remoteEndpoint(relative(root(), file))), names),
           // A new module: none of its code maps to the source.
           map: { mappings: "" },
           moduleType: "js",
