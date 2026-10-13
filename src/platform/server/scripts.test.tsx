@@ -236,3 +236,23 @@ describe("Launch inline script serialization", () => {
     expect(src).toContain("], transferState);");
   });
 });
+
+describe("Launch script paths", () => {
+  test("loads URLs as they are, e.g. from a CDN in Vite's base", async () => {
+    const src = scriptSource(
+      await renderToString(
+        Launch({
+          body: {
+            ...BODY,
+            runtime: { path: "https://cdn.example/assets/runtime.js", name: "runtime" },
+          },
+          islands: [{ ...makeIsland({ a: 1 }), path: "https://cdn.example/assets/island.js" }],
+        }),
+        {},
+      ),
+    );
+    expect(src).toContain('import { launch } from "https://cdn.example/assets/runtime.js";');
+    expect(src).toContain('import $I1 from "https://cdn.example/assets/island.js";');
+    expect(src).toContain('path: "https://cdn.example/assets/island.js"');
+  });
+});

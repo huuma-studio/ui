@@ -60,8 +60,11 @@ async function load(config: ResolvedConfig): Promise<ClientBuild> {
 /**
  * The browser path of a built file, e.g. `assets/counter.client-3f2a.js`
  * after `base`. Each segment is URL-encoded, like the dev server's paths.
+ * A URL `base` (a CDN) makes it a URL, which the page loads as it is; a
+ * relative one (`./`) is `/`, as the app lives there (see `appBase()`).
  */
 export function builtPath(base: string, file: string): string {
   const segments = file.split("/").map(encodeURIComponent);
-  return (base + segments.join("/")).replace(/^\//, "");
+  const prefix = base === "" || base === "./" ? "/" : base;
+  return (prefix + segments.join("/")).replace(/^\/(?!\/)/, "");
 }

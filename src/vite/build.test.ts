@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { createBuilder } from "vite";
+import { createBuilder, type InlineConfig } from "vite";
 import { type ChildProcess, spawn } from "node:child_process";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { remoteEndpoint } from "../platform/server/remote.ts";
 import { builtPath } from "./client-build.ts";
 import { huuma } from "./mod.ts";
 
@@ -38,6 +39,42 @@ function freePort(): Promise<number> {
   });
 }
 
+// Builds a copy of the basic fixture with `vite build`'s builder.
+async function buildFixture(prefix: string, config: InlineConfig = {}): Promise<string> {
+  const root = await mkdtemp(join(fixtures, prefix));
+  await cp(join(fixtures, "basic"), root, { recursive: true });
+  const builder = await createBuilder({
+    root,
+    configFile: false,
+    logLevel: "silent",
+    plugins: [huuma()],
+    ...config,
+  });
+  await builder.buildApp();
+  return root;
+}
+
+// Starts `dist/server/server.js` like in production; resolves with its origin.
+async function startServer(root: string): Promise<{ origin: string; server: ChildProcess }> {
+  const port = await freePort();
+  const server = spawn(process.execPath, [join(root, "dist/server/server.js")], {
+    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  // Route logs once the server is listening.
+  await new Promise<void>((resolve, reject) => {
+    let output = "";
+    const read = (chunk: Buffer) => {
+      output += chunk.toString();
+      if (output.includes("Listening on")) resolve();
+    };
+    server.stdout!.on("data", read);
+    server.stderr!.on("data", read);
+    server.once("exit", (code) => reject(new Error(`server.js exited (${code}): ${output}`)));
+  });
+  return { origin: `http://127.0.0.1:${port}`, server };
+}
+
 interface BuiltApp {
   fetch(
     request: Request,
@@ -55,15 +92,7 @@ describe("vite build", () => {
   beforeAll(async () => {
     // As with `vite build`; Vitest sets "test", which builds JSX in dev mode.
     process.env.NODE_ENV = "production";
-    root = await mkdtemp(join(fixtures, ".tmp-build-"));
-    await cp(join(fixtures, "basic"), root, { recursive: true });
-    const builder = await createBuilder({
-      root,
-      configFile: false,
-      logLevel: "silent",
-      plugins: [huuma()],
-    });
-    await builder.buildApp();
+    root = await buildFixture(".tmp-build-");
     manifest = JSON.parse(
       await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
     ) as Manifest;
@@ -135,36 +164,11 @@ describe("node dist/server/server.js", () => {
 
   beforeAll(async () => {
     process.env.NODE_ENV = "production";
-    root = await mkdtemp(join(fixtures, ".tmp-build-server-"));
-    await cp(join(fixtures, "basic"), root, { recursive: true });
-    const builder = await createBuilder({
-      root,
-      configFile: false,
-      logLevel: "silent",
-      plugins: [huuma()],
-    });
-    await builder.buildApp();
+    root = await buildFixture(".tmp-build-server-");
     manifest = JSON.parse(
       await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
     ) as Manifest;
-
-    const port = await freePort();
-    origin = `http://127.0.0.1:${port}`;
-    server = spawn(process.execPath, [join(root, "dist/server/server.js")], {
-      env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    // Route logs once the server is listening.
-    await new Promise<void>((resolve, reject) => {
-      let output = "";
-      const read = (chunk: Buffer) => {
-        output += chunk.toString();
-        if (output.includes("Listening on")) resolve();
-      };
-      server.stdout!.on("data", read);
-      server.stderr!.on("data", read);
-      server.once("exit", (code) => reject(new Error(`server.js exited (${code}): ${output}`)));
-    });
+    ({ origin, server } = await startServer(root));
   });
   afterAll(async () => {
     process.env.NODE_ENV = nodeEnv;
@@ -192,6 +196,52 @@ describe("node dist/server/server.js", () => {
   test("doesn't serve the client manifest", async () => {
     const response = await fetch(`${origin}/.vite/manifest.json`);
     expect(response.status).toStrictEqual(404);
+  });
+});
+
+describe("a build with a URL base, e.g. a CDN", () => {
+  let root: string;
+  let server: ChildProcess;
+  let origin: string;
+  let manifest: Manifest;
+  const nodeEnv = process.env.NODE_ENV;
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = "production";
+    root = await buildFixture(".tmp-build-cdn-", { base: "https://cdn.example/shop/" });
+    manifest = JSON.parse(
+      await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
+    ) as Manifest;
+    ({ origin, server } = await startServer(root));
+  });
+  afterAll(async () => {
+    process.env.NODE_ENV = nodeEnv;
+    server?.kill();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("loads the scripts from the base's URL", async () => {
+    const counter = manifest["app/counter.client.tsx"]!;
+    const html = await (await fetch(`${origin}/shop/`)).text();
+    expect(html).toContain("<h1>Home</h1>");
+    expect(html).toContain(`from "https://cdn.example/shop/${counter.file}";`);
+  });
+
+  test("serves the app and the client files below the base's path", async () => {
+    const counter = manifest["app/counter.client.tsx"]!;
+    expect((await fetch(`${origin}/shop/about`)).status).toStrictEqual(200);
+    expect((await fetch(`${origin}/shop/${counter.file}`)).status).toStrictEqual(200);
+    const root = await fetch(`${origin}/`, { redirect: "manual" });
+    expect(root.headers.get("location")).toStrictEqual("/shop/");
+  });
+
+  test("calls remote functions on the app's server, not on the CDN", async () => {
+    // Bundled into the island that calls it.
+    const island = manifest["app/remote/sum.client.tsx"]!;
+    const stub = await readFile(join(root, "dist/client", island.file), "utf8");
+    const endpoint = `/shop${await remoteEndpoint("app/sum.remote.ts")}`;
+    expect(stub).toContain(`fetch(\`${endpoint}\``);
+    expect(stub).not.toContain("cdn.example");
   });
 });
 
@@ -224,5 +274,15 @@ describe(builtPath.name, () => {
     expect(builtPath("/", "assets/a-1.js")).toStrictEqual("assets/a-1.js");
     expect(builtPath("/shop/", "assets/a-1.js")).toStrictEqual("shop/assets/a-1.js");
     expect(builtPath("/", "assets/50%off a-1.js")).toStrictEqual("assets/50%25off%20a-1.js");
+  });
+
+  test("is a URL with a URL base, and after / with a relative one", () => {
+    expect(builtPath("https://cdn.example/shop/", "assets/a-1.js")).toStrictEqual(
+      "https://cdn.example/shop/assets/a-1.js",
+    );
+    expect(builtPath("//cdn.example/", "assets/a-1.js")).toStrictEqual(
+      "//cdn.example/assets/a-1.js",
+    );
+    expect(builtPath("./", "assets/a-1.js")).toStrictEqual("assets/a-1.js");
   });
 });

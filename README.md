@@ -161,7 +161,7 @@ HUUMA_ENV=PROD PORT=3000 node dist/server/server.js
 
 `PORT` (default `8000`) and `HOST` (default: all interfaces) set where it listens; `HUUMA_ENV=PROD` is `@huuma/route`'s production mode. Set `build.outDir` to build somewhere else than `dist/`.
 
-With a [`base`](https://vite.dev/config/shared-options.html#base) other than `/`, e.g. `/shop/`, the app lives below it, in the dev server and the built app alike: `/shop/about` renders the page `app/about/page.tsx`, `/` redirects to `/shop/`, and other paths outside of it are not found. Remote functions are called below the base too. Links in your pages need the base themselves, e.g. from `import.meta.env.BASE_URL`.
+With a [`base`](https://vite.dev/config/shared-options.html#base) other than `/`, e.g. `/shop/`, the app lives below it, in the dev server and the built app alike: `/shop/about` renders the page `app/about/page.tsx`, `/` redirects to `/shop/`, and other paths outside of it are not found. Remote functions are called below the base too. Links in your pages need the base themselves, e.g. from `import.meta.env.BASE_URL`. With a URL as the base, e.g. `https://cdn.example/shop/` for a CDN, built pages load their scripts from that URL, while the app lives below its path, `/shop/`, and remote functions are called there.
 
 Not there yet: CSS imported by islands or pages. Add stylesheets with `app.addStylesheet()` as before.
 

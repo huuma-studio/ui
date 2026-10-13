@@ -7,6 +7,14 @@ import type { TransferState } from "./transfer-state.ts";
 import type { PageScripts, Script } from "./app.ts";
 import { inlineJSON } from "./inline-json.ts";
 
+/**
+ * Where the page loads a script from: `/` and its path, or the path as it
+ * is if it's a URL, e.g. on a CDN (Vite's `base`).
+ */
+function scriptURL(path: string): string {
+  return /^([a-z][a-z\d+.-]*:|\/\/)/i.test(path) ? path : `/${path}`;
+}
+
 interface ScriptsProps extends JSX.ComponentProps {
   scripts?: { entryPoints: Script[] };
   nonce?: string;
@@ -23,7 +31,7 @@ export function Scripts({ scripts, nonce }: ScriptsProps): JSX.Element {
     templates.push("");
     nodes.push(
       jsx("script", {
-        src: `/${script.path}`,
+        src: scriptURL(script.path),
         type: "module",
         nonce,
       }),
@@ -53,12 +61,12 @@ export function Launch({ body, nonce, islands, transferState }: LaunchProps): JS
   const nodes: string[] = [];
   const _islands = [];
 
-  templates.push(`import { launch } from "/${body.runtime.path}";`);
+  templates.push(`import { launch } from "${scriptURL(body.runtime.path)}";`);
   nodes.push("\n");
 
   let i = 1;
   for (const island of islands) {
-    templates.push(`import $I${i} from "/${island.path}";\n`);
+    templates.push(`import $I${i} from "${scriptURL(island.path)}";\n`);
     nodes.push("\n");
 
     // Remove children.
@@ -66,7 +74,7 @@ export function Launch({ body, nonce, islands, transferState }: LaunchProps): JS
     // The path lets the browser runtime find the islands of a module that
     // changed (hot updates in Vite's dev server).
     _islands.push(
-      `{fn: $I${i}, path: ${inlineJSON(`/${island.path}`)}, props: ${inlineJSON(props)}, islandId: "${island.id}"}`,
+      `{fn: $I${i}, path: ${inlineJSON(scriptURL(island.path))}, props: ${inlineJSON(props)}, islandId: "${island.id}"}`,
     );
 
     i++;

@@ -2,6 +2,7 @@ import type { Plugin, UserConfig } from "vite";
 import { join, parse, relative, resolve } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
+import { appBase } from "./base.ts";
 import { RUNTIME_INPUT } from "./client-build.ts";
 import { SERVER_ID } from "./entry.ts";
 import { RUNTIME_ID } from "./islands.ts";
@@ -75,7 +76,7 @@ export function buildPlugin(root: () => string): Plugin {
         return {
           code: nodeModule({
             client: `${relative(server, client).replaceAll("\\", "/")}/`,
-            base: config.base,
+            base: appBase(config.base),
             assetsDir: config.environments.client.build.assetsDir,
           }),
           moduleType: "js",
