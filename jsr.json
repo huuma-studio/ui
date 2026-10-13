@@ -22,7 +22,8 @@
     "./i18n/middleware": "./src/i18n/middleware/mod.ts",
     "./lint": "./src/lint/mod.ts",
     "./vite": "./src/vite/mod.ts",
-    "./vite/runtime": "./src/vite/runtime.ts"
+    "./vite/runtime": "./src/vite/runtime.ts",
+    "./vite/node": "./src/vite/node.ts"
   },
   "publish": {
     "include": ["src", "README.md", "LICENSE"],

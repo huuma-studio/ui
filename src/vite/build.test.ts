@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { createBuilder } from "vite";
+import { type ChildProcess, spawn } from "node:child_process";
 import { cp, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -22,6 +24,18 @@ function loaded(manifest: Manifest, key: string): Set<string> {
     pending.push(...(manifest[next]?.imports ?? []));
   }
   return keys;
+}
+
+// A port that's free right now.
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as { port: number };
+      server.close(() => resolve(port));
+    });
+  });
 }
 
 interface BuiltApp {
@@ -108,6 +122,76 @@ describe("vite build", () => {
     expect(html).toContain(`import { launch } from "/${runtime.file}";`);
     expect(html).toContain(`from "/${counter.file}";`);
     expect(html).not.toContain("@id/");
+  });
+});
+
+describe("node dist/server/server.js", () => {
+  // Another build of the basic fixture, started like in production.
+  let root: string;
+  let server: ChildProcess;
+  let origin: string;
+  let manifest: Manifest;
+  const nodeEnv = process.env.NODE_ENV;
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = "production";
+    root = await mkdtemp(join(fixtures, ".tmp-build-server-"));
+    await cp(join(fixtures, "basic"), root, { recursive: true });
+    const builder = await createBuilder({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [huuma()],
+    });
+    await builder.buildApp();
+    manifest = JSON.parse(
+      await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
+    ) as Manifest;
+
+    const port = await freePort();
+    origin = `http://127.0.0.1:${port}`;
+    server = spawn(process.execPath, [join(root, "dist/server/server.js")], {
+      env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    // Route logs once the server is listening.
+    await new Promise<void>((resolve, reject) => {
+      let output = "";
+      const read = (chunk: Buffer) => {
+        output += chunk.toString();
+        if (output.includes("Listening on")) resolve();
+      };
+      server.stdout!.on("data", read);
+      server.stderr!.on("data", read);
+      server.once("exit", (code) => reject(new Error(`server.js exited (${code}): ${output}`)));
+    });
+  });
+  afterAll(async () => {
+    process.env.NODE_ENV = nodeEnv;
+    server?.kill();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("renders pages", async () => {
+    const response = await fetch(`${origin}/`);
+    expect(response.status).toStrictEqual(200);
+    expect(await response.text()).toContain("<h1>Home</h1>");
+  });
+
+  test("serves the client build's files", async () => {
+    const counter = manifest["app/counter.client.tsx"]!;
+    const response = await fetch(`${origin}/${counter.file}`);
+    expect(response.status).toStrictEqual(200);
+    expect(response.headers.get("content-type")).toStrictEqual("text/javascript");
+    expect(response.headers.get("cache-control")).toStrictEqual(
+      "public, max-age=31536000, immutable",
+    );
+    expect(await response.text()).toContain("export");
+  });
+
+  test("doesn't serve the client manifest", async () => {
+    const response = await fetch(`${origin}/.vite/manifest.json`);
+    expect(response.status).toStrictEqual(404);
   });
 });
 
