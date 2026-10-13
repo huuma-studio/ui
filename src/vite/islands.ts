@@ -112,12 +112,14 @@ if (import.meta.hot) {
 
 /**
  * A hash of the hook calls in a module (calls of `$`-prefixed functions,
- * like `$signal(0)`), in order and with their arguments. An island keeps
- * its state over a hot update only if it's unchanged: hooks keep their
- * values by call order, and a `$computed` or `$effect` keeps the function
- * it was created with.
+ * like `$signal(0)`, also through a namespace, like `hooks.$signal(0)`,
+ * or imported under another name), in order and with their arguments. An
+ * island keeps its state over a hot update only if it's unchanged: hooks
+ * keep their values by call order, and a `$computed` or `$effect` keeps
+ * the function it was created with.
  */
 export function hookSignature(program: ESTree.Program, code: string): string {
+  const hooks = importedHooks(program);
   const calls: string[] = [];
   const pending: unknown[] = [program];
   while (pending.length) {
@@ -128,15 +130,11 @@ export function hookSignature(program: ESTree.Program, code: string): string {
     } else if (node && typeof node === "object") {
       const { type, callee, start, end } = node as {
         type?: string;
-        callee?: { type: string; name?: string };
+        callee?: ESTree.Expression;
         start: number;
         end: number;
       };
-      if (
-        type === "CallExpression" &&
-        callee?.type === "Identifier" &&
-        callee.name?.startsWith("$")
-      ) {
+      if (type === "CallExpression" && callee && isHook(callee, hooks)) {
         calls.push(code.slice(start, end));
       }
       const children = Object.values(node).filter((child) => child && typeof child === "object");
@@ -144,6 +142,48 @@ export function hookSignature(program: ESTree.Program, code: string): string {
     }
   }
   return createHash("sha256").update(calls.join("\n")).digest("hex").slice(0, 16);
+}
+
+// The local names of `$`-prefixed imports, e.g. `signal` for
+// `import { $signal as signal } from "@huuma/ui/hooks/signal"`.
+function importedHooks(program: ESTree.Program): Set<string> {
+  const names = new Set<string>();
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") continue;
+    for (const specifier of statement.specifiers) {
+      if (
+        specifier.type === "ImportSpecifier" &&
+        isHookName(moduleExportName(specifier.imported))
+      ) {
+        names.add(specifier.local.name);
+      }
+    }
+  }
+  return names;
+}
+
+// `$signal(…)`, `signal(…)` if imported as `$signal`, `hooks.$signal(…)`
+// and `hooks["$signal"](…)`.
+function isHook(callee: ESTree.Expression, hooks: Set<string>): boolean {
+  if (callee.type === "Identifier") return isHookName(callee.name) || hooks.has(callee.name);
+  if (callee.type === "MemberExpression") {
+    const { property } = callee;
+    if (!callee.computed) return property.type === "Identifier" && isHookName(property.name);
+    return (
+      property.type === "Literal" &&
+      typeof property.value === "string" &&
+      isHookName(property.value)
+    );
+  }
+  return false;
+}
+
+function isHookName(name: string): boolean {
+  return name.startsWith("$");
+}
+
+function moduleExportName(name: ESTree.ModuleExportName): string {
+  return name.type === "Identifier" ? name.name : String(name.value);
 }
 
 /** Generates the source of `virtual:huuma/islands`. */

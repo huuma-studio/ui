@@ -41,6 +41,36 @@ describe(hookSignature.name, () => {
       signature(counter("$effect(() => log(b));")),
     );
   });
+
+  test("counts hooks called through a namespace", () => {
+    const namespace = (body: string) =>
+      `import * as hooks from "@huuma/ui/hooks/signal";\n${counter(body)}`;
+    const base = signature(namespace("const a = hooks.$signal(0);"));
+    for (const body of [
+      "const a = hooks.$computed(() => 1);",
+      "const a = hooks.$signal(0); const b = hooks.$signal(1);",
+      'const a = hooks["$signal"](1);',
+      "const a = hooks?.$signal(1);",
+    ]) {
+      expect(signature(namespace(body)), body).not.toStrictEqual(base);
+    }
+    expect(signature(namespace("const a = hooks.$signal(0); log(a);"))).toStrictEqual(base);
+  });
+
+  test("counts hooks imported under another name", () => {
+    const aliased = (body: string) =>
+      'import { $signal as signal, "$computed" as computed } from "@huuma/ui/hooks/signal";\n' +
+      counter(body);
+    const base = signature(aliased("const a = signal(0);"));
+    for (const body of [
+      "const a = signal(1);",
+      "const a = signal(0); const b = signal(0);",
+      "const a = signal(0); const b = computed(() => 1);",
+    ]) {
+      expect(signature(aliased(body)), body).not.toStrictEqual(base);
+    }
+    expect(signature(aliased("const a = signal(0); log(a);"))).toStrictEqual(base);
+  });
 });
 
 describe("browser paths", () => {
