@@ -113,13 +113,14 @@ if (import.meta.hot) {
 /**
  * A hash of the hook calls in a module (calls of `$`-prefixed functions,
  * like `$signal(0)`, also through a namespace, like `hooks.$signal(0)`,
- * or imported under another name), in order and with their arguments. An
- * island keeps its state over a hot update only if it's unchanged: hooks
- * keep their values by call order, and a `$computed` or `$effect` keeps
- * the function it was created with.
+ * or imported under another name), in order, with their arguments and
+ * the import their function comes from. An island keeps its state over a
+ * hot update only if it's unchanged: hooks keep their values by call
+ * order, and a `$computed` or `$effect` keeps the function it was created
+ * with.
  */
 export function hookSignature(program: ESTree.Program, code: string): string {
-  const hooks = importedHooks(program);
+  const imports = importBindings(program);
   const calls: string[] = [];
   const pending: unknown[] = [program];
   while (pending.length) {
@@ -134,8 +135,11 @@ export function hookSignature(program: ESTree.Program, code: string): string {
         start: number;
         end: number;
       };
-      if (type === "CallExpression" && callee && isHook(callee, hooks)) {
-        calls.push(code.slice(start, end));
+      if (type === "CallExpression" && callee && isHook(callee, imports)) {
+        // With the import, so `import { $computed as hook }` instead of
+        // `import { $signal as hook }` changes it, but `hook(0)` doesn't.
+        const binding = imports.get(calleeName(callee) ?? "");
+        calls.push(JSON.stringify([code.slice(start, end), binding ?? null]));
       }
       const children = Object.values(node).filter((child) => child && typeof child === "object");
       pending.push(...children.reverse());
@@ -144,28 +148,39 @@ export function hookSignature(program: ESTree.Program, code: string): string {
   return createHash("sha256").update(calls.join("\n")).digest("hex").slice(0, 16);
 }
 
-// The local names of `$`-prefixed imports, e.g. `signal` for
+interface ImportBinding {
+  source: string;
+  /** The imported name, `"*"` for a namespace import. */
+  imported: string;
+}
+
+// The module's imports by their local names, e.g. `signal` for
 // `import { $signal as signal } from "@huuma/ui/hooks/signal"`.
-function importedHooks(program: ESTree.Program): Set<string> {
-  const names = new Set<string>();
+function importBindings(program: ESTree.Program): Map<string, ImportBinding> {
+  const bindings = new Map<string, ImportBinding>();
   for (const statement of program.body) {
     if (statement.type !== "ImportDeclaration") continue;
+    const source = statement.source.value;
     for (const specifier of statement.specifiers) {
-      if (
-        specifier.type === "ImportSpecifier" &&
-        isHookName(moduleExportName(specifier.imported))
-      ) {
-        names.add(specifier.local.name);
-      }
+      const imported =
+        specifier.type === "ImportSpecifier"
+          ? moduleExportName(specifier.imported)
+          : specifier.type === "ImportNamespaceSpecifier"
+            ? "*"
+            : "default";
+      bindings.set(specifier.local.name, { source, imported });
     }
   }
-  return names;
+  return bindings;
 }
 
 // `$signal(…)`, `signal(…)` if imported as `$signal`, `hooks.$signal(…)`
 // and `hooks["$signal"](…)`.
-function isHook(callee: ESTree.Expression, hooks: Set<string>): boolean {
-  if (callee.type === "Identifier") return isHookName(callee.name) || hooks.has(callee.name);
+function isHook(callee: ESTree.Expression, imports: Map<string, ImportBinding>): boolean {
+  if (callee.type === "Identifier") {
+    const imported = imports.get(callee.name)?.imported;
+    return isHookName(callee.name) || (imported !== undefined && isHookName(imported));
+  }
   if (callee.type === "MemberExpression") {
     const { property } = callee;
     if (!callee.computed) return property.type === "Identifier" && isHookName(property.name);
@@ -176,6 +191,15 @@ function isHook(callee: ESTree.Expression, hooks: Set<string>): boolean {
     );
   }
   return false;
+}
+
+// The name a hook call's function is bound to: `hook` for `hook(…)`,
+// `hooks` for `hooks.$signal(…)`.
+function calleeName(callee: ESTree.Expression): string | undefined {
+  if (callee.type === "Identifier") return callee.name;
+  if (callee.type === "MemberExpression" && callee.object.type === "Identifier") {
+    return callee.object.name;
+  }
 }
 
 function isHookName(name: string): boolean {

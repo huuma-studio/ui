@@ -71,6 +71,35 @@ describe(hookSignature.name, () => {
     }
     expect(signature(aliased("const a = signal(0); log(a);"))).toStrictEqual(base);
   });
+
+  test("changes when a hook's import changes but its local name doesn't", () => {
+    const body = counter("const a = hook(0); const b = hooks.$signal(0); const c = $signal(0);");
+    const imports = (hook: string, namespace: string, signal: string) =>
+      `import { ${hook} as hook } from "@huuma/ui/hooks/signal";\n` +
+      `import * as hooks from "${namespace}";\n` +
+      `import { $signal } from "${signal}";\n`;
+    const base = signature(
+      imports("$signal", "@huuma/ui/hooks/signal", "@huuma/ui/hooks/signal") + body,
+    );
+    for (const changed of [
+      imports("$computed", "@huuma/ui/hooks/signal", "@huuma/ui/hooks/signal"),
+      imports("$signal", "./hooks.ts", "@huuma/ui/hooks/signal"),
+      imports("$signal", "@huuma/ui/hooks/signal", "./hooks.ts"),
+    ]) {
+      expect(signature(changed + body), changed).not.toStrictEqual(base);
+    }
+    // Other imports and their order don't matter.
+    expect(
+      signature(
+        'import { x } from "./x.ts";\n' +
+          imports("$signal", "@huuma/ui/hooks/signal", "@huuma/ui/hooks/signal")
+            .split("\n")
+            .reverse()
+            .join("\n") +
+          body,
+      ),
+    ).toStrictEqual(base);
+  });
 });
 
 describe("browser paths", () => {
