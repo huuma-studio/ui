@@ -245,29 +245,37 @@ describe("a build with a URL base, e.g. a CDN", () => {
   });
 });
 
-test("fails when an island imports server-only code", async () => {
-  const root = await mkdtemp(join(fixtures, ".tmp-build-server-only-"));
-  try {
-    await cp(join(fixtures, "basic"), root, { recursive: true });
-    await writeFile(
-      join(root, "app/leak.client.tsx"),
-      'import { host } from "./host.server.ts";\n' +
-        "export default function Leak() { return <p>{host()}</p>; }\n",
-    );
-    const builder = await createBuilder({
-      root,
-      configFile: false,
-      logLevel: "silent",
-      plugins: [huuma()],
-    });
-    await expect(builder.buildApp()).rejects.toThrow(
-      '"app/host.server.ts" is server-only code and can\'t be imported in the browser ' +
-        "(imported by app/leak.client.tsx).",
-    );
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
+// Also when the import's name doesn't show it's server-only code.
+test.each(["./host.server.ts", "./host.server", "#host"])(
+  "fails when an island imports server-only code: %s",
+  async (specifier) => {
+    const root = await mkdtemp(join(fixtures, ".tmp-build-server-only-"));
+    try {
+      await cp(join(fixtures, "basic"), root, { recursive: true });
+      await writeFile(
+        join(root, "package.json"),
+        JSON.stringify({ type: "module", imports: { "#host": "./app/host.server.ts" } }),
+      );
+      await writeFile(
+        join(root, "app/leak.client.tsx"),
+        `import { host } from "${specifier}";\n` +
+          "export default function Leak() { return <p>{host()}</p>; }\n",
+      );
+      const builder = await createBuilder({
+        root,
+        configFile: false,
+        logLevel: "silent",
+        plugins: [huuma()],
+      });
+      await expect(builder.buildApp()).rejects.toThrow(
+        '"app/host.server.ts" is server-only code and can\'t be imported in the browser ' +
+          "(imported by app/leak.client.tsx).",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 describe(builtPath.name, () => {
   test("starts with the base and encodes each segment", () => {
