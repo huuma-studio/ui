@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { remoteEndpoint } from "../platform/server/remote.ts";
 import { huuma } from "./mod.ts";
-import { injectViteClient, withViteClient } from "./dev.ts";
+import { allowViteWorker, injectViteClient, withViteClient } from "./dev.ts";
 
 const fixture = fileURLToPath(new URL("../../test/fixtures/basic", import.meta.url));
 
@@ -55,6 +55,43 @@ describe(withViteClient.name, () => {
     expect(response.headers.get("x-app")).toStrictEqual("1");
     expect(response.headers.has("content-length")).toStrictEqual(false);
     expect(await response.text()).toContain("/@vite/client");
+  });
+
+  test("lets the page's policy allow Vite's worker", async () => {
+    const response = await withViteClient(
+      new Response("<head></head>", {
+        headers: { "content-security-policy": "script-src 'none'" },
+      }),
+      "/",
+    );
+    expect(response.headers.get("content-security-policy")).toStrictEqual(
+      "script-src 'none'; worker-src blob:",
+    );
+  });
+});
+
+describe(allowViteWorker.name, () => {
+  test("adds blob: to a copy of the directive workers fall back to", () => {
+    expect(allowViteWorker("script-src-elem 'nonce-abc'; script-src 'none'")).toStrictEqual(
+      "script-src-elem 'nonce-abc'; script-src 'none'; worker-src blob:",
+    );
+    expect(allowViteWorker("default-src 'self'; child-src https://a.example")).toStrictEqual(
+      "default-src 'self'; child-src https://a.example; worker-src https://a.example blob:",
+    );
+    expect(allowViteWorker("default-src 'self'")).toStrictEqual(
+      "default-src 'self'; worker-src 'self' blob:",
+    );
+  });
+
+  test("adds blob: to worker-src, once", () => {
+    expect(allowViteWorker("worker-src 'self'; script-src 'none'")).toStrictEqual(
+      "worker-src 'self' blob:; script-src 'none'",
+    );
+    expect(allowViteWorker("worker-src blob:")).toStrictEqual("worker-src blob:");
+  });
+
+  test("leaves a policy that doesn't restrict workers alone", () => {
+    expect(allowViteWorker("img-src 'self'")).toStrictEqual("img-src 'self'");
   });
 });
 

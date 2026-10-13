@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { Browser } from "playwright-core";
 
 import { button, findChromium, launchChromium, open } from "../../test/browser.ts";
-import { buildFixture, fixtures, startServer } from "../../test/build.ts";
+import { buildFixture, fixtures, freePort, startServer } from "../../test/build.ts";
 import { huuma } from "./mod.ts";
 
 const chromium = findChromium();
@@ -37,7 +37,8 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
         root,
         configFile: false,
         logLevel: "silent",
-        server: { host: "127.0.0.1", port: 0 },
+        // A fixed port, which a restart keeps.
+        server: { host: "127.0.0.1", port: await freePort(), strictPort: true },
         plugins: [huuma()],
       });
       await server.listen();
@@ -107,6 +108,17 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
       await page.getByRole("heading", { name: "About us" }).waitFor({ timeout: 5_000 });
 
       expect(await page.evaluate(() => "loaded" in window)).toStrictEqual(false);
+      expect(errors).toStrictEqual([]);
+      await page.close();
+    });
+
+    test("reloads the page once a restarted dev server is back", async () => {
+      const { page, errors } = await open(browser, `${origin}/about`);
+      await page.evaluate(() => Object.assign(window, { loaded: true }));
+
+      await server.restart();
+      await page.waitForFunction(() => !("loaded" in window), undefined, { timeout: 5_000 });
+
       expect(errors).toStrictEqual([]);
       await page.close();
     });
