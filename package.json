@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@deno/esbuild-plugin": "npm:@jsr/deno__esbuild-plugin@^1.2.1",
-    "@huuma/route": "npm:@jsr/huuma__route@^0.2.0",
+    "@huuma/route": "npm:@jsr/huuma__route@^0.3.0",
     "@huuma/validate": "npm:@jsr/huuma__validate@^0.2.0",
     "esbuild": "0.28.1"
   },
