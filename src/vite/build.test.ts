@@ -1,18 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { createBuilder, type InlineConfig } from "vite";
-import { type ChildProcess, spawn } from "node:child_process";
+import { createBuilder } from "vite";
+import type { ChildProcess } from "node:child_process";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
+import { buildFixture, fixtures, startServer } from "../../test/build.ts";
 import { renderFixture } from "../../test/rendered.ts";
 import { remoteEndpoint } from "../platform/server/remote.ts";
 import { builtPath } from "./client-build.ts";
 import { hasHash } from "./build.ts";
 import { huuma } from "./mod.ts";
-
-const fixtures = fileURLToPath(new URL("../../test/fixtures", import.meta.url));
 
 type Manifest = Record<string, { file: string; name?: string; imports?: string[] }>;
 
@@ -27,54 +25,6 @@ function loaded(manifest: Manifest, key: string): Set<string> {
     pending.push(...(manifest[next]?.imports ?? []));
   }
   return keys;
-}
-
-// A port that's free right now.
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-// Builds a copy of the basic fixture with `vite build`'s builder.
-async function buildFixture(prefix: string, config: InlineConfig = {}): Promise<string> {
-  const root = await mkdtemp(join(fixtures, prefix));
-  await cp(join(fixtures, "basic"), root, { recursive: true });
-  const builder = await createBuilder({
-    root,
-    configFile: false,
-    logLevel: "silent",
-    plugins: [huuma()],
-    ...config,
-  });
-  await builder.buildApp();
-  return root;
-}
-
-// Starts `dist/server/server.js` like in production; resolves with its origin.
-async function startServer(root: string): Promise<{ origin: string; server: ChildProcess }> {
-  const port = await freePort();
-  const server = spawn(process.execPath, [join(root, "dist/server/server.js")], {
-    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  // Route logs once the server is listening.
-  await new Promise<void>((resolve, reject) => {
-    let output = "";
-    const read = (chunk: Buffer) => {
-      output += chunk.toString();
-      if (output.includes("Listening on")) resolve();
-    };
-    server.stdout!.on("data", read);
-    server.stderr!.on("data", read);
-    server.once("exit", (code) => reject(new Error(`server.js exited (${code}): ${output}`)));
-  });
-  return { origin: `http://127.0.0.1:${port}`, server };
 }
 
 interface BuiltApp {
