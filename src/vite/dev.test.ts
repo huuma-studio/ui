@@ -188,3 +188,47 @@ test("names a missing server entry", async () => {
     await server.close();
   }
 });
+
+describe("dev server with a base", () => {
+  // Vite strips the base before the app sees the request.
+  let server: ViteDevServer;
+  let origin: string;
+  beforeAll(async () => {
+    server = await createServer({
+      root: fixture,
+      base: "/shop/",
+      configFile: false,
+      logLevel: "silent",
+      server: { host: "127.0.0.1", port: 0 },
+      plugins: [huuma()],
+    });
+    await server.listen();
+    origin = new URL(server.resolvedUrls!.local[0]).origin;
+  });
+  afterAll(async () => {
+    await server.close();
+  });
+
+  test("serves pages and islands below the base", async () => {
+    const response = await fetch(`${origin}/shop/about`);
+    expect(response.status).toStrictEqual(200);
+    expect(await response.text()).toContain("<h1>About</h1>");
+
+    const home = await (await fetch(`${origin}/shop/`)).text();
+    expect(home).toContain('from "/shop/app/counter.client.tsx"');
+  });
+
+  test("calls remote functions below the base", async () => {
+    const stub = await (await fetch(`${origin}/shop/app/sum.remote.ts`)).text();
+    const endpoint = `/shop${await remoteEndpoint("app/sum.remote.ts")}`;
+    expect(stub).toContain(JSON.stringify(endpoint));
+
+    const response = await fetch(origin + endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ remoteFunction: "add", args: [1, 2] }),
+    });
+    expect(response.status).toStrictEqual(200);
+    expect(await response.json()).toStrictEqual(3);
+  });
+});
