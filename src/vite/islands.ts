@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { join, relative } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
+import { readClientBuild } from "./client-build.ts";
 
 /**
  * Every island module by the path the browser loads it from (without the
@@ -61,8 +62,10 @@ export function islandsPlugin(options: () => IslandsOptions): Plugin {
         const consumer = this.environment.config.consumer;
         if (id === RESOLVED_RUNTIME_ID) {
           if (consumer !== "client") this.error(`${RUNTIME_ID} is the browser runtime.`);
+          // Hot updates only happen in the dev server.
+          const exports = this.environment.mode === "dev" ? "hotReplaceIsland, launch" : "launch";
           return {
-            code: 'export { hotReplaceIsland, launch } from "@huuma/ui/browser";\n',
+            code: `export { ${exports} } from "@huuma/ui/browser";\n`,
             moduleType: "js",
           };
         }
@@ -70,9 +73,18 @@ export function islandsPlugin(options: () => IslandsOptions): Plugin {
           this.error(`${ISLANDS_ID} imports every island for the server and is server only.`);
         }
         const { root, base } = options();
+        // Built islands are loaded from the client build's files.
+        const client =
+          this.environment.mode === "build"
+            ? await readClientBuild(this.environment.getTopLevelConfig())
+            : undefined;
         const islands = (await listIslands(root)).map((island) => {
           const file = join(island.filePath, island.fileName);
-          return { name: island.name, file, path: islandPath(root, base, file) };
+          const path = client ? client.islands.get(file) : islandPath(root, base, file);
+          if (path === undefined) {
+            this.error(`The client build has no script for the island "${file}".`);
+          }
+          return { name: island.name, file, path };
         });
         return { code: islandsModule(islands), moduleType: "js" };
       },

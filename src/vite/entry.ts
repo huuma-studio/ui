@@ -1,6 +1,7 @@
 import type { Plugin } from "vite";
 import { access } from "node:fs/promises";
 
+import { readClientBuild } from "./client-build.ts";
 import { ISLANDS_ID, runtimePath } from "./islands.ts";
 import { REMOTE_ID } from "./remote.ts";
 import { ROUTES_ID } from "./routes.ts";
@@ -10,7 +11,8 @@ import { ROUTES_ID } from "./routes.ts";
  * plugin's routes, islands, remote functions and runtime mounted, as its
  * default export. Its `fetch()` handles requests and initializes the app
  * on the first one. The dev server loads it per request; the production
- * build will use it as its ssr entry.
+ * build makes it `app.js`, with the built browser paths of the runtime and
+ * the islands from the client build.
  */
 export const SERVER_ID = "virtual:huuma/server";
 const RESOLVED_SERVER_ID = `\0${SERVER_ID}`;
@@ -47,7 +49,12 @@ export function entryPlugin(options: () => EntryOptions): Plugin {
               "`export default createUIApp(Root);`",
           );
         }
-        return { code: serverModule(server, runtimePath(base)), moduleType: "js" };
+        // The built runtime is loaded from the client build's files.
+        const runtime =
+          this.environment.mode === "build"
+            ? (await readClientBuild(this.environment.getTopLevelConfig())).runtime
+            : runtimePath(base);
+        return { code: serverModule(server, runtime), moduleType: "js" };
       },
     },
   };
