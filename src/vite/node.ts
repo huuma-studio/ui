@@ -29,14 +29,20 @@ export interface StartOptions {
 
 /**
  * Serves `app` on Node with `serve()` from `@huuma/route/node`, and the
- * client build's files before it. Resolves once the server is listening.
+ * client build's files before it. Like Vite's dev server, the app lives
+ * below `base` and sees paths without it. Resolves once the server is
+ * listening.
  */
 export function start(app: FetchHandler, options: StartOptions): Promise<NodeServer> {
   const files = clientFiles(options);
+  const base = options.base ?? "/";
   return serve(
     {
       async fetch(request, info) {
-        return (await files(request)) ?? app.fetch(request, info);
+        const file = await files(request);
+        if (file) return file;
+        const below = belowBase(request, base);
+        return below instanceof Response ? below : app.fetch(below, info);
       },
     },
     {
@@ -45,6 +51,28 @@ export function start(app: FetchHandler, options: StartOptions): Promise<NodeSer
       signal: options.signal,
     },
   );
+}
+
+/**
+ * The request as the app sees it, without `base`, as in Vite's dev
+ * server: `/shop/about` becomes `/about`. Outside of `base`, `/` redirects
+ * to it, and everything else is not found.
+ */
+export function belowBase(request: Request, base: string): Request | Response {
+  if (base === "/") return request;
+  const url = new URL(request.url);
+  if (url.pathname.startsWith(base)) {
+    url.pathname = url.pathname.slice(base.length - 1);
+    // With the request's method, headers, body and signal.
+    return new Request(url, request);
+  }
+  if (url.pathname === "/" || url.pathname === "/index.html") {
+    return new Response(null, { status: 302, headers: { Location: base + url.search } });
+  }
+  return new Response(`The server's public base URL is ${base}.`, {
+    status: 404,
+    headers: { "Content-Type": "text/plain" },
+  });
 }
 
 function port(value: string | undefined): number | undefined {
