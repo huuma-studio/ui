@@ -51,7 +51,9 @@ export async function renderFixture(app: Handler): Promise<string> {
 }
 
 /**
- * - Nonces (UUIDs) become `NONCE`.
+ * - Nonces (UUIDs) become `nonce1`, `nonce2`, … in the order they appear,
+ *   so a script whose nonce isn't the one its CSP header allows doesn't
+ *   match.
  * - Island ids become `island1`, `island2`, … in the order they appear.
  * - Script paths become `script:<name>.js`, with the name of the island's
  *   module or `runtime`: without the Deno pipeline's hash directory and hash
@@ -59,7 +61,14 @@ export async function renderFixture(app: Handler): Promise<string> {
  *   suffix (`/assets/counter.client-Bb4Qoi4p.js`).
  */
 export function comparable(text: string): string {
-  text = text.replaceAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "NONCE");
+  const nonces = new Map<string, string>();
+  text = text.replaceAll(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
+    (uuid) => {
+      if (!nonces.has(uuid)) nonces.set(uuid, `nonce${nonces.size + 1}`);
+      return nonces.get(uuid)!;
+    },
+  );
 
   const ids = [...new Set(Array.from(text.matchAll(/start_island_([a-z0-9]+)/g), (m) => m[1]))];
   ids.forEach((id, index) => {

@@ -18,16 +18,28 @@ describe(comparable.name, () => {
     expect(vite).toStrictEqual(deno);
   });
 
-  test("numbers island ids in order and replaces nonces", () => {
+  test("numbers island ids in order", () => {
     expect(
       comparable(
         "<!-- start_island_x7k2pa --><!--end_island_x7k2pa --><!-- start_island_0abc12 -->" +
-          '<script nonce="977fa892-8806-4c3b-aec1-292d5b7cb2b3">' +
           'launch([{islandId: "x7k2pa"}, {islandId: "0abc12"}])',
       ),
     ).toStrictEqual(
       "<!-- start_island_island1 --><!--end_island_island1 --><!-- start_island_island2 -->" +
-        '<script nonce="NONCE">launch([{islandId: "island1"}, {islandId: "island2"}])',
+        'launch([{islandId: "island1"}, {islandId: "island2"}])',
+    );
+  });
+
+  test("numbers nonces in order, so different ones stay different", () => {
+    const csp = (nonce: string) => `content-security-policy: script-src-elem 'nonce-${nonce}'`;
+    const script = (nonce: string) => `<script nonce="${nonce}">`;
+    const a = "977fa892-8806-4c3b-aec1-292d5b7cb2b3";
+    const b = "a99a68bb-1f79-418c-877e-9efd6a11404f";
+    expect(comparable(`${csp(a)}\n${script(a)}`)).toStrictEqual(
+      `${csp("nonce1")}\n${script("nonce1")}`,
+    );
+    expect(comparable(`${csp(a)}\n${script(b)}`)).toStrictEqual(
+      `${csp("nonce1")}\n${script("nonce2")}`,
     );
   });
 });

@@ -1,10 +1,10 @@
 === GET /
 200
-content-security-policy: script-src-elem 'nonce-NONCE'; script-src 'none'
+content-security-policy: script-src-elem 'nonce-nonce1'; script-src 'none'
 content-type: text/html
 x-fixture-middleware: app
 
-<!DOCTYPE html><html lang="en"><head><title>Fixture</title></head><body><main><h1>Home</h1><!-- start_island_island1 --><button>1</button> <!--end_island_island1 --><!-- start_island_island2 --><p>Hello Ada</p> <!--end_island_island2 --></main><script type="module" nonce="NONCE">import { launch } from "script:runtime.js";
+<!DOCTYPE html><html lang="en"><head><title>Fixture</title></head><body><main><h1>Home</h1><!-- start_island_island1 --><button>1</button> <!--end_island_island1 --><!-- start_island_island2 --><p>Hello Ada</p> <!--end_island_island2 --></main><script type="module" nonce="nonce1">import { launch } from "script:runtime.js";
 import $I1 from "script:counter.client.js";
 
 import $I2 from "script:greeting.client.js";
@@ -15,7 +15,7 @@ launch([{fn: $I1, path: "script:counter.client.js", props: {"start":1}, islandId
 
 === GET /about
 200
-content-security-policy: script-src-elem 'nonce-NONCE'; script-src 'none'
+content-security-policy: script-src-elem 'nonce-nonce2'; script-src 'none'
 content-type: text/html
 x-fixture-middleware: app
 
@@ -23,11 +23,11 @@ x-fixture-middleware: app
 
 === GET /remote
 200
-content-security-policy: script-src-elem 'nonce-NONCE'; script-src 'none'
+content-security-policy: script-src-elem 'nonce-nonce3'; script-src 'none'
 content-type: text/html
 x-fixture-middleware: app
 
-<!DOCTYPE html><html lang="en"><head><title>Fixture</title></head><body><main><h1>Remote</h1><!-- start_island_island3 --><button>0</button> <!--end_island_island3 --></main><script type="module" nonce="NONCE">import { launch } from "script:runtime.js";
+<!DOCTYPE html><html lang="en"><head><title>Fixture</title></head><body><main><h1>Remote</h1><!-- start_island_island3 --><button>0</button> <!--end_island_island3 --></main><script type="module" nonce="nonce3">import { launch } from "script:runtime.js";
 import $I1 from "script:sum.client.js";
 
 const transferState = {};
@@ -36,7 +36,7 @@ launch([{fn: $I1, path: "script:sum.client.js", props: {}, islandId: "island3"}]
 
 === GET /missing
 404
-content-security-policy: script-src-elem 'nonce-NONCE'; script-src 'none'
+content-security-policy: script-src-elem 'nonce-nonce4'; script-src 'none'
 content-type: text/html
 x-fixture-middleware: app
 
