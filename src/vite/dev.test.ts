@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { createLogger, createServer, type ViteDevServer } from "vite";
+import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 
 import { remoteEndpoint } from "../platform/server/remote.ts";
@@ -155,6 +156,23 @@ describe("dev server", () => {
     });
     expect(response.status).toStrictEqual(200);
     expect(await response.json()).toStrictEqual(3);
+  });
+
+  test("answers a request a web Request can't represent with 400", async () => {
+    // `TRACE` reaches the app's middleware, but a web Request refuses it.
+    // `fetch()` can't send it either, so it goes over a socket.
+    const { hostname, port } = new URL(origin);
+    const status = await new Promise<string>((resolve, reject) => {
+      const socket = connect(Number(port), hostname, () => {
+        socket.write(`TRACE /about HTTP/1.1\r\nHost: ${hostname}\r\n\r\n`);
+      });
+      socket.once("data", (data) => {
+        resolve(data.toString().split("\r\n")[0]);
+        socket.destroy();
+      });
+      socket.once("error", reject);
+    });
+    expect(status).toStrictEqual("HTTP/1.1 400 Bad Request");
   });
 
   test("serves other pages and the 404 page", async () => {

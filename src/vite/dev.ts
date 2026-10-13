@@ -3,10 +3,10 @@
  * release candidate, stays in this module (spec #126).
  */
 import type { Connect, DevEnvironment, Plugin, RunnableDevEnvironment, ViteDevServer } from "vite";
+import { toRequest, writeResponse } from "@huuma/route/node";
 
 import { SERVER_ID } from "./entry.ts";
 import { ISLANDS_ID } from "./islands.ts";
-import { toRequest, writeResponse } from "./node-http.ts";
 import { REMOTE_ID } from "./remote.ts";
 import { ROUTES_ID } from "./routes.ts";
 
@@ -75,9 +75,19 @@ function appMiddleware(server: ViteDevServer, app: { stale: boolean }): Connect.
       if (!res.writableFinished) controller.abort();
     });
 
+    let request: Request;
+    try {
+      request = toRequest(req, controller.signal);
+    } catch {
+      // A request a web Request can't represent, e.g. the method `TRACE`.
+      res.writeHead(400);
+      res.end();
+      return;
+    }
+
     try {
       const handler = await loadApp(server, app);
-      let response = await handler.fetch(toRequest(req, controller.signal), {
+      let response = await handler.fetch(request, {
         remoteAddr: {
           transport: "tcp",
           hostname: req.socket.remoteAddress,
