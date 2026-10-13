@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { renderFixture } from "../../test/rendered.ts";
 import { remoteEndpoint } from "../platform/server/remote.ts";
 import { builtPath } from "./client-build.ts";
 import { hasHash } from "./build.ts";
@@ -152,6 +153,11 @@ describe("vite build", () => {
     expect(html).toContain(`import { launch } from "/${runtime.file}";`);
     expect(html).toContain(`from "/${counter.file}";`);
     expect(html).not.toContain("@id/");
+  });
+
+  test("renders the pages like the Deno pipeline", async () => {
+    // The snapshot is what the Deno pipeline rendered (test/deno/rendered.test.ts).
+    await expect(await renderFixture(app)).toMatchFileSnapshot("../../test/snapshots/basic.txt");
   });
 });
 
