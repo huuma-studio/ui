@@ -1,4 +1,4 @@
-import type { Plugin, UserConfig } from "vite";
+import type { Plugin, Rolldown, UserConfig } from "vite";
 import { join, parse, relative, resolve } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
@@ -22,6 +22,9 @@ const RESOLVED_NODE_ID = `\0${NODE_ID}`;
  * app, `server.js` starts it on Node.
  */
 export function buildPlugin(root: () => string): Plugin {
+  // The client build's files with a content hash in their name, which
+  // `server.js` caches for good.
+  const hashed = new Set<string>();
   return {
     name: "huuma:build",
     config(config) {
@@ -77,6 +80,7 @@ export function buildPlugin(root: () => string): Plugin {
           code: nodeModule({
             client: `${relative(server, client).replaceAll("\\", "/")}/`,
             base: appBase(config.base),
+            hashed: [...hashed].sort(),
           }),
           moduleType: "js",
         };
@@ -86,6 +90,7 @@ export function buildPlugin(root: () => string): Plugin {
       if (this.environment.config.consumer !== "client" || this.environment.mode !== "build") {
         return;
       }
+      hashed.clear();
       for (const island of await listIslands(root())) {
         this.emitFile({
           type: "chunk",
@@ -95,14 +100,81 @@ export function buildPlugin(root: () => string): Plugin {
         });
       }
     },
+    generateBundle(options, bundle) {
+      if (this.environment.config.consumer !== "client") return;
+      for (const file of Object.values(bundle)) {
+        if (hasHash(file, options)) hashed.add(file.fileName);
+      }
+    },
   };
+}
+
+/**
+ * Whether Rolldown named an output file with its content hash: by a
+ * pattern with `[hash]`, e.g. Vite's `assets/[name]-[hash].js`, that
+ * matches the file's name. Chunks are named by `entryFileNames` or
+ * `chunkFileNames` (which Rolldown uses for emitted chunks, like the
+ * islands), assets by `assetFileNames`. A file named otherwise, e.g. by a
+ * pattern like `[name].js` or by the plugin that emitted it, keeps its
+ * name when its content changes.
+ */
+export function hasHash(
+  file: Rolldown.OutputChunk | Rolldown.OutputAsset,
+  options: Pick<
+    Rolldown.NormalizedOutputOptions,
+    "entryFileNames" | "chunkFileNames" | "assetFileNames"
+  >,
+): boolean {
+  let patterns: string[];
+  if (file.type === "asset") {
+    patterns = [
+      typeof options.assetFileNames === "function"
+        ? options.assetFileNames({
+            type: "asset",
+            name: file.name,
+            names: file.names,
+            originalFileName: file.originalFileName ?? undefined,
+            originalFileNames: file.originalFileNames,
+            source: file.source,
+          })
+        : options.assetFileNames,
+    ];
+  } else {
+    patterns = [options.entryFileNames, options.chunkFileNames].map((names) =>
+      typeof names === "function" ? names(file) : names,
+    );
+  }
+  return patterns.some((pattern) => fileNamePattern(pattern)?.test(file.fileName));
+}
+
+const PLACEHOLDERS: Record<string, string> = {
+  hash: "[\\w-]+",
+  name: ".+",
+  ext: "[^/]+",
+  extname: "(?:\\.[^/]+)?",
+  format: "[^/]+",
+};
+
+// A regular expression for the file names a pattern with `[hash]` gives.
+function fileNamePattern(pattern: string): RegExp | undefined {
+  if (!/\[hash(?::\d+)?\]/.test(pattern)) return undefined;
+  const source = pattern
+    .split(/(\[\w+(?::\d+)?\])/)
+    .map((part) => {
+      const placeholder = /^\[(\w+)(?::\d+)?\]$/.exec(part)?.[1];
+      return (
+        (placeholder && PLACEHOLDERS[placeholder]) ?? part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      );
+    })
+    .join("");
+  return new RegExp(`^${source}$`);
 }
 
 /**
  * Generates the source of `virtual:huuma/node`. `client` is the client
  * build's directory relative to the server build's.
  */
-export function nodeModule(options: { client: string; base: string }): string {
+export function nodeModule(options: { client: string; base: string; hashed: string[] }): string {
   return [
     `import app from ${JSON.stringify(SERVER_ID)};`,
     'import { start } from "@huuma/ui/vite/node";',
@@ -110,6 +182,7 @@ export function nodeModule(options: { client: string; base: string }): string {
     "await start(app, {",
     `  client: new URL(${JSON.stringify(options.client)}, import.meta.url),`,
     `  base: ${JSON.stringify(options.base)},`,
+    `  hashed: ${JSON.stringify(options.hashed)},`,
     "});",
     "",
   ].join("\n");

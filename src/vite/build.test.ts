@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { remoteEndpoint } from "../platform/server/remote.ts";
 import { builtPath } from "./client-build.ts";
+import { hasHash } from "./build.ts";
 import { huuma } from "./mod.ts";
 
 const fixtures = fileURLToPath(new URL("../../test/fixtures", import.meta.url));
@@ -276,6 +277,73 @@ test.each(["./host.server.ts", "./host.server", "#host"])(
     }
   },
 );
+
+describe("a build with unhashed file names", () => {
+  let root: string;
+  let server: ChildProcess;
+  let origin: string;
+  let manifest: Manifest;
+  const nodeEnv = process.env.NODE_ENV;
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = "production";
+    root = await buildFixture(".tmp-build-unhashed-", {
+      environments: {
+        client: { build: { rolldownOptions: { output: { chunkFileNames: "[name].js" } } } },
+      },
+    });
+    manifest = JSON.parse(
+      await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
+    ) as Manifest;
+    ({ origin, server } = await startServer(root));
+  });
+  afterAll(async () => {
+    process.env.NODE_ENV = nodeEnv;
+    server?.kill();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("caches them briefly, and hashed files for good", async () => {
+    // An island, named by `chunkFileNames`.
+    const counter = manifest["app/counter.client.tsx"]!;
+    expect(counter.file).toStrictEqual("counter.client.js");
+    const island = await fetch(`${origin}/${counter.file}`);
+    expect(island.headers.get("cache-control")).toStrictEqual("public, max-age=3600");
+
+    // The runtime, named by Vite's `entryFileNames`.
+    const runtime = Object.values(manifest).find((chunk) => chunk.name === "runtime")!;
+    expect(runtime.file).toMatch(/^assets\/runtime-.+\.js$/);
+    const entry = await fetch(`${origin}/${runtime.file}`);
+    expect(entry.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
+  });
+});
+
+describe(hasHash.name, () => {
+  const options = {
+    entryFileNames: "assets/[name]-[hash].js",
+    chunkFileNames: "chunks/[name].js",
+    assetFileNames: (asset: { names: string[] }) =>
+      asset.names[0] === "logo.svg" ? "[name][extname]" : "assets/[name]-[hash:8][extname]",
+  };
+  const chunk = (fileName: string, isEntry: boolean) =>
+    ({ type: "chunk", fileName, isEntry, name: "x" }) as Parameters<typeof hasHash>[0];
+  const asset = (fileName: string, name: string) =>
+    ({ type: "asset", fileName, names: [name] }) as unknown as Parameters<typeof hasHash>[0];
+
+  test("by the pattern that named the file", () => {
+    expect(hasHash(chunk("assets/app-B2x_9-aZ.js", true), options)).toStrictEqual(true);
+    expect(hasHash(chunk("chunks/jsx.js", false), options)).toStrictEqual(false);
+    // An emitted chunk, an entry named by `chunkFileNames`.
+    expect(hasHash(chunk("chunks/counter.js", true), options)).toStrictEqual(false);
+    expect(hasHash(asset("assets/app-1a2b3c4d.css", "app.css"), options)).toStrictEqual(true);
+    expect(hasHash(asset("logo.svg", "logo.svg"), options)).toStrictEqual(false);
+  });
+
+  test("not for a file named otherwise, e.g. by its plugin", () => {
+    expect(hasHash(chunk("sw.js", true), options)).toStrictEqual(false);
+    expect(hasHash(asset(".vite/manifest.json", "manifest.json"), options)).toStrictEqual(false);
+  });
+});
 
 describe(builtPath.name, () => {
   test("starts with the base and encodes each segment", () => {

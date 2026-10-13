@@ -23,20 +23,15 @@ describe(clientFiles.name, () => {
     // From Vite's public dir, with its name as it is.
     await writeFile(join(client, "assets/logo.svg"), "<svg/>");
     await writeFile(join(client, "robots.txt"), "User-agent: *");
-    await writeFile(
-      join(client, ".vite/manifest.json"),
-      JSON.stringify({
-        "app.tsx": { file: "assets/app-3f2a.js", css: ["assets/app-9c1d.css"], isEntry: true },
-      }),
-    );
+    await writeFile(join(client, ".vite/manifest.json"), "{}");
     await writeFile(join(client, ".env"), "SECRET=1");
-    files = clientFiles({ client });
+    files = clientFiles({ client, hashed: ["assets/app-3f2a.js", "assets/app-9c1d.css"] });
   });
   afterAll(async () => {
     await rm(client, { recursive: true, force: true });
   });
 
-  test("serves the files the build wrote, cached for good", async () => {
+  test("serves files with hashed names, cached for good", async () => {
     const response = await get("/assets/app-3f2a.js");
     expect(response?.status).toStrictEqual(200);
     expect(response?.headers.get("content-type")).toStrictEqual("text/javascript");
