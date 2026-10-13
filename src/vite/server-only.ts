@@ -14,6 +14,9 @@ export const SERVER_ONLY: RegExp = /\.server\.[^/\\?]+(\?.*)?$/;
  * the app's convention.
  */
 export function serverOnlyPlugin(): Plugin {
+  // The build's importers by server-only module: Rolldown doesn't know a
+  // module's importers yet while loading it.
+  const importers = new Map<string, Set<string>>();
   return {
     name: "huuma:server-only",
     // Before any other plugin loads the module.
@@ -21,15 +24,27 @@ export function serverOnlyPlugin(): Plugin {
     applyToEnvironment(environment) {
       return environment.config.consumer === "client";
     },
+    resolveId: {
+      filter: { id: /\.server\./ },
+      async handler(source, importer, options) {
+        if (!importer || "moduleGraph" in this.environment) return;
+        const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
+        if (resolved && SERVER_ONLY.test(resolved.id)) {
+          const known = importers.get(resolved.id) ?? new Set();
+          importers.set(resolved.id, known.add(importer));
+        }
+        return resolved;
+      },
+    },
     load: {
       filter: { id: { include: SERVER_ONLY, exclude: /[\\/]node_modules[\\/]/ } },
       handler(id) {
         const root = this.environment.config.root;
         const file = id.replace(/\?.*$/, "");
-        const importers = importersOf(this, id).map((importer) => relative(root, importer));
+        const by = importersOf(this, id, importers).map((importer) => relative(root, importer));
         this.error(
           `"${relative(root, file)}" is server-only code and can't be imported in the browser` +
-            (importers.length ? ` (imported by ${importers.join(", ")}).` : ".") +
+            (by.length ? ` (imported by ${by.join(", ")}).` : ".") +
             " Import it from server code, e.g. a remote function (`*.remote.ts`).",
         );
       },
@@ -39,12 +54,19 @@ export function serverOnlyPlugin(): Plugin {
 
 type LoadContext = ThisParameterType<Extract<Plugin["load"], { handler: unknown }>["handler"]>;
 
-/** The modules that import `id`: from the dev server's module graph, or the build's. */
-function importersOf(context: LoadContext, id: string): string[] {
+/**
+ * The modules that import `id`: from the dev server's module graph, or
+ * the ones `resolveId` recorded in the build.
+ */
+function importersOf(
+  context: LoadContext,
+  id: string,
+  recorded: Map<string, Set<string>>,
+): string[] {
   const environment = context.environment;
   if ("moduleGraph" in environment) {
     const module = environment.moduleGraph.getModuleById(id);
     return [...(module?.importers ?? [])].map((importer) => importer.file ?? importer.id ?? "");
   }
-  return [...(context.getModuleInfo(id)?.importers ?? [])];
+  return [...(recorded.get(id) ?? context.getModuleInfo(id)?.importers ?? [])];
 }

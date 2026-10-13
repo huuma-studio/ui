@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { createBuilder } from "vite";
 import { type ChildProcess, spawn } from "node:child_process";
-import { cp, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -193,6 +193,30 @@ describe("node dist/server/server.js", () => {
     const response = await fetch(`${origin}/.vite/manifest.json`);
     expect(response.status).toStrictEqual(404);
   });
+});
+
+test("fails when an island imports server-only code", async () => {
+  const root = await mkdtemp(join(fixtures, ".tmp-build-server-only-"));
+  try {
+    await cp(join(fixtures, "basic"), root, { recursive: true });
+    await writeFile(
+      join(root, "app/leak.client.tsx"),
+      'import { host } from "./host.server.ts";\n' +
+        "export default function Leak() { return <p>{host()}</p>; }\n",
+    );
+    const builder = await createBuilder({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [huuma()],
+    });
+    await expect(builder.buildApp()).rejects.toThrow(
+      '"app/host.server.ts" is server-only code and can\'t be imported in the browser ' +
+        "(imported by app/leak.client.tsx).",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 describe(builtPath.name, () => {
