@@ -13,6 +13,11 @@ jobs:
           cache: true
       - run: vp check
       - run: vp test
+      # Again with upstream Vite instead of Vite+'s copy: apps don't need
+      # Vite+ (spec #126).
+      - run: vp test
+        env:
+          HUUMA_VITE: upstream
       - run: vp run jsr:dry-run
       # The native npm build (not published), which also enforces
       # isolatedDeclarations: `vp check` doesn't report those errors.

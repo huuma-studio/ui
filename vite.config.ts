@@ -8,6 +8,13 @@ export default defineConfig({
   },
   test: {
     include: ["src/**/*.test.{ts,tsx}", "test/*.test.ts"],
+    // The plugin tests run the Vite they import. That's Vite+'s copy
+    // (pnpm's override installs it as `vite`), or with `HUUMA_VITE=upstream`
+    // upstream Vite (`vite-upstream`, npm:vite@^8), like an app without Vite+.
+    alias:
+      process.env.HUUMA_VITE === "upstream"
+        ? [{ find: /^vite$/, replacement: "vite-upstream" }]
+        : [],
   },
   lint: {
     options: { typeAware: true, typeCheck: true },
