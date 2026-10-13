@@ -7,13 +7,11 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { createUIApp } from "../../src/platform/server/app.ts";
 import { jsx } from "../../src/jsx-runtime/mod.ts";
 import { list } from "../../src/platform/server/pack/list/mod.ts";
-
-const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
+import { writeDenoConfig } from "./config.ts";
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -41,20 +39,6 @@ async function inTempDir(fn: (dir: string) => Promise<void>) {
  * Resolves "@huuma/ui" to this repository, so the fixture app and the
  * bundled browser runtime use the code under test.
  */
-async function writeDenoConfig(dir: string) {
-  const config = JSON.parse(await readFile(join(repoRoot, "jsr.json"), "utf8"));
-  await writeFile(
-    join(dir, "deno.json"),
-    JSON.stringify({
-      imports: {
-        ...config.imports,
-        "@huuma/ui/jsx-runtime": join(repoRoot, "src/jsx-runtime/mod.ts"),
-        "@huuma/ui/server/pack": join(repoRoot, "src/platform/server/pack/mod.ts"),
-      },
-      compilerOptions: { jsx: "react-jsx", jsxImportSource: "@huuma/ui" },
-    }),
-  );
-}
 
 Deno.test({
   name: `${list.name}: bundles the app and registers the live reload route`,

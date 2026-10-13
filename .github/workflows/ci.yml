@@ -26,4 +26,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno test --allow-all --no-check --node-modules-dir=none test/deno/
+      # No minimum dependency age (24 hours by default): the tests take the
+      # newest versions jsr.json allows, which can be one of our own releases
+      # from today, like @huuma/route 0.3.1.
+      - run: deno test --allow-all --no-check --node-modules-dir=none --minimum-dependency-age=0 test/deno/
