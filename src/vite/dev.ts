@@ -16,11 +16,13 @@ const DISCOVERED = /(\/page\.tsx|\/layout\.tsx|\/middleware\.ts|\.client\.tsx|\.
 const ISLAND = /\.client\.tsx$/;
 const GENERATED = [ROUTES_ID, ISLANDS_ID, REMOTE_ID, SERVER_ID].map((id) => `\0${id}`);
 
-/** What `virtual:huuma/server` exports: `UIApp.deliver()`. */
-type Handle = (
-  request: Request,
-  connection: { remoteAddr: { transport: string; hostname?: string; port?: number } },
-) => Promise<Response>;
+/** What `virtual:huuma/server` exports: the app, with route's fetch handler. */
+interface App {
+  fetch(
+    request: Request,
+    connection: { remoteAddr: { transport: string; hostname?: string; port?: number } },
+  ): Promise<Response>;
+}
 
 /**
  * Serves the app from Vite's dev server, and rebuilds it when its server
@@ -74,8 +76,8 @@ function appMiddleware(server: ViteDevServer, app: { stale: boolean }): Connect.
     });
 
     try {
-      const handle = await loadApp(server, app);
-      let response = await handle(toRequest(req, controller.signal), {
+      const handler = await loadApp(server, app);
+      let response = await handler.fetch(toRequest(req, controller.signal), {
         remoteAddr: {
           transport: "tcp",
           hostname: req.socket.remoteAddress,
@@ -111,7 +113,7 @@ function appMiddleware(server: ViteDevServer, app: { stale: boolean }): Connect.
  * would mount the pages onto the old app instance, whose router rejects
  * routes it already has.
  */
-async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<Handle> {
+async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<App> {
   const ssr = server.environments.ssr;
   if (!isRunnable(ssr)) {
     throw new Error(
@@ -123,7 +125,7 @@ async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<
     app.stale = false;
     ssr.runner.clearCache();
   }
-  const entry = (await ssr.runner.import(SERVER_ID)) as { default: Handle };
+  const entry = (await ssr.runner.import(SERVER_ID)) as { default: App };
   return entry.default;
 }
 
