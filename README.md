@@ -153,7 +153,7 @@ Options of `huuma()`:
 
 - `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, plus Vite's `public/` directory.
 - `dist/server/app.js`: the app, as the default export. Its `fetch(request)` handles requests, so runtimes with their own server can serve it, e.g. `deno serve` or Bun.
-- `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: hashed assets are cached for good, other files for an hour.
+- `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: the files the build wrote, which have hashed names, are cached for good; other files, like those from `public/`, for an hour.
 
 ```sh
 HUUMA_ENV=PROD PORT=3000 node dist/server/server.js

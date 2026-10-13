@@ -18,9 +18,17 @@ describe(clientFiles.name, () => {
     await mkdir(join(client, ".vite"));
     await mkdir(join(client, "images"));
     await writeFile(join(client, "assets/app-3f2a.js"), "export {};");
+    await writeFile(join(client, "assets/app-9c1d.css"), "a{}");
     await writeFile(join(client, "assets/50%off a.css"), "a{}");
+    // From Vite's public dir, with its name as it is.
+    await writeFile(join(client, "assets/logo.svg"), "<svg/>");
     await writeFile(join(client, "robots.txt"), "User-agent: *");
-    await writeFile(join(client, ".vite/manifest.json"), "{}");
+    await writeFile(
+      join(client, ".vite/manifest.json"),
+      JSON.stringify({
+        "app.tsx": { file: "assets/app-3f2a.js", css: ["assets/app-9c1d.css"], isEntry: true },
+      }),
+    );
     await writeFile(join(client, ".env"), "SECRET=1");
     files = clientFiles({ client });
   });
@@ -28,7 +36,7 @@ describe(clientFiles.name, () => {
     await rm(client, { recursive: true, force: true });
   });
 
-  test("serves built assets, cached for good", async () => {
+  test("serves the files the build wrote, cached for good", async () => {
     const response = await get("/assets/app-3f2a.js");
     expect(response?.status).toStrictEqual(200);
     expect(response?.headers.get("content-type")).toStrictEqual("text/javascript");
@@ -36,12 +44,16 @@ describe(clientFiles.name, () => {
       "public, max-age=31536000, immutable",
     );
     expect(await response?.text()).toStrictEqual("export {};");
+    const css = await get("/assets/app-9c1d.css");
+    expect(css?.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
   });
 
   test("serves other files, e.g. from Vite's public dir, cached briefly", async () => {
-    const response = await get("/robots.txt");
-    expect(response?.status).toStrictEqual(200);
-    expect(response?.headers.get("cache-control")).toStrictEqual("public, max-age=3600");
+    for (const path of ["/robots.txt", "/assets/logo.svg"]) {
+      const response = await get(path);
+      expect(response?.status, path).toStrictEqual(200);
+      expect(response?.headers.get("cache-control"), path).toStrictEqual("public, max-age=3600");
+    }
   });
 
   test("decodes paths", async () => {

@@ -6,9 +6,10 @@
  */
 import { type FetchHandler, type NodeServer, serve } from "@huuma/route/node";
 import { mimeTypeByExtension } from "@huuma/route/utils/mime-types";
+import type { Manifest } from "vite";
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { extname, join, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
@@ -17,8 +18,6 @@ export interface StartOptions {
   client: string | URL;
   /** Vite's `base`, which every browser path starts with. Defaults to `"/"`. */
   base?: string;
-  /** The client build's `build.assetsDir`, whose files have hashed names. Defaults to `"assets"`. */
-  assetsDir?: string;
   /** Defaults to the `PORT` environment variable, else `8000`. */
   port?: number;
   /** Defaults to the `HOST` environment variable, else all interfaces. */
@@ -88,16 +87,18 @@ function port(value: string | undefined): number | undefined {
  * Responds with a file of the client build for a `GET` or `HEAD` request
  * below `base`, or `undefined` if there is none. Files and directories
  * starting with `.` (like Vite's `.vite/manifest.json`) aren't served.
- * Files in `assetsDir` have hashed names and are cached for good.
+ * The files the build wrote, listed in that manifest, have hashed names
+ * and are cached for good; others, like copies of Vite's public dir, for
+ * an hour.
  */
 export function clientFiles(
-  options: Pick<StartOptions, "client" | "base" | "assetsDir">,
+  options: Pick<StartOptions, "client" | "base">,
 ): (request: Request) => Promise<Response | undefined> {
   const directory = resolve(
     typeof options.client === "string" ? options.client : fileURLToPath(options.client),
   );
   const base = options.base ?? "/";
-  const assets = `${(options.assetsDir ?? "assets").replace(/^\/|\/$/g, "")}/`;
+  let built: Promise<Set<string>> | undefined;
 
   return async (request) => {
     if (request.method !== "GET" && request.method !== "HEAD") return;
@@ -134,7 +135,7 @@ export function clientFiles(
       "Content-Type":
         mimeTypeByExtension(extname(file).slice(1))?.type ?? "application/octet-stream",
       "Content-Length": String(size),
-      "Cache-Control": path.startsWith(assets)
+      "Cache-Control": (await (built ??= builtFiles(directory))).has(path)
         ? "public, max-age=31536000, immutable"
         : "public, max-age=3600",
     });
@@ -143,4 +144,27 @@ export function clientFiles(
       headers,
     });
   };
+}
+
+/**
+ * The files the client build wrote, from its manifest, e.g.
+ * `assets/counter.client-3f2a.js`: chunks, their CSS and their assets.
+ * Vite's public dir isn't listed, even if it has an `assets` directory.
+ */
+async function builtFiles(directory: string): Promise<Set<string>> {
+  let manifest: Manifest;
+  try {
+    manifest = JSON.parse(
+      await readFile(join(directory, ".vite/manifest.json"), "utf8"),
+    ) as Manifest;
+  } catch {
+    // Without a manifest, nothing is cached for good.
+    return new Set();
+  }
+  const files = new Set<string>();
+  for (const chunk of Object.values(manifest)) {
+    files.add(chunk.file);
+    for (const file of [...(chunk.css ?? []), ...(chunk.assets ?? [])]) files.add(file);
+  }
+  return files;
 }

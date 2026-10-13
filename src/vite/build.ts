@@ -77,7 +77,6 @@ export function buildPlugin(root: () => string): Plugin {
           code: nodeModule({
             client: `${relative(server, client).replaceAll("\\", "/")}/`,
             base: appBase(config.base),
-            assetsDir: config.environments.client.build.assetsDir,
           }),
           moduleType: "js",
         };
@@ -103,7 +102,7 @@ export function buildPlugin(root: () => string): Plugin {
  * Generates the source of `virtual:huuma/node`. `client` is the client
  * build's directory relative to the server build's.
  */
-export function nodeModule(options: { client: string; base: string; assetsDir: string }): string {
+export function nodeModule(options: { client: string; base: string }): string {
   return [
     `import app from ${JSON.stringify(SERVER_ID)};`,
     'import { start } from "@huuma/ui/vite/node";',
@@ -111,7 +110,6 @@ export function nodeModule(options: { client: string; base: string; assetsDir: s
     "await start(app, {",
     `  client: new URL(${JSON.stringify(options.client)}, import.meta.url),`,
     `  base: ${JSON.stringify(options.base)},`,
-    `  assetsDir: ${JSON.stringify(options.assetsDir)},`,
     "});",
     "",
   ].join("\n");
