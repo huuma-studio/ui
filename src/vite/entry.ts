@@ -2,11 +2,12 @@ import type { Plugin } from "vite";
 import { access } from "node:fs/promises";
 
 import { ISLANDS_ID, runtimePath } from "./islands.ts";
+import { REMOTE_ID } from "./remote.ts";
 import { ROUTES_ID } from "./routes.ts";
 
 /**
  * The app's server entry: the app from the `server` option with the
- * plugin's routes, islands and runtime mounted. Its default export handles
+ * plugin's routes, islands, remote functions and runtime mounted. Its default export handles
  * requests (`UIApp.deliver()`). The dev server loads it per request; the
  * production build will use it as its ssr entry.
  */
@@ -57,9 +58,10 @@ export function serverModule(server: string, runtime: string): string {
     `import app from ${JSON.stringify(server.replaceAll("\\", "/"))};`,
     `import pages from ${JSON.stringify(ROUTES_ID)};`,
     `import islands from ${JSON.stringify(ISLANDS_ID)};`,
+    `import remote from ${JSON.stringify(REMOTE_ID)};`,
     'import { mount } from "@huuma/ui/vite/runtime";',
     "",
-    `export default mount(app, { pages, islands, runtime: ${JSON.stringify(runtime)} }).deliver();`,
+    `export default mount(app, { pages, islands, remote, runtime: ${JSON.stringify(runtime)} }).deliver();`,
     "",
   ].join("\n");
 }

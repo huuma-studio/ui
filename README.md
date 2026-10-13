@@ -129,14 +129,23 @@ export default function Root({ children, scripts, islands, transferState }: Root
 }
 ```
 
-Pages, layouts and middlewares go in `app/` as before, islands anywhere in the project as `*.client.tsx`. Start the dev server with `vite` (or `vp dev` with Vite+).
+Pages, layouts and middlewares go in `app/` as before, islands anywhere in the project as `*.client.tsx`, remote functions as `*.remote.ts`. Start the dev server with `vite` (or `vp dev` with Vite+).
+
+What the dev server does:
+
+- **Remote functions:** browser code gets a stub that calls the server, never the module's code or imports. Every value export of a remote module is a remote function: `export async function`, `export const f = async () => {}` (also with several declarators or a type annotation), `export { f }`, `export { f } from "./f.ts"` and the default export. `export *`, destructuring, classes and enums fail with an error at the export.
+- **Server-only code:** importing a `*.server.*` module (any extension) from browser code fails, naming the importer. Use it from server code, e.g. a remote function.
+- **Environment variables:** `PUBLIC_*` variables (from the environment and `.env` files) are available as `import.meta.env.PUBLIC_*`, in the browser and on the server. Other variables stay on the server. `Deno.env.get()` still works for one more minor version, with a deprecation warning. Declare your variables' types yourself, e.g. with `/// <reference types="vite/client" />` and an `ImportMetaEnv` interface.
+- **Decorators:** standard decorators, e.g. `@inject()` from `@huuma/inject`, are compiled with Babel in the modules that use them. Install it in your app: `pnpm add -D @babel/core @babel/plugin-proposal-decorators`.
+- **Updates:** an edited island updates in place, without reloading the page, and keeps its state: signals keep their values, and typed input and focus stay. If you add, remove or reorder hooks (`$signal`, `$computed`, …) or change their arguments, the island starts over with its initial state. Components defined in the island's module next to it start over too. Other edits, e.g. to pages, layouts or an island's helper modules, reload the page.
 
 Options of `huuma()`:
 
 - `routes`: the directory with `page.tsx`, `layout.tsx` and `middleware.ts` files. Defaults to `"app"`.
 - `server`: the module that exports the app. Defaults to `"server.ts"`.
+- `decorators`: `"auto"` (default) compiles standard decorators unless Oxc's legacy decorators (`oxc.decorator.legacy`) are on; `true` or `false` to force it.
 
-Not there yet: remote functions, `PUBLIC_*` environment variables and decorators in the dev server, island updates that keep their state, and the production build (`vite build`).
+Not there yet: the production build (`vite build`).
 
 ## Remote server functions
 

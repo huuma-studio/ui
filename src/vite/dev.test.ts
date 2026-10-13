@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test"
 import { createLogger, createServer, type ViteDevServer } from "vite";
 import { fileURLToPath } from "node:url";
 
+import { remoteEndpoint } from "../platform/server/remote.ts";
 import { huuma } from "./mod.ts";
 import { injectViteClient, withViteClient } from "./dev.ts";
 
@@ -106,11 +107,13 @@ describe("dev server", () => {
 
     expect(runtime).toStrictEqual("/@id/__x00__virtual:huuma/runtime");
     expect(island).toStrictEqual("/app/counter.client.tsx");
-    expect(html).toContain('{fn: $I1, props: {"start":1}, islandId: "');
+    expect(html).toContain(
+      '{fn: $I1, path: "/app/counter.client.tsx", props: {"start":1}, islandId: "',
+    );
 
     const runtimeModule = await fetch(origin + runtime);
     expect(runtimeModule.headers.get("content-type")).toContain("javascript");
-    expect(await runtimeModule.text()).toContain("export { launch }");
+    expect(await runtimeModule.text()).toContain("export { hotReplaceIsland, launch }");
 
     const islandModule = await fetch(origin + island);
     expect(islandModule.headers.get("content-type")).toContain("javascript");
@@ -129,6 +132,29 @@ describe("dev server", () => {
         errors.some((error) => error.includes("/stream-error: Error: stream failed")),
       ).toStrictEqual(true);
     });
+  });
+
+  test("exposes PUBLIC_* env vars from .env, and only those", async () => {
+    expect(server.config.env.PUBLIC_GREETING).toStrictEqual("Hello");
+    expect(server.config.env.SECRET_TOKEN).toStrictEqual(undefined);
+
+    // Rendered on the server…
+    const html = await (await fetch(`${origin}/`)).text();
+    expect(html).toMatch(/<p>Hello.*Ada<\/p>/);
+    // …and readable in the browser, without the other variables.
+    const island = await (await fetch(`${origin}/components/greeting.client.tsx`)).text();
+    expect(island).toContain('"PUBLIC_GREETING": "Hello"');
+    expect(island).not.toContain("SECRET_TOKEN");
+  });
+
+  test("serves remote functions", async () => {
+    const response = await fetch(origin + (await remoteEndpoint("app/sum.remote.ts")), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ remoteFunction: "add", args: [1, 2] }),
+    });
+    expect(response.status).toStrictEqual(200);
+    expect(await response.json()).toStrictEqual(3);
   });
 
   test("serves other pages and the 404 page", async () => {

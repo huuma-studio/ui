@@ -1,10 +1,10 @@
 import * as esbuild from "esbuild";
 import { denoPlugin } from "@deno/esbuild-plugin";
 import { parse, relative } from "node:path";
-import { EOL } from "node:os";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
-import { generateHash, toCanonicalPath } from "./utils.ts";
+import { remoteEndpoint, remoteStub } from "../../remote.ts";
+import { generateHash } from "./utils.ts";
 
 export type EntryPoint = {
   path: string;
@@ -142,44 +142,11 @@ const remoteFunctionsPlugin: esbuild.Plugin = {
         hasDefaultExport = true;
       }
 
-      const fileName = parse(args.path).name;
-      const fileHash = await generateHash(toCanonicalPath(relative(process.cwd(), args.path)));
-      const endpoint = `/_huuma/remote/${fileHash}/${fileName}`;
-
-      const buildFetch = (remoteFunction: string) =>
-        `fetch(${JSON.stringify(endpoint)}, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            args,
-            remoteFunction: ${JSON.stringify(remoteFunction)},
-          }),
-        }).then(async (res) => {
-          if (res.status === 204) return undefined;
-          if (!res.ok) {
-            const body = await res.json().catch(() => null);
-            const err = new Error(
-              body?.message ??
-                ("Remote function " + ${JSON.stringify(
-                  remoteFunction,
-                )} + " failed (HTTP " + res.status + ")"),
-            );
-            err.name = body?.name ?? "RemoteFunctionError";
-            throw err;
-          }
-          return res.json();
-        })`;
-
-      // Create exports for each function found
-      const namedExports = [...exportedFunctions].map(
-        (fn) => `export async function ${fn}(...args){ return ${buildFetch(fn)}; }`,
-      );
-
-      const defaultExport = hasDefaultExport
-        ? [`export default async function(...args){ return ${buildFetch("default")}; }`]
-        : [];
-
-      const exportContents = [...namedExports, ...defaultExport].join(EOL);
+      const endpoint = await remoteEndpoint(relative(process.cwd(), args.path));
+      const exportContents = remoteStub(endpoint, [
+        ...exportedFunctions,
+        ...(hasDefaultExport ? ["default"] : []),
+      ]);
 
       return {
         contents: exportContents,

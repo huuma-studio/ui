@@ -11,9 +11,13 @@ import type { Plugin } from "vite";
 import { resolve } from "node:path";
 
 import { devPlugin } from "./dev.ts";
+import { type DecoratorsOption, decoratorsPlugin } from "./decorators.ts";
 import { entryPlugin } from "./entry.ts";
+import { denoEnvPlugin } from "./env.ts";
 import { islandsPlugin } from "./islands.ts";
+import { remotePlugin } from "./remote.ts";
 import { routesPlugin } from "./routes.ts";
+import { serverOnlyPlugin } from "./server-only.ts";
 
 /** Options of the Huuma UI plugin. */
 export interface HuumaOptions {
@@ -27,6 +31,14 @@ export interface HuumaOptions {
    * relative to Vite's `root`. Defaults to `"server.ts"`.
    */
   server?: string;
+  /**
+   * Lowers standard decorators (e.g. `@inject()` from `@huuma/inject`)
+   * with Babel, in the modules that use them. Needs `@babel/core` and
+   * `@babel/plugin-proposal-decorators` in the app's dependencies.
+   * `"auto"` (the default) does it unless Oxc's legacy decorators are
+   * turned on; `false` leaves decorators alone.
+   */
+  decorators?: DecoratorsOption;
 }
 
 /**
@@ -51,6 +63,13 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     }),
     routesPlugin(() => resolve(app.root, options.routes ?? "app")),
     islandsPlugin(() => app),
+    remotePlugin(() => app.root),
+    serverOnlyPlugin(),
+    denoEnvPlugin(),
+    decoratorsPlugin(
+      () => options.decorators ?? "auto",
+      () => app.root,
+    ),
     entryPlugin(() => ({ server: serverEntry(), base: app.base })),
     devPlugin(serverEntry),
   ];
@@ -67,6 +86,9 @@ function configPlugin(onResolved: (config: { root: string; base: string }) => vo
       return {
         // Huuma renders its own HTML: no index.html, no SPA fallback.
         appType: "custom",
+        // `import.meta.env.PUBLIC_*` in browser code, as with the Deno
+        // pipeline. An array, so Vite adds it to an app's own prefixes.
+        envPrefix: ["PUBLIC_"],
         oxc: {
           jsx: { runtime: "automatic", importSource: "@huuma/ui" },
         },

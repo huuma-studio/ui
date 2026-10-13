@@ -23,6 +23,9 @@ function Counter(): JSX.Element {
 const manifest: Manifest = {
   runtime: "@id/__x00__virtual:huuma/runtime",
   islands: { "app/counter.client.tsx": { default: Counter } },
+  remote: {
+    "/_huuma/remote/1a2b3c4d/sum.remote": { add: async (a: number, b: number) => a + b },
+  },
   pages: {
     "/": {
       page: { default: () => <Counter /> },
@@ -58,6 +61,20 @@ describe(mount.name, () => {
 
     expect(html).toContain('import { launch } from "/@id/__x00__virtual:huuma/runtime";');
     expect(html).toContain('import $I1 from "/app/counter.client.tsx";');
+  });
+
+  test("serves the remote functions at their endpoints", async () => {
+    const handle = mount(createUIApp(Root), manifest).deliver();
+    const response = await handle(
+      new Request("http://localhost/_huuma/remote/1a2b3c4d/sum.remote", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ remoteFunction: "add", args: [1, 2] }),
+      }),
+      connection,
+    );
+    expect(response.status).toStrictEqual(200);
+    expect(await response.json()).toStrictEqual(3);
   });
 
   test("rejects a server entry without an app", () => {

@@ -12,9 +12,16 @@ interface AstNode {
   generator?: boolean;
   name?: string;
   exportKind?: string;
+  importKind?: string;
   declaration?: AstNode | null;
   id?: AstNode | null;
   init?: AstNode | null;
+  expression?: AstNode | null;
+  body?: AstNode[] | AstNode | null;
+  declarations?: AstNode[];
+  specifiers?: AstNode[];
+  local?: AstNode;
+  source?: AstNode | null;
 }
 
 interface RuleContext {
@@ -45,6 +52,54 @@ export interface LintPlugin {
 }
 
 const TYPE_DECLARATIONS = new Set(["TSTypeAliasDeclaration", "TSInterfaceDeclaration"]);
+const FUNCTIONS = new Set(["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"]);
+// Wrappers that don't change the value: `(async () => {}) satisfies Handler`.
+const TRANSPARENT = new Set([
+  "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TSNonNullExpression",
+  "ParenthesizedExpression",
+]);
+
+function isAsyncFunction(node: AstNode | null | undefined): boolean {
+  while (node && TRANSPARENT.has(node.type)) node = node.expression;
+  return !!node && FUNCTIONS.has(node.type) && !!node.async && !node.generator;
+}
+
+/** What a top-level name of a remote module is bound to. */
+type Binding = "async-function" | "import" | "type" | "other";
+
+function bindings(program: AstNode): Map<string, Binding> {
+  const names = new Map<string, Binding>();
+  const statements = Array.isArray(program.body) ? program.body : [];
+  for (const statement of statements) {
+    // `export const f = …` binds `f` as well.
+    const node = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
+    if (!node) continue;
+    if (node.type === "ImportDeclaration") {
+      for (const specifier of node.specifiers ?? []) {
+        const type = node.importKind === "type" || specifier.importKind === "type";
+        if (specifier.local?.name) names.set(specifier.local.name, type ? "type" : "import");
+      }
+    } else if (TYPE_DECLARATIONS.has(node.type)) {
+      // A type can share its name with a value, which is what's exported.
+      if (node.id?.name && !names.has(node.id.name)) names.set(node.id.name, "type");
+    } else if (node.type === "FunctionDeclaration" || node.type === "ClassDeclaration") {
+      if (node.id?.name)
+        names.set(node.id.name, isAsyncFunction(node) ? "async-function" : "other");
+    } else if (node.type === "VariableDeclaration") {
+      for (const declarator of node.declarations ?? []) {
+        if (declarator.id?.type === "Identifier" && declarator.id.name) {
+          names.set(
+            declarator.id.name,
+            isAsyncFunction(declarator.init) ? "async-function" : "other",
+          );
+        }
+      }
+    }
+  }
+  return names;
+}
 
 const asyncRemoteFunctions: Rule = {
   meta: {
@@ -52,28 +107,52 @@ const asyncRemoteFunctions: Rule = {
     docs: { description: "Remote function exports must be async functions." },
   },
   create(context) {
+    const message = "Huuma remote function MUST be an async function export";
     return {
-      ExportNamedDeclaration(node) {
+      // Every value export becomes a browser stub that calls the server
+      // (`remoteExports()` in the Vite plugin), so each must be an async
+      // function. What another module exports can't be checked here.
+      Program(program) {
         if (!context.filename.endsWith(".remote.ts")) return;
-        // Types never reach the client.
-        if (node.exportKind === "type") return;
-        const declaration = node.declaration;
-        if (declaration && TYPE_DECLARATIONS.has(declaration.type)) return;
-        // Only the form the client stub generator reliably finds. Its regex
-        // misses `export const` with a type annotation, several declarators
-        // or a multi-line parameter list, and `export { f }`, so those would
-        // lose their browser stub. Relax with the Oxc-based generator.
-        if (
-          declaration?.type === "FunctionDeclaration" &&
-          declaration.async &&
-          !declaration.generator
-        ) {
-          return;
+        const names = bindings(program);
+        const statements = Array.isArray(program.body) ? program.body : [];
+        for (const node of statements) {
+          if (node.type === "ExportAllDeclaration") {
+            if (node.exportKind === "type") continue;
+            context.report({
+              node,
+              message:
+                "Huuma remote modules can't use `export *`: export each remote function by name",
+            });
+          }
+          if (node.type !== "ExportNamedDeclaration") continue;
+          // Types never reach the client.
+          if (node.exportKind === "type") continue;
+          const declaration = node.declaration;
+          if (declaration) {
+            // An overload signature: the implementation is checked.
+            if (declaration.type === "TSDeclareFunction") continue;
+            if (TYPE_DECLARATIONS.has(declaration.type)) continue;
+            const valid =
+              declaration.type === "VariableDeclaration"
+                ? (declaration.declarations ?? []).every(
+                    (declarator) =>
+                      declarator.id?.type === "Identifier" && isAsyncFunction(declarator.init),
+                  )
+                : isAsyncFunction(declaration);
+            if (!valid) context.report({ node, message });
+            continue;
+          }
+          // A re-export (`export { f } from "./f.ts"`) names another module's.
+          if (node.source) continue;
+          for (const specifier of node.specifiers ?? []) {
+            if (specifier.exportKind === "type") continue;
+            const binding = names.get(specifier.local?.name ?? "");
+            if (binding === "other" || binding === undefined) {
+              context.report({ node: specifier, message });
+            }
+          }
         }
-        context.report({
-          node,
-          message: "Huuma remote function MUST be an async function export",
-        });
       },
     };
   },

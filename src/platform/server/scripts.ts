@@ -63,7 +63,11 @@ export function Launch({ body, nonce, islands, transferState }: LaunchProps): JS
 
     // Remove children.
     const { children: _, ...props } = (<JSX.ComponentNode<JSX.Component>>island.node).props;
-    _islands.push(`{fn: $I${i}, props: ${inlineJSON(props)}, islandId: "${island.id}"}`);
+    // The path lets the browser runtime find the islands of a module that
+    // changed (hot updates in Vite's dev server).
+    _islands.push(
+      `{fn: $I${i}, path: ${inlineJSON(`/${island.path}`)}, props: ${inlineJSON(props)}, islandId: "${island.id}"}`,
+    );
 
     i++;
   }

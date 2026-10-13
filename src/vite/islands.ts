@@ -1,4 +1,5 @@
-import type { Plugin } from "vite";
+import type { ESTree, Plugin } from "vite";
+import { createHash } from "node:crypto";
 import { join, relative } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
@@ -12,7 +13,8 @@ import { listIslands } from "../platform/server/discover.ts";
 export const ISLANDS_ID = "virtual:huuma/islands";
 
 /**
- * The browser runtime (`launch`) as a client module. Served by Vite like
+ * The browser runtime (`launch`, and `hotReplaceIsland` for hot updates)
+ * as a client module. Served by Vite like
  * the islands, so both import `@huuma/ui` through the same (optimized)
  * modules and share one signal runtime.
  */
@@ -26,10 +28,27 @@ export interface IslandsOptions {
   base: string;
 }
 
-/** Serves `virtual:huuma/islands` (server) and `virtual:huuma/runtime` (client). */
+// An island module, e.g. `app/counter.client.tsx`, with an optional query.
+const ISLAND_MODULE = /\.client\.tsx(\?.*)?$/;
+
+/**
+ * Serves `virtual:huuma/islands` (server) and `virtual:huuma/runtime`
+ * (client). In the dev server, island modules accept their own hot
+ * updates: the runtime replaces the component in the page's islands,
+ * which start over with their initial state.
+ */
 export function islandsPlugin(options: () => IslandsOptions): Plugin {
   return {
     name: "huuma:islands",
+    transform: {
+      filter: { id: { include: ISLAND_MODULE, exclude: /[\\/]node_modules[\\/]/ } },
+      handler(code) {
+        if (this.environment.config.consumer !== "client" || this.environment.mode !== "dev") {
+          return;
+        }
+        return { code: code + hotUpdate(hookSignature(this.parse(code), code)), map: null };
+      },
+    },
     resolveId: {
       filter: { id: new RegExp(`^(${ISLANDS_ID}|${RUNTIME_ID})$`) },
       handler(id) {
@@ -42,7 +61,10 @@ export function islandsPlugin(options: () => IslandsOptions): Plugin {
         const consumer = this.environment.config.consumer;
         if (id === RESOLVED_RUNTIME_ID) {
           if (consumer !== "client") this.error(`${RUNTIME_ID} is the browser runtime.`);
-          return { code: 'export { launch } from "@huuma/ui/browser";\n', moduleType: "js" };
+          return {
+            code: 'export { hotReplaceIsland, launch } from "@huuma/ui/browser";\n',
+            moduleType: "js",
+          };
         }
         if (consumer !== "server") {
           this.error(`${ISLANDS_ID} imports every island for the server and is server only.`);
@@ -56,6 +78,136 @@ export function islandsPlugin(options: () => IslandsOptions): Plugin {
       },
     },
   };
+}
+
+/**
+ * Appended to island modules in the dev server. The runtime finds the
+ * page's islands by the module's browser path; if it can't replace the
+ * component (or the new module has none), Vite reloads the page.
+ *
+ * Each version stores its hook signature in `import.meta.hot.data`, which
+ * all versions of a module share. When the previous version's accept
+ * callback runs, the new version has already stored its signature: if
+ * they're equal, the islands keep their state.
+ */
+function hotUpdate(signature: string): string {
+  return `
+import { hotReplaceIsland as $huuma$hotReplaceIsland } from "${RUNTIME_ID}";
+if (import.meta.hot) {
+  const hooks = ${JSON.stringify(signature)};
+  import.meta.hot.data.hooks = hooks;
+  import.meta.hot.accept((next) => {
+    const path = new URL(import.meta.url).pathname;
+    const keepState = import.meta.hot.data.hooks === hooks;
+    if (
+      typeof next?.default !== "function" ||
+      !$huuma$hotReplaceIsland(path, next.default, { keepState })
+    ) {
+      import.meta.hot.invalidate("Huuma can't replace this island in place.");
+    }
+  });
+}
+`;
+}
+
+/**
+ * A hash of the hook calls in a module (calls of `$`-prefixed functions,
+ * like `$signal(0)`, also through a namespace, like `hooks.$signal(0)`,
+ * or imported under another name), in order, with their arguments and
+ * the import their function comes from. An island keeps its state over a
+ * hot update only if it's unchanged: hooks keep their values by call
+ * order, and a `$computed` or `$effect` keeps the function it was created
+ * with.
+ */
+export function hookSignature(program: ESTree.Program, code: string): string {
+  const imports = importBindings(program);
+  const calls: string[] = [];
+  const pending: unknown[] = [program];
+  while (pending.length) {
+    // A stack, children pushed in reverse: calls come out in source order.
+    const node = pending.pop();
+    if (Array.isArray(node)) {
+      pending.push(...[...node].reverse());
+    } else if (node && typeof node === "object") {
+      const { type, callee, start, end } = node as {
+        type?: string;
+        callee?: ESTree.Expression;
+        start: number;
+        end: number;
+      };
+      if (type === "CallExpression" && callee && isHook(callee, imports)) {
+        // With the import, so `import { $computed as hook }` instead of
+        // `import { $signal as hook }` changes it, but `hook(0)` doesn't.
+        const binding = imports.get(calleeName(callee) ?? "");
+        calls.push(JSON.stringify([code.slice(start, end), binding ?? null]));
+      }
+      const children = Object.values(node).filter((child) => child && typeof child === "object");
+      pending.push(...children.reverse());
+    }
+  }
+  return createHash("sha256").update(calls.join("\n")).digest("hex").slice(0, 16);
+}
+
+interface ImportBinding {
+  source: string;
+  /** The imported name, `"*"` for a namespace import. */
+  imported: string;
+}
+
+// The module's imports by their local names, e.g. `signal` for
+// `import { $signal as signal } from "@huuma/ui/hooks/signal"`.
+function importBindings(program: ESTree.Program): Map<string, ImportBinding> {
+  const bindings = new Map<string, ImportBinding>();
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") continue;
+    const source = statement.source.value;
+    for (const specifier of statement.specifiers) {
+      const imported =
+        specifier.type === "ImportSpecifier"
+          ? moduleExportName(specifier.imported)
+          : specifier.type === "ImportNamespaceSpecifier"
+            ? "*"
+            : "default";
+      bindings.set(specifier.local.name, { source, imported });
+    }
+  }
+  return bindings;
+}
+
+// `$signal(…)`, `signal(…)` if imported as `$signal`, `hooks.$signal(…)`
+// and `hooks["$signal"](…)`.
+function isHook(callee: ESTree.Expression, imports: Map<string, ImportBinding>): boolean {
+  if (callee.type === "Identifier") {
+    const imported = imports.get(callee.name)?.imported;
+    return isHookName(callee.name) || (imported !== undefined && isHookName(imported));
+  }
+  if (callee.type === "MemberExpression") {
+    const { property } = callee;
+    if (!callee.computed) return property.type === "Identifier" && isHookName(property.name);
+    return (
+      property.type === "Literal" &&
+      typeof property.value === "string" &&
+      isHookName(property.value)
+    );
+  }
+  return false;
+}
+
+// The name a hook call's function is bound to: `hook` for `hook(…)`,
+// `hooks` for `hooks.$signal(…)`.
+function calleeName(callee: ESTree.Expression): string | undefined {
+  if (callee.type === "Identifier") return callee.name;
+  if (callee.type === "MemberExpression" && callee.object.type === "Identifier") {
+    return callee.object.name;
+  }
+}
+
+function isHookName(name: string): boolean {
+  return name.startsWith("$");
+}
+
+function moduleExportName(name: ESTree.ModuleExportName): string {
+  return name.type === "Identifier" ? name.name : String(name.value);
 }
 
 /** Generates the source of `virtual:huuma/islands`. */
