@@ -92,7 +92,7 @@ export default function Counter() {
 
 > The Vite setup is in development on the `next` branch and isn't released yet. It replaces the Deno build pipeline (`@huuma/ui/server/pack/list`) with a plugin for [Vite 8](https://vite.dev).
 
-With Vite, the dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page.
+With Vite, the dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page. `vite build` builds the app for production (see below).
 
 It needs Node.js 24 or later: the router of [`@huuma/route`](https://jsr.io/@huuma/route) uses the global `URLPattern`.
 
@@ -147,7 +147,23 @@ Options of `huuma()`:
 - `server`: the module that exports the app. Defaults to `"server.ts"`.
 - `decorators`: `"auto"` (default) compiles standard decorators unless Oxc's legacy decorators (`oxc.decorator.legacy`) are on; `true` or `false` to force it. Huuma supports standard decorators. If your app uses legacy (TypeScript `experimentalDecorators`) decorators, set `oxc: { decorator: { legacy: true } }` in your Vite config: `experimentalDecorators` in `tsconfig.json` alone isn't picked up, and Babel would compile them as standard decorators.
 
-Not there yet: the production build (`vite build`).
+### Production build
+
+`vite build` (or `vp build`) builds the browser scripts and the app:
+
+- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, plus Vite's `public/` directory.
+- `dist/server/app.js`: the app, as the default export. Its `fetch(request)` handles requests, so runtimes with their own server can serve it, e.g. `deno serve` or Bun.
+- `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: hashed assets are cached for good, other files for an hour.
+
+```sh
+HUUMA_ENV=PROD PORT=3000 node dist/server/server.js
+```
+
+`PORT` (default `8000`) and `HOST` (default: all interfaces) set where it listens; `HUUMA_ENV=PROD` is `@huuma/route`'s production mode. Set `build.outDir` to build somewhere else than `dist/`.
+
+With a [`base`](https://vite.dev/config/shared-options.html#base) other than `/`, e.g. `/shop/`, the app lives below it, in the dev server and the built app alike: `/shop/about` renders the page `app/about/page.tsx`, `/` redirects to `/shop/`, and other paths outside of it are not found. Remote functions are called below the base too. Links in your pages need the base themselves, e.g. from `import.meta.env.BASE_URL`.
+
+Not there yet: CSS imported by islands or pages. Add stylesheets with `app.addStylesheet()` as before.
 
 ## Remote server functions
 
