@@ -1,6 +1,12 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vite-plus/test";
-import { createServer, parseSync, type InlineConfig, type ViteDevServer } from "vite";
-import { mkdtemp, rm } from "node:fs/promises";
+import {
+  createServer,
+  isRunnableDevEnvironment,
+  parseSync,
+  type InlineConfig,
+  type ViteDevServer,
+} from "vite";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -96,6 +102,48 @@ describe("decorators turned off", () => {
     const result = await server.environments.client.transformRequest("/app/services.ts");
     expect(result?.code).not.toContain("Symbol.metadata");
   });
+});
+
+test("lowers field decorators before Oxc drops them", async () => {
+  // Below ES2022, `useDefineForClassFields` is off: Oxc moves fields into
+  // the constructor and drops their decorators. Inside the repository,
+  // where Babel can be resolved.
+  const root = await mkdtemp(join(fixture, "../.tmp-field-decorators-"));
+  await writeFile(
+    join(root, "tsconfig.json"),
+    JSON.stringify({ compilerOptions: { target: "ES2021" } }),
+  );
+  await writeFile(
+    join(root, "a.ts"),
+    [
+      "export const decorated: string[] = [];",
+      "function times10(_: undefined, context: ClassFieldDecoratorContext) {",
+      "  decorated.push(String(context.name));",
+      "  return (value: number) => value * 10;",
+      "}",
+      "export class A { @times10 x = 1; }",
+      "",
+    ].join("\n"),
+  );
+  const server = await createServer({
+    root,
+    configFile: false,
+    logLevel: "silent",
+    server: { middlewareMode: true, ws: false },
+    plugins: [huuma()],
+  });
+  try {
+    if (!isRunnableDevEnvironment(server.environments.ssr)) throw new Error("Not runnable");
+    const module = await server.environments.ssr.runner.import<{
+      decorated: string[];
+      A: new () => { x: number };
+    }>("/a.ts");
+    expect(new module.A().x).toStrictEqual(10);
+    expect(module.decorated).toStrictEqual(["x"]);
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("names the packages to install when Babel is missing", async () => {

@@ -5,8 +5,14 @@ import { pathToFileURL } from "node:url";
 
 /**
  * Which modules get their decorators lowered: `"auto"` (the default) for
- * every module with standard decorators, unless the app turned on Oxc's
- * legacy (`experimentalDecorators`) ones; `true` always; `false` never.
+ * every module with decorators, unless the app turned on Oxc's legacy
+ * decorators with `oxc.decorator.legacy`; `true` always; `false` never.
+ *
+ * Huuma supports standard decorators. Rolldown also turns on legacy ones
+ * for files whose tsconfig.json sets `experimentalDecorators`, but which
+ * tsconfig.json applies is decided per file, and Vite doesn't expose it.
+ * `"auto"` only reads the Vite config, so those apps set
+ * `oxc.decorator.legacy` too (or `decorators: false`).
  */
 export type DecoratorsOption = "auto" | boolean;
 
@@ -42,7 +48,9 @@ export function decoratorsPlugin(option: () => DecoratorsOption, root: () => str
   let babel: Promise<{ babel: Babel; decorators: unknown }> | undefined;
   return {
     name: "huuma:decorators",
-    // On the TypeScript source, before Oxc compiles it.
+    // On the TypeScript source, before Oxc compiles it: with
+    // `useDefineForClassFields` off (the default below ES2022), Oxc moves
+    // fields into the constructor and drops their decorators.
     enforce: "pre",
     configResolved(config) {
       const decorators = option();

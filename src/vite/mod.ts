@@ -36,7 +36,9 @@ export interface HuumaOptions {
    * with Babel, in the modules that use them. Needs `@babel/core` and
    * `@babel/plugin-proposal-decorators` in the app's dependencies.
    * `"auto"` (the default) does it unless Oxc's legacy decorators are
-   * turned on; `false` leaves decorators alone.
+   * turned on with `oxc.decorator.legacy`; `false` leaves decorators
+   * alone. `experimentalDecorators` in a tsconfig.json alone doesn't turn
+   * it off: set `oxc.decorator.legacy: true` for legacy decorators.
    */
   decorators?: DecoratorsOption;
 }
