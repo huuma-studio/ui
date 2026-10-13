@@ -44,6 +44,8 @@ Deno.test("the Deno pipeline renders the basic fixture like the Vite build", asy
         "--no-check",
         "--node-modules-dir=none",
         "--config=deno.json",
+        // Like the CI job that runs this test.
+        "--minimum-dependency-age=0",
         "--env-file=.env",
         join(repoRoot, "test/deno/render-fixture.ts"),
       ],
