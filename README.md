@@ -94,6 +94,8 @@ export default function Counter() {
 
 With Vite, the dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page.
 
+It needs Node.js 24 or later: the router of [`@huuma/route`](https://jsr.io/@huuma/route) uses the global `URLPattern`.
+
 ```ts
 // vite.config.ts
 import { defineConfig } from "vite";
