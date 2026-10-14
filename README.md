@@ -6,7 +6,7 @@
 
 Huuma UI is a web framework for interactive websites: components render on the server, and islands come alive in the browser. It builds with [Vite 8](https://vite.dev) and runs on Node.js; Deno works too. Features remote server functions, reactive state management, and automatic code splitting.
 
-> Huuma UI 0.3, the Vite version described here, isn't released yet: it's in development on the `next` branch. 0.2 is the Deno version, which [Huuma CLI](https://jsr.io/@huuma/cli) creates projects for.
+> Huuma UI 0.3, the Vite version described here, isn't released yet: it's in development on the `next` branch. 0.2 is the Deno version, which [Huuma CLI](https://jsr.io/@huuma/cli) creates projects for; see [Migrating from the Deno setup](#migrating-from-the-deno-setup).
 
 ## Features
 
@@ -212,6 +212,23 @@ deno run -A dist/server/server.js
 ```
 
 With a `package.json`, Deno takes the packages from `node_modules`, like Node.js.
+
+## Migrating from the Deno Setup
+
+Huuma UI 0.3 replaces the Deno build pipeline (`prepare()` and `list()` from `@huuma/ui/server/pack/list`, `pack()` from `@huuma/ui/server/pack`, the `.huuma/` directory and `--bundle`) with the Vite plugin. For a project created by Huuma CLI:
+
+1. **Dependencies:** create a `package.json` with the scripts from the [Quick Start](#quick-start) and install `@huuma/ui` (and `@huuma/route`, if you import it) and `vite` as in [Installation](#installation). The `jsr:` imports in `deno.json` become dependencies in `package.json`.
+2. **Vite config:** create `vite.config.ts` with the `huuma()` plugin. Huuma CLI's `app/root.tsx` creates and exports the app, so point the plugin at it, `huuma({ server: "app/root.tsx" })`, or move `createUIApp()` to `server.ts`. If you used the import map's aliases, move them to Vite's `resolve.alias`, e.g. `"@/": fileURLToPath(new URL("./src/", import.meta.url))` with `fileURLToPath` from `node:url`, and to `paths` in `tsconfig.json`. Drop `@manifest/`.
+3. **Entry points:** delete `dev.ts` and `app.ts`, and the `.huuma/` directory. The dev server replaces `dev.ts` with `prepare()`; `vite build` and `server.js` replace `--bundle`, `pack()` and `Deno.serve()`.
+4. **Static files:** move `static/` to `public/` and remove `loadStaticFiles(app)` from `app/root.tsx`. Vite serves `public/` in the dev server, and `server.js` serves it in production.
+5. **JSX:** precompiled JSX (`"jsx": "precompile"`) isn't supported; Vite compiles JSX with the automatic runtime. Put `"jsx": "react-jsx"` and `"jsxImportSource": "@huuma/ui"` in `tsconfig.json` for your editor.
+6. **Environment variables:** replace `Deno.env.get("PUBLIC_…")` with `import.meta.env.PUBLIC_…`. `Deno.env.get()` keeps working for one minor version, with a warning. Server code can also read `process.env`.
+7. **Linting:** with `deno.json` gone, run `@huuma/ui/lint` with Oxlint or ESLint (see [Linting](#linting)), or keep a `deno.json` with just its `lint` settings.
+8. **Run it:** `pnpm dev` instead of `deno task dev`; `pnpm build` and `pnpm start` instead of `deno task bundle` and `deno task start`. Live reload is now Vite's hot updates. To stay on Deno, see [Deno](#deno).
+
+Pages, layouts, middlewares, islands, remote functions, `createUIApp()`, `Scripts` and `Launch` don't change. Remote modules may now also use `export const f = async () => {}` and the other forms in [Dev Server](#dev-server).
+
+With Tailwind, `@huuma/theme`'s `tailwindcss()` ran in `dev.ts`. Until Huuma supports CSS imports, compile the stylesheet into `public/` with the Tailwind CLI, e.g. `npx @tailwindcss/cli -i src/styles.css -o public/styles.css --watch` next to the dev server.
 
 ## Remote server functions
 
