@@ -1,17 +1,18 @@
 name: Publish pre-release to JSR
-run-name: pre-release ${{ github.ref_name }} by ${{ github.actor }}
-# Publishes a pre-release of @huuma/ui from `next` when its tag is pushed:
-#
-#   git tag v0.3.0-beta.1 origin/next && git push origin v0.3.0-beta.1
-#
-# The tag must name jsr.json's version, which must be a pre-release
-# (e.g. 0.3.0-beta.1), and point at a commit on `next`. JSR doesn't mark
+# Publishes jsr.json's version from `next` on every push (every merged PR)
+# when it's a pre-release (e.g. 0.3.0-beta.1). JSR skips a version that's
+# already published, so only a version bump publishes. JSR doesn't mark
 # pre-releases as latest, so apps only get one when they ask for it.
 # Releases publish from `main` (publish.yml).
 on:
   push:
-    tags:
-      - "v*-*"
+    branches:
+      - next
+
+# One publish at a time, if two PRs are merged in quick succession.
+concurrency:
+  group: prerelease
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -23,32 +24,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The history of `next`, to check the tag is on it.
-          fetch-depth: 0
 
-      - name: Check the tag, the version and the branch
+      # A regular version (e.g. 0.2.11) publishes from `main` only.
+      - name: Check the version is a pre-release
+        id: version
         run: |
           version=$(jq -r .version jsr.json)
-          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::The tag $GITHUB_REF_NAME doesn't name jsr.json's version $version (expected v$version)."
-            exit 1
-          fi
           case "$version" in
-            *-*) ;;
-            *) echo "::error::$version isn't a pre-release (e.g. 0.3.0-beta.1)."; exit 1 ;;
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT"; echo "Publishing @huuma/ui@$version, unless it's already on JSR" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT"; echo "::notice::$version isn't a pre-release; nothing to publish from next." ;;
           esac
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/next; then
-            echo "::error::$GITHUB_REF_NAME isn't on next."
-            exit 1
-          fi
-          echo "Publishing @huuma/ui@$version"
 
       # Installs the dependencies: JSR publish resolves npm packages
       # through node_modules.
       - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        if: steps.version.outputs.prerelease == 'true'
         with:
           node-version: "24"
 
       - name: Publish package
+        if: steps.version.outputs.prerelease == 'true'
         run: vp exec jsr publish
