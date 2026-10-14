@@ -26,9 +26,14 @@ function deno(cwd: string, args: string[], env: Record<string, string> = {}): De
   });
 }
 
+// How long a server may take to start, so a stuck one fails the test
+// instead of holding CI until the job times out.
+const STARTUP_TIMEOUT = 30_000;
+
 /**
- * Starts a server and resolves once it prints `ready`. Its output is read to
- * the end, so its pipes never fill up; `stop()` ends it.
+ * Starts a server and resolves once it prints `ready`, within
+ * `STARTUP_TIMEOUT`. Its output is read to the end, so its pipes never fill
+ * up; `stop()` ends it.
  */
 async function start(command: Deno.Command, ready: string): Promise<{ stop(): Promise<void> }> {
   const process = command.spawn();
@@ -50,10 +55,16 @@ async function start(command: Deno.Command, ready: string): Promise<{ stop(): Pr
     }
     await Promise.all([process.status, reading]);
   };
-  const exited = process.status.then(() => false);
-  if (!(await Promise.race([isReady.then(() => true), exited]))) {
+  const exited = process.status.then(() => "exited" as const);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<"timed out">((resolve) => {
+    timer = setTimeout(() => resolve("timed out"), STARTUP_TIMEOUT);
+  });
+  const result = await Promise.race([isReady.then(() => "ready" as const), exited, timedOut]);
+  clearTimeout(timer);
+  if (result !== "ready") {
     await stop();
-    assert.fail(`"${ready}" never appeared:\n${output}`);
+    assert.fail(`"${ready}" never appeared (${result}):\n${output}`);
   }
   return { stop };
 }
