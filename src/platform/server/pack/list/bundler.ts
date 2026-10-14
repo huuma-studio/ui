@@ -4,7 +4,7 @@ import { parse, relative } from "node:path";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 import { remoteEndpoint, remoteStub } from "../../remote.ts";
-import { generateHash } from "./utils.ts";
+import { generateHash } from "../../utils.ts";
 
 export type EntryPoint = {
   path: string;

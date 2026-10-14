@@ -11,7 +11,7 @@ import { huumaDirectory, type List, pack, scriptsDirectory, shimsDirectory } fro
 import type { EntryPoints } from "./bundler.ts";
 import { Bundler } from "./bundler.ts";
 import { createList, listIslands, listPages, listRemoteFunctions } from "./list.ts";
-import { generateHash, isNodeError } from "./utils.ts";
+import { generateHash, isNodeError } from "../../utils.ts";
 
 export interface PrepareOptions {
   routesPath?: string;

@@ -8,7 +8,7 @@ import process from "node:process";
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 
 import { remoteEndpoint } from "../remote.ts";
-import { generateHash } from "./list/utils.ts";
+import { generateHash } from "../utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 

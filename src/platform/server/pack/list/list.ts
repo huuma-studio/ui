@@ -3,7 +3,7 @@ import { EOL } from "node:os";
 import { readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
 import type { List } from "../mod.ts";
-import { isNodeError } from "./utils.ts";
+import { isNodeError } from "../../utils.ts";
 import type { FileImport, Page, Routes } from "../../discover.ts";
 
 export type { FileImport } from "../../discover.ts";
