@@ -4,7 +4,9 @@
 
 > ⚠️ **Developer Preview** - Huuma UI is currently in active development and should be considered experimental software. This release contains known bugs, incomplete features, and APIs that will change without notice. Documentation may be outdated or incorrect. Performance has not been optimized and memory leaks may occur. **Do not use in production environments.** We encourage experimentation and feedback, but please expect breaking changes, data loss, and unstable behavior. Use at your own risk.
 
-Huuma UI An easy to use web framework for Deno that lets you build interactive websites with components that work on both server and client. Features remote server functions, reactive state management, and automatic code splitting for optimal performance.
+Huuma UI is a web framework for interactive websites: components render on the server, and islands come alive in the browser. It builds with [Vite 8](https://vite.dev) and runs on Node.js; Deno works too. Features remote server functions, reactive state management, and automatic code splitting.
+
+> Huuma UI 0.3, the Vite version described here, isn't released yet: it's in development on the `next` branch. 0.2 is the Deno version, which [Huuma CLI](https://jsr.io/@huuma/cli) creates projects for.
 
 ## Features
 
@@ -15,86 +17,42 @@ Huuma UI An easy to use web framework for Deno that lets you build interactive w
 - **Signal-Based Reactivity**: Fine-grained reactivity system for efficient updates
 - **Internationalization (i18n)**: Built-in support for multilingual applications
 - **TypeScript First**: Fully typed API for improved developer experience
-- **Live Module Reloading**: Fast development cycle with live reloading
+- **Hot Updates**: Edited islands update in place and keep their state, with Vite's dev server
+
+## Installation
+
+Huuma UI is published on [JSR](https://jsr.io/@huuma/ui). It needs Node.js 24 or later (the router of [`@huuma/route`](https://jsr.io/@huuma/route) uses the global `URLPattern`) and Vite 8.
+
+With pnpm 10.9+ (recommended) or Yarn 4.9+, which install JSR packages natively:
+
+```sh
+pnpm add jsr:@huuma/ui
+pnpm add -D vite@^8
+```
+
+With npm or Bun, through JSR's npm compatibility layer (`jsr add` also writes an `.npmrc` for it):
+
+```sh
+npx jsr add @huuma/ui
+npm install -D vite@^8
+```
+
+pnpm is recommended: npm and Yarn can install a package twice through the compatibility layer. Add `@huuma/route` the same way if your app imports it, e.g. for middlewares. For Deno, see [Deno](#deno).
 
 ## Quick Start
 
-### 1. Create a New Project with Huuma CLI
+`package.json`:
 
-```bash
-# Install Huuma CLI if you haven't already
-deno install -A -f -g -r -n huuma jsr:@huuma/cli
-
-# Create a new project
-huuma project
-
-# Enter your project name when prompted
-# Select "website" as the project type
-```
-
-This will create a project with the following structure:
-
-```
-your-project-name/
-├── assets/            # Static assets
-├── app/             # Page components
-│   ├── page.tsx       # Main page component
-│   └── root.tsx       # Root layout component
-├── src/               # Application source code
-├── app.ts             # Production entry point
-├── dev.ts             # Development entry point
-└── deno.json          # Deno configuration
-```
-
-### 2. Run Your Project
-
-```bash
-cd your-project-name
-
-# Start the development server
-deno task dev
-```
-
-The default page.tsx will look something like:
-
-```tsx
-// app/page.tsx
-export default function HomePage() {
-  return (
-    <>
-      <main>
-        <h2>Hello Huuma</h2>
-      </main>
-    </>
-  );
+```json
+{
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node dist/server/server.js"
+  }
 }
 ```
-
-### 3. Add Interactivity with Islands
-
-```tsx
-// app/counter.client.tsx (the .client.tsx suffix marks this as an island component)
-import { $signal } from "@huuma/ui/hooks/signal";
-
-export default function Counter() {
-  const count = $signal(0);
-
-  return (
-    <div>
-      <p>Count: {count.get()}</p>
-      <button on-click={() => count.set(count.get() + 1)}>Increment</button>
-    </div>
-  );
-}
-```
-
-## Vite (preview)
-
-> The Vite setup is in development on the `next` branch and isn't released yet. It replaces the Deno build pipeline (`@huuma/ui/server/pack/list`) with a plugin for [Vite 8](https://vite.dev).
-
-With Vite, the dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page. `vite build` builds the app for production (see below).
-
-It needs Node.js 24 or later: the router of [`@huuma/route`](https://jsr.io/@huuma/route) uses the global `URLPattern`.
 
 ```ts
 // vite.config.ts
@@ -131,9 +89,58 @@ export default function Root({ children, scripts, islands, transferState }: Root
 }
 ```
 
-Pages, layouts and middlewares go in `app/` as before, islands anywhere in the project as `*.client.tsx`, remote functions as `*.remote.ts`. Start the dev server with `vite` (or `vp dev` with Vite+).
+```tsx
+// app/page.tsx: the page at /
+import Counter from "./counter.client.tsx";
 
-What the dev server does:
+export default function HomePage() {
+  return (
+    <main>
+      <h2>Hello Huuma</h2>
+      <Counter />
+    </main>
+  );
+}
+```
+
+```tsx
+// app/counter.client.tsx: an island (the .client.tsx suffix), interactive in the browser
+import { $signal } from "@huuma/ui/hooks/signal";
+
+export default function Counter() {
+  const count = $signal(0);
+  return <button on-click={() => count.set(count.get() + 1)}>Count: {count}</button>;
+}
+```
+
+Start the dev server with `pnpm dev` (or `vp dev` with [Vite+](https://viteplus.dev)) and open the URL it prints. For type checking and your editor, set `"jsx": "react-jsx"` and `"jsxImportSource": "@huuma/ui"` in `tsconfig.json`; Vite compiles JSX for Huuma either way.
+
+## Project Structure
+
+```
+my-app/
+├── app/                    # Pages, layouts and middlewares
+│   ├── root.tsx            # The HTML document
+│   ├── layout.tsx          # A layout around the pages below it
+│   ├── middleware.ts       # Middlewares for the pages below it
+│   ├── page.tsx            # The page at /
+│   ├── about/page.tsx      # The page at /about
+│   ├── !404/page.tsx       # The page for paths that aren't found
+│   └── counter.client.tsx  # An island
+├── src/                    # Application code
+│   ├── user.remote.ts      # Remote server functions
+│   └── db.server.ts        # Server-only code
+├── public/                 # Static files, served as they are
+├── server.ts               # The app
+├── vite.config.ts
+└── package.json
+```
+
+Pages, layouts and middlewares go in `app/`, islands anywhere in the project as `*.client.tsx`, remote functions as `*.remote.ts`, server-only modules as `*.server.*`.
+
+## Dev Server
+
+The dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page.
 
 - **Remote functions:** browser code gets a stub that calls the server, never the module's code or imports. Every value export of a remote module is a remote function: `export async function`, `export const f = async () => {}` (also with several declarators or a type annotation), `export { f }`, `export { f } from "./f.ts"` and the default export. `export *`, destructuring, classes and enums fail with an error at the export.
 - **Server-only code:** importing a `*.server.*` module (any extension) from browser code fails, naming the importer. Use it from server code, e.g. a remote function.
@@ -147,7 +154,7 @@ Options of `huuma()`:
 - `server`: the module that exports the app. Defaults to `"server.ts"`.
 - `decorators`: `"auto"` (default) compiles standard decorators unless Oxc's legacy decorators (`oxc.decorator.legacy`) are on; `true` or `false` to force it. Huuma supports standard decorators. If your app uses legacy (TypeScript `experimentalDecorators`) decorators, set `oxc: { decorator: { legacy: true } }` in your Vite config: `experimentalDecorators` in `tsconfig.json` alone isn't picked up, and Babel would compile them as standard decorators.
 
-### Production build
+## Production Build
 
 `vite build` (or `vp build`) builds the browser scripts and the app:
 
@@ -163,7 +170,48 @@ HUUMA_ENV=PROD PORT=3000 node dist/server/server.js
 
 With a [`base`](https://vite.dev/config/shared-options.html#base) other than `/`, e.g. `/shop/`, the app lives below it, in the dev server and with `server.js` alike: `/shop/about` renders the page `app/about/page.tsx`, `/` redirects to `/shop/`, and other paths outside of it are not found. Remote functions are called below the base too. Links in your pages need the base themselves, e.g. from `import.meta.env.BASE_URL`. With a URL as the base, e.g. `https://cdn.example/shop/` for a CDN, built pages load their scripts from that URL, while the app lives below its path, `/shop/`, and remote functions are called there.
 
-Not there yet: CSS imported by islands or pages. Add stylesheets with `app.addStylesheet()` as before.
+Not there yet: CSS imported by islands or pages. Put stylesheets in `public/` and link them in `root.tsx`, or add them with `app.addStylesheet()`.
+
+## Linting
+
+`@huuma/ui/lint` checks remote functions, hooks and islands: remote modules export async functions only, async components don't call hooks (`$signal`, …), and islands aren't async. It works with Oxlint, ESLint and `deno lint`.
+
+For Oxlint, in `.oxlintrc.json`:
+
+```json
+{
+  "jsPlugins": ["@huuma/ui/lint"],
+  "rules": {
+    "huuma/async-remote-functions": "error",
+    "huuma/no-async-hook-calling": "error",
+    "huuma/no-async-client-jsx": "error"
+  }
+}
+```
+
+For ESLint, in `eslint.config.js`, with typescript-eslint's parser for TypeScript files:
+
+```js
+import tseslint from "typescript-eslint";
+import huuma from "@huuma/ui/lint";
+
+export default [
+  { files: ["**/*.ts", "**/*.tsx"], languageOptions: { parser: tseslint.parser } },
+  huuma.configs.recommended,
+];
+```
+
+## Deno
+
+Deno runs Vite and the built app too. Deno support is best effort: CI checks it, but Node.js is the supported runtime. Keep the `package.json` from the [Quick Start](#quick-start), install the dependencies (e.g. with pnpm), and run Vite and `server.js` with Deno:
+
+```sh
+deno run -A npm:vite          # dev server
+deno run -A npm:vite build    # production build
+deno run -A dist/server/server.js
+```
+
+With a `package.json`, Deno takes the packages from `node_modules`, like Node.js.
 
 ## Remote server functions
 
@@ -433,53 +481,9 @@ function NavigationLink({ href, children }) {
 }
 ```
 
-## Project Structure
-
-A typical Huuma UI project structure:
-
-```
-my-app/
-├── assets/           # Static assets
-├── app/            # Page components
-│   ├── layout.tsx    # Layout components
-│   ├── page.tsx      # Page components
-│   └── counter.client.tsx  # Island components (with .client.tsx suffix)
-├── src/              # Application code
-│   ├── user.remote.ts    # Remote server functions for user operations
-│   └── blog.remote.ts    # Remote server functions for blog operations
-├── app.ts            # Main application entry
-└── deno.json         # Deno configuration
-```
-
-## Development Workflow
-
-Once you've created your project with Huuma CLI, you can use the following commands:
-
-1. **Development Mode** - Start the development server with hot reloading
-
-```bash
-deno task dev
-```
-
-2. **Production Bundle** - Bundle your application for production
-
-```bash
-deno task bundle
-```
-
-3. **Production Start** - Start the production server
-
-```bash
-deno task start
-```
-
 ## Browser Support
 
-Huuma UI targets modern browsers with good ES module support:
-
-- Chrome/Edge 79+
-- Firefox 67+
-- Safari/iOS Safari 11.1+
+The production build targets Vite's default, [Baseline Widely Available](https://vite.dev/config/build-options.html#build-target) browsers: Chrome/Edge 111+, Firefox 114+ and Safari 16.4+.
 
 ## License
 
