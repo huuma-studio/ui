@@ -284,13 +284,13 @@ export default function CreateUserForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form on-submit={handleSubmit}>
       <div>
-        <label htmlFor="name">Name:</label>
+        <label for="name">Name:</label>
         <input type="text" id="name" name="name" required />
       </div>
       <div>
-        <label htmlFor="email">Email:</label>
+        <label for="email">Email:</label>
         <input type="email" id="email" name="email" required />
       </div>
       <button type="submit" disabled={pending.get()}>
@@ -468,7 +468,7 @@ const app = createUIApp(({ children, scripts, islands, transferState }) => {
 // app/blog/layout.tsx
 export default function BlogLayout({ children }) {
   return (
-    <div className="blog-layout">
+    <div class="blog-layout">
       <aside>Blog Sidebar</aside>
       <section>{children}</section>
     </div>
@@ -491,7 +491,7 @@ function NavigationLink({ href, children }) {
   const isActive = currentUrl.pathname.startsWith(href);
 
   return (
-    <a href={href} className={isActive ? "active" : ""}>
+    <a href={href} class={isActive ? "active" : ""}>
       {children}
     </a>
   );
