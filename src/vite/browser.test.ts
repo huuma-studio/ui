@@ -80,6 +80,9 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
       // Same hooks, new markup: the island keeps its count.
       await writeFile(counter, code.replace(">{count}</button>", ">Count: {count}</button>"));
       await button(page, "Count: 2");
+      // And it still counts, from where it was.
+      await page.click("button");
+      await button(page, "Count: 3");
       // Vite's watcher reports a file once per short window, so an edit
       // right after the last one's update would go unnoticed (plain Vite too).
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -91,6 +94,8 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
           .replace(">{count}</button>", ">Count: {count}</button>"),
       );
       await button(page, "Count: 11");
+      await page.click("button");
+      await button(page, "Count: 12");
 
       expect(await page.evaluate(() => "loaded" in window)).toStrictEqual(true);
       expect(errors).toStrictEqual([]);
