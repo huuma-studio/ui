@@ -12,6 +12,8 @@ jobs:
           node-version: "24"
           cache: true
       - run: vp check
+      # For the browser tests, which fail in CI without it.
+      - run: vp exec playwright-core install --with-deps chromium
       - run: vp test
       # Again with upstream Vite instead of Vite+'s copy: apps don't need
       # Vite+ (spec #126).
