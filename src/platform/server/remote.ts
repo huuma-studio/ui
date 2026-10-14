@@ -3,9 +3,8 @@ import { posix } from "node:path";
 import { generateHash, toCanonicalPath } from "./utils.ts";
 
 // Remote functions: the endpoint a `*.remote.ts` module is served at, and
-// the browser module that calls it. Shared by the Deno build pipeline
-// (`pack/`) and the Vite plugin (`src/vite`); not an entry point in
-// `jsr.json`'s exports map.
+// the browser module that calls it. Used by the Vite plugin (`src/vite`);
+// not an entry point in `jsr.json`'s exports map.
 
 /**
  * The endpoint of a remote module, e.g.

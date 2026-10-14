@@ -1,7 +1,7 @@
-// Renders the basic fixture for comparing builds: the Vite build and the
-// Deno pipeline must render the same pages (spec #126), and the Vite build
-// keeps rendering them once the Deno pipeline is gone. Both tests match
-// `test/snapshots/basic.txt`.
+// Renders the basic fixture for comparing builds: the Vite build renders
+// the pages the removed Deno pipeline rendered (spec #126), recorded in
+// `test/snapshots/basic.txt`, on Node (src/vite/build.test.ts) and on Deno
+// (test/deno/vite.test.ts).
 
 /** A fetch handler, such as a built app. */
 export type Handler = {
@@ -56,9 +56,8 @@ export async function renderFixture(app: Handler): Promise<string> {
  *   match.
  * - Island ids become `island1`, `island2`, … in the order they appear.
  * - Script paths become `script:<name>.js`, with the name of the island's
- *   module or `runtime`: without the Deno pipeline's hash directory and hash
- *   prefix (`/_huuma/0d2d03b4/be9d3798-counter.client.js`) and Vite's hash
- *   suffix (`/assets/counter.client-Bb4Qoi4p.js`).
+ *   module or `runtime`, without Vite's hash
+ *   (`/assets/counter.client-Bb4Qoi4p.js`).
  */
 export function comparable(text: string): string {
   const nonces = new Map<string, string>();
@@ -78,7 +77,6 @@ export function comparable(text: string): string {
   });
 
   return text.replaceAll(/"\/[^"\s]*\/([^"/\s]+)\.js"/g, (_, file: string) => {
-    const name = file.replace(/^[0-9a-f]{8}-/, "").replace(/-[\w-]{8}$/, "");
-    return `"script:${name === "huuma_ui_launch" ? "runtime" : name}.js"`;
+    return `"script:${file.replace(/-[\w-]{8}$/, "")}.js"`;
   });
 }

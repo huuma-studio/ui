@@ -3,19 +3,15 @@ import { describe, expect, test } from "vite-plus/test";
 import { comparable } from "./rendered.ts";
 
 describe(comparable.name, () => {
-  test("names scripts the same in both builds", () => {
-    const deno = comparable(
-      'import { launch } from "/_huuma/0d2d03b4/huuma_ui_launch.js";\n' +
-        'import $I1 from "/_huuma/0d2d03b4/be9d3798-counter.client.js";',
-    );
-    const vite = comparable(
-      'import { launch } from "/assets/runtime-68o9yzIp.js";\n' +
-        'import $I1 from "/assets/counter.client-Bb4_Qo-p.js";',
-    );
-    expect(deno).toStrictEqual(
+  test("names scripts by their module, without Vite's hash", () => {
+    expect(
+      comparable(
+        'import { launch } from "/assets/runtime-68o9yzIp.js";\n' +
+          'import $I1 from "/shop/assets/counter.client-Bb4_Qo-p.js";',
+      ),
+    ).toStrictEqual(
       'import { launch } from "script:runtime.js";\nimport $I1 from "script:counter.client.js";',
     );
-    expect(vite).toStrictEqual(deno);
   });
 
   test("numbers island ids in order", () => {

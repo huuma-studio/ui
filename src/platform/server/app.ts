@@ -401,8 +401,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
         _scripts.body.runtime = script;
         continue;
       }
-      // By path: island file names repeat across directories when nothing
-      // (such as the Deno pipeline's hash prefix) makes them unique.
+      // By path: island file names repeat across directories.
       if (
         this.#islands.length &&
         script.isIsland &&

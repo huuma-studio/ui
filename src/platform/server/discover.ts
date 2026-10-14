@@ -2,8 +2,8 @@ import { dirname, join } from "node:path";
 import { readdir } from "node:fs/promises";
 
 // File-system discovery of pages, layouts, middlewares, islands and remote
-// functions. Shared by the Deno build pipeline (`pack/list`) and the Vite
-// plugin (`src/vite`); not an entry point in `jsr.json`'s exports map.
+// functions, for the Vite plugin (`src/vite`); not an entry point in
+// `jsr.json`'s exports map.
 
 export interface FileImport {
   name: string;

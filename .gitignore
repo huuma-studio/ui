@@ -7,7 +7,6 @@ old/*
 .zed
 example/*
 .agents/
-.huuma/
 node_modules/
 dist/
 test/fixtures/.tmp-*/

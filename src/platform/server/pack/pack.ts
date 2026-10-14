@@ -1,14 +1,8 @@
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
 import { array, object, string, unknown } from "@huuma/validate";
-import { info } from "@huuma/route/utils/logger";
-import { join, parse } from "node:path";
-import { readFile } from "node:fs/promises";
-import process from "node:process";
 
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 
-import { remoteEndpoint } from "../remote.ts";
-import { generateHash } from "../utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 
@@ -51,64 +45,6 @@ export function packPages<T extends UIAppContext>(pages: List["pages"], app: UIA
   return app;
 }
 
-export async function packIslands<T extends UIAppContext>(
-  islands: List["islands"],
-  scripts: List["scripts"],
-  scriptsDirectory: string,
-  app: UIApp<T>,
-): Promise<UIApp<T>> {
-  if (islands) {
-    for (const [islandPath, island] of Object.entries(islands)) {
-      const islandHash = await generateHash(islandPath);
-      const script = scripts.find(
-        (s) => parse(s[1]).name === `${islandHash}-${parse(islandPath).name}`,
-      );
-      if (script) {
-        app.addIsland(island.default, {
-          path: join("_huuma", script[0], script[1]),
-          contents: await readScript(join(scriptsDirectory, script[1])),
-          imports: script[2].imports,
-        });
-      } else {
-        info(
-          "PACK",
-          `Frontend script for island "${islandPath}" not found. Island was not added to Huuma UI`,
-        );
-      }
-    }
-  }
-  return app;
-}
-
-export async function packScripts<T extends UIAppContext>(
-  scripts: List["scripts"],
-  scriptsDirectory: string,
-  app: UIApp<T>,
-): Promise<UIApp<T>> {
-  if (scripts?.length) {
-    for (const script of scripts) {
-      app.addScript(
-        join("_huuma", script[0], script[1]),
-        await readScript(join(scriptsDirectory, script[1])),
-        script[2],
-      );
-    }
-  }
-  return app;
-}
-
-export async function packRemoteFunctions<T extends UIAppContext>(
-  _remoteFunctions: List["remoteFunctions"],
-  app: UIApp<T>,
-): Promise<UIApp<T>> {
-  if (_remoteFunctions) {
-    for (const [key, remoteFunctions] of Object.entries(_remoteFunctions)) {
-      serveRemoteFunctions(app, await remoteEndpoint(key), remoteFunctions);
-    }
-  }
-  return app;
-}
-
 const remoteFunctionsSchema = object({
   remoteFunction: string(),
   args: array(unknown()).optional(),
@@ -135,10 +71,6 @@ export function serveRemoteFunctions<T extends UIAppContext>(
     throw new NotFoundException(`Remote function "${remoteFunction}" not found`);
   });
   return app;
-}
-
-async function readScript(path: string): Promise<Uint8Array<ArrayBuffer>> {
-  return new Uint8Array(await readFile(join(process.cwd(), path)));
 }
 
 /**

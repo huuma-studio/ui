@@ -106,7 +106,7 @@ describe("vite build", () => {
   });
 
   test("renders the pages like the Deno pipeline", async () => {
-    // The snapshot is what the Deno pipeline rendered (test/deno/rendered.test.ts).
+    // The snapshot is what the Deno pipeline rendered before it was removed.
     await expect(await renderFixture(app)).toMatchFileSnapshot("../../test/snapshots/basic.txt");
   });
 });

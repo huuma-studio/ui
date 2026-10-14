@@ -5,9 +5,11 @@
 import assert from "node:assert/strict";
 import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { renderFixture } from "../rendered.ts";
-import { repoRoot } from "./config.ts";
+
+const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 const fixtures = join(repoRoot, "test/fixtures");
 // Upstream Vite: `vite` itself is Vite+'s copy, which has no CLI.

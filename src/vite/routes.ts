@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { type FileImport, listPages, type Routes } from "../platform/server/discover.ts";
 
 /**
- * The app's pages with their layouts and middlewares, in the shape of
- * `List["pages"]` from the Deno pipeline, so `packPages()` registers them.
+ * The app's pages with their layouts and middlewares, in the shape
+ * `packPages()` registers (`List["pages"]`).
  * Server only: it imports every page module.
  */
 export const ROUTES_ID = "virtual:huuma/routes";
@@ -52,7 +52,7 @@ export function routesModule(routes: Routes): string {
       `    page: ${page.name},`,
       `    layouts: [${layouts.join(", ")}],`,
       // Discovery lists middlewares deepest first; they run outermost first,
-      // like the Deno pipeline's `.huuma/list.ts`.
+      // as the Deno pipeline ordered them.
       `    middleware: [${[...middlewares].reverse().join(", ")}],`,
       "  },",
     ].join("\n");
