@@ -38,8 +38,10 @@ export default defineConfig({
     root: "src",
     unbundle: true,
     platform: "neutral",
-    // Server code imports Node built-ins, which "neutral" doesn't know.
-    deps: { neverBundle: [/^node:/] },
+    // Server code imports Node built-ins, which "neutral" doesn't know. The
+    // plugin's types come from the app's own Vite (a dev dependency here,
+    // which tsdown would otherwise bundle).
+    deps: { neverBundle: [/^node:/, "vite"] },
     dts: true,
     failOnWarn: true,
   },
