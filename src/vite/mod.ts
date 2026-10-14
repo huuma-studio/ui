@@ -1,7 +1,7 @@
 /*
- * The Huuma UI plugin for Vite 8 (spec #126). It replaces the Deno build
- * pipeline (`@huuma/ui/server/pack/list`): Vite discovers, transforms and
- * serves the app instead of the `.huuma/` codegen.
+ * The Huuma UI plugin for Vite 8 (spec #126): Vite discovers, transforms and
+ * serves the app. It replaced the Deno build pipeline and its `.huuma/`
+ * codegen.
  *
  * Only types are imported from `vite`: JSR has no peer dependencies, and a
  * runtime import could install a second copy of Vite next to the app's.

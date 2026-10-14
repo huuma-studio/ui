@@ -8,8 +8,6 @@
     "./v-node/sync": "./src/v-node/sync.ts",
     "./browser": "./src/platform/browser/mod.ts",
     "./server": "./src/platform/server/mod.ts",
-    "./server/pack": "./src/platform/server/pack/mod.ts",
-    "./server/pack/list": "./src/platform/server/pack/list/mod.ts",
     "./ref": "./src/ref/mod.ts",
     "./signal": "./src/signal/mod.ts",
     "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
@@ -30,7 +28,6 @@
     "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
   },
   "imports": {
-    "@deno/esbuild-plugin": "jsr:@deno/esbuild-plugin@^1.2.1",
     "@huuma/route": "jsr:@huuma/route@^0.3.1",
     "@huuma/validate": "jsr:@huuma/validate@^0.2.0"
   }

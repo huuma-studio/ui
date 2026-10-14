@@ -30,10 +30,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Installs node_modules, which Vite on Deno uses (test/deno/vite.test.ts).
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version: "24"
+          cache: true
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      # No minimum dependency age (24 hours by default): the tests take the
-      # newest versions jsr.json allows, which can be one of our own releases
-      # from today, like @huuma/route 0.3.1.
-      - run: deno test --allow-all --no-check --node-modules-dir=none --minimum-dependency-age=0 test/deno/
+      - run: deno test --allow-all --no-check --node-modules-dir=none test/deno/

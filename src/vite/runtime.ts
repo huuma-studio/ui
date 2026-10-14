@@ -21,9 +21,8 @@ export interface Manifest {
 }
 
 /**
- * Registers the plugin's modules on `app`, like `pack()` does for the Deno
- * pipeline: the browser runtime, the islands, the remote functions and
- * the pages. Vite serves the scripts, so the app only references them.
+ * Registers the plugin's modules on `app`: the browser runtime, the
+ * islands, the remote functions and the pages. Vite serves the scripts, so the app only references them.
  */
 export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest): UIApp<T> {
   // The server entry's default export, which nothing type-checks.

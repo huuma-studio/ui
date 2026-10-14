@@ -9,8 +9,6 @@
     "./v-node/sync": "./src/v-node/sync.ts",
     "./browser": "./src/platform/browser/mod.ts",
     "./server": "./src/platform/server/mod.ts",
-    "./server/pack": "./src/platform/server/pack/mod.ts",
-    "./server/pack/list": "./src/platform/server/pack/list/mod.ts",
     "./ref": "./src/ref/mod.ts",
     "./signal": "./src/signal/mod.ts",
     "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
@@ -27,10 +25,8 @@
     "./vite/node": "./src/vite/node.ts"
   },
   "dependencies": {
-    "@deno/esbuild-plugin": "npm:@jsr/deno__esbuild-plugin@^1.2.1",
     "@huuma/route": "npm:@jsr/huuma__route@^0.3.1",
-    "@huuma/validate": "npm:@jsr/huuma__validate@^0.2.0",
-    "esbuild": "0.28.1"
+    "@huuma/validate": "npm:@jsr/huuma__validate@^0.2.0"
   },
   "devDependencies": {
     "@babel/core": "^8.0.7",

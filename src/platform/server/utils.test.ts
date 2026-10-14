@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { readFile } from "node:fs/promises";
-import { generateHash, isNodeError, toCanonicalPath } from "./utils.ts";
+import { generateHash, toCanonicalPath } from "./utils.ts";
 
 describe(toCanonicalPath.name, () => {
   test("leaves an already-canonical path unchanged", () => {
@@ -71,25 +70,5 @@ describe(generateHash.name, () => {
     const a = await generateHash("/src/a.remote.ts");
     const b = await generateHash("/src/b.remote.ts");
     expect(a === b).toStrictEqual(false);
-  });
-});
-
-describe(isNodeError.name, () => {
-  test("matches a node:fs error by its code", async () => {
-    const error = await readFile("./does-not-exist.txt").catch((e) => e);
-    expect(isNodeError(error, "ENOENT")).toStrictEqual(true);
-    expect(isNodeError(error, "EEXIST")).toStrictEqual(false);
-  });
-
-  test("matches any error carrying the code, like Deno.errors", () => {
-    // Deno's Deno.errors.* carry the same errno code as node:fs errors.
-    const error = Object.assign(new Error("not found"), { code: "ENOENT" });
-    expect(isNodeError(error, "ENOENT")).toStrictEqual(true);
-  });
-
-  test("rejects errors without a code and non-errors", () => {
-    expect(isNodeError(new Error("boom"), "ENOENT")).toStrictEqual(false);
-    expect(isNodeError({ code: "ENOENT" }, "ENOENT")).toStrictEqual(false);
-    expect(isNodeError(undefined, "ENOENT")).toStrictEqual(false);
   });
 });
