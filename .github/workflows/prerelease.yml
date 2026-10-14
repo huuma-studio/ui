@@ -9,14 +9,38 @@ on:
     branches:
       - next
 
-# One publish at a time, if two PRs are merged in quick succession.
-concurrency:
-  group: prerelease
-  cancel-in-progress: false
-
 jobs:
-  publish:
+  version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A regular version (e.g. 0.2.11) publishes from `main` only.
+      - name: Read the version
+        id: version
+        run: |
+          version=$(jq -r .version jsr.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT"; echo "Publishing @huuma/ui@$version, unless it's already on JSR" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT"; echo "::notice::$version isn't a pre-release; nothing to publish from next." ;;
+          esac
+
+  publish:
+    needs: version
+    if: needs.version.outputs.prerelease == 'true'
+    runs-on: ubuntu-latest
+
+    # One run per version at a time. A group holds a single waiting run, so
+    # a shared group would let a newer version bump replace a waiting older
+    # one, which would then never be published. Runs of the same version
+    # can replace each other: JSR publishes it once either way.
+    concurrency:
+      group: prerelease-${{ needs.version.outputs.version }}
+      cancel-in-progress: false
 
     permissions:
       contents: read
@@ -25,23 +49,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # A regular version (e.g. 0.2.11) publishes from `main` only.
-      - name: Check the version is a pre-release
-        id: version
-        run: |
-          version=$(jq -r .version jsr.json)
-          case "$version" in
-            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT"; echo "Publishing @huuma/ui@$version, unless it's already on JSR" ;;
-            *) echo "prerelease=false" >> "$GITHUB_OUTPUT"; echo "::notice::$version isn't a pre-release; nothing to publish from next." ;;
-          esac
-
       # Installs the dependencies: JSR publish resolves npm packages
       # through node_modules.
       - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
-        if: steps.version.outputs.prerelease == 'true'
         with:
           node-version: "24"
 
       - name: Publish package
-        if: steps.version.outputs.prerelease == 'true'
         run: vp exec jsr publish
