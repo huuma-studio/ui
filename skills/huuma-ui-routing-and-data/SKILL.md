@@ -14,7 +14,7 @@ Routes are files under `app/`:
 - `app/page.tsx` — route at `/`.
 - `app/[param]/page.tsx` — dynamic route mapped to `/:param`.
 - `app/(group)/page.tsx` — grouping directory, stripped from the URL.
-- `app/!404/page.tsx` — catch-all 404 route, mapped to `/*` (path-mapping is handled internally by `@huuma/ui/server/pack` during the build).
+- `app/!404/page.tsx` — catch-all 404 route, mapped to `/*` (the Vite plugin maps file paths to routes).
 - `app/layout.tsx` — applies to all nested pages under its directory.
 - `app/middleware.ts` — middleware for nested routes.
 

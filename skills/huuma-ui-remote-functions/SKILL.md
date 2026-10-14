@@ -10,14 +10,14 @@ Use this skill when the agent is adding server-side mutations, form submissions,
 ## File convention
 
 - Remote functions live in `.remote.ts` files.
-- Each export must be `export async function name(...)` (lint `async-remote-functions`).
+- Every value export is a remote function and must be an async function (lint `async-remote-functions`): `export async function name(...)`, `export const name = async (...) => {}` (also with a type annotation or several declarators), `export { name }`, `export { name } from "./other.ts"`.
 - Default exports are allowed and are treated as the `default` remote function.
-- `export const foo = ...` and `export { foo }` are **not** reliably recognized by the current bundler stub; prefer named `export async function`.
+- `export *`, destructuring (`export const { a } = …`), classes and enums fail the dev server and the build with an error at the export. Type exports are ignored.
 
 ## Calling from the client
 
 - Import the `.remote.ts` file into an island (`.client.tsx`).
-- Call the exported async function directly; the bundler replaces it with a `fetch` to `POST /_huuma/remote/<hash>/<name>`.
+- Call the exported async function directly; in browser code, the Vite plugin replaces the module with a stub that `fetch`es `POST /_huuma/remote/<hash>/<module>` (below Vite's `base`). The module's code and imports never reach the browser.
 - Arguments must be JSON-serializable.
 - The return value is JSON-deserialized on the client.
 - A function that returns `void` / `undefined` resolves to `undefined` on the client (the server responds `204 No Content`). This is the correct way to express "fire and forget" or "acknowledged mutation" — do **not** return `undefined` accidentally.
@@ -25,7 +25,7 @@ Use this skill when the agent is adding server-side mutations, form submissions,
 
 ## Return value rules
 
-The server (`packRemoteFunctions` in `src/platform/server/pack/pack.ts`) normalizes the return before sending:
+The server normalizes the return before sending:
 
 | Return value                                              | Server response                          | Client receives        |
 | --------------------------------------------------------- | ---------------------------------------- | ---------------------- |
@@ -54,7 +54,7 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 
 ## Server-side validation
 
-- The framework validates the request body with `@huuma/validate` inside the remote-handler shipped by `@huuma/ui/server/pack`.
+- The framework validates the request body with `@huuma/validate` in the route it registers for each remote module.
 - Schema: `{ remoteFunction: string, args?: unknown[] }`.
 - The server looks up `remoteFunction` on the imported module and invokes it with the args.
 - If the body fails schema validation, `remoteFunctionsSchema.parse(body)` throws and is handled by the framework's global error handler — **not** yet by the structured error path above. The same applies to `NotFoundException` ("Remote function not found"). Both are open improvements; do not rely on a structured body for these yet.
@@ -63,7 +63,7 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 ## Secrets and side effects
 
 - Remote functions run on the server. Database access, secrets, and private APIs belong here.
-- Do not put secrets in client code; only `PUBLIC_` env vars are shimmed to the client.
+- Do not put secrets in client code; only `PUBLIC_` env vars reach the client (`import.meta.env.PUBLIC_*`). Keep server-only helpers in `*.server.*` modules: browser code can't import them.
 
 ## Known limitations
 
@@ -71,11 +71,10 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 - The client stub does not yet wrap network-level fetch failures (`TypeError: Failed to fetch`) into `RemoteFunctionError`; callers see the raw browser error.
 - The error body carries only `name` and `message` (and only `name` on the serialization-error path). `stack`, `cause`, custom subclass properties, and validation `fields` are not yet transported. Dev/prod redaction policy for `stack` is not yet defined.
 - Errors are rehydrated on the client as a plain `Error` with `name`/`message` set — there is no `instanceof`-checkable `RemoteFunctionError` class exported from `@huuma/ui` yet.
-- Remote export detection in the bundler is regex-based; see `improvements.md`.
 
 ## Things to check
 
-- Every remote function is `export async function`.
+- Every value export of a `.remote.ts` module is an async function.
 - Only JSON-serializable arguments are passed.
 - Return values are JSON-serializable, or `void`/`undefined` intentionally. Watch for accidental `BigInt`, `function`, `Symbol`, or circular references — they produce a `500 RemoteFunctionSerializationError`.
 - The `.remote.ts` file is imported only from islands (or server-safe code), not from server components that will ship to the client.
