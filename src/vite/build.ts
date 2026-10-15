@@ -13,15 +13,25 @@ import { writeWorkersFiles } from "./workers.ts";
  * `dist/server/server.js`. Server only, in the production build.
  */
 export const NODE_ID = "virtual:huuma/node";
-const RESOLVED_NODE_ID = `\0${NODE_ID}`;
+
+/**
+ * The app as a Cloudflare Worker: `dist/server/worker.js`. Server only, in
+ * the production build.
+ */
+export const WORKER_ID = "virtual:huuma/worker";
+
+// The modules this plugin generates for the server build.
+const ENTRIES = new RegExp(`^(${NODE_ID}|${WORKER_ID})$`);
+const RESOLVED_ENTRIES = new RegExp(`^\0(${NODE_ID}|${WORKER_ID})$`);
 
 /**
  * The production build (`vite build`): the client environment builds the
  * browser runtime and the islands into `dist/client`, with a manifest;
  * then the ssr environment builds the app into `dist/server`, reading the
  * client's manifest for the islands' browser paths: `app.js` exports the
- * app, `server.js` starts it on Node. The client build also gets the files
- * Cloudflare Workers reads (`workers.ts`).
+ * app, `server.js` starts it on Node, `worker.js` is it as a Cloudflare
+ * Worker. The client build also gets the files Workers reads
+ * (`workers.ts`).
  */
 export function buildPlugin(root: () => string): Plugin {
   // The client build's files with a content hash in their name, which
@@ -54,7 +64,7 @@ export function buildPlugin(root: () => string): Plugin {
           ssr: {
             build: {
               outDir: config.environments?.ssr?.build?.outDir ?? join(outDir, "server"),
-              rolldownOptions: { input: { app: SERVER_ID, server: NODE_ID } },
+              rolldownOptions: { input: { app: SERVER_ID, server: NODE_ID, worker: WORKER_ID } },
             },
           },
         },
@@ -75,18 +85,22 @@ export function buildPlugin(root: () => string): Plugin {
       await builder.build(builder.environments.ssr);
     },
     resolveId: {
-      filter: { id: new RegExp(`^${NODE_ID}$`) },
-      handler() {
-        return RESOLVED_NODE_ID;
+      filter: { id: ENTRIES },
+      handler(id) {
+        return `\0${id}`;
       },
     },
     load: {
-      filter: { id: new RegExp(`^\0${NODE_ID}$`) },
-      handler() {
+      filter: { id: RESOLVED_ENTRIES },
+      handler(id) {
+        const entry = id.slice(1);
         if (this.environment.config.consumer !== "server" || this.environment.mode !== "build") {
-          this.error(`${NODE_ID} starts the built app and is only part of the server build.`);
+          this.error(`${entry} starts the built app and is only part of the server build.`);
         }
         const config = this.environment.getTopLevelConfig();
+        if (entry === WORKER_ID) {
+          return { code: workerModule(appBase(config.base)), moduleType: "js" };
+        }
         const client = resolve(config.root, config.environments.client.build.outDir);
         const server = resolve(config.root, this.environment.config.build.outDir);
         return {
@@ -205,6 +219,17 @@ export function nodeModule(options: { client: string; base: string; hashed: stri
     `  base: ${JSON.stringify(options.base)},`,
     `  hashed: ${JSON.stringify(options.hashed)},`,
     "});",
+    "",
+  ].join("\n");
+}
+
+/** Generates the source of `virtual:huuma/worker`. */
+export function workerModule(base: string): string {
+  return [
+    `import app from ${JSON.stringify(SERVER_ID)};`,
+    'import { worker } from "@huuma/ui/vite/runtime";',
+    "",
+    `export default worker(app, ${JSON.stringify(base)});`,
     "",
   ].join("\n");
 }

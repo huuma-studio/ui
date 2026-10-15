@@ -112,6 +112,16 @@ describe("vite build", () => {
     expect(headers).toContain("/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n");
   });
 
+  test("builds the app as a Cloudflare Worker", async () => {
+    const worker = (
+      (await import(pathToFileURL(join(root, "dist/server/worker.js")).href)) as {
+        default: unknown;
+      }
+    ).default;
+    // At the base /, the Worker is the app.
+    expect(worker).toBe(app);
+  });
+
   test("renders the pages like the Deno pipeline", async () => {
     // The snapshot is what the Deno pipeline rendered before it was removed.
     await expect(await renderFixture(app)).toMatchFileSnapshot("../../test/snapshots/basic.txt");
@@ -197,6 +207,18 @@ describe("a build with a URL base, e.g. a CDN", () => {
     expect((await fetch(`${origin}/shop/${counter.file}`)).status).toStrictEqual(200);
     const root = await fetch(`${origin}/`, { redirect: "manual" });
     expect(root.headers.get("location")).toStrictEqual("/shop/");
+  });
+
+  test("builds a Worker that strips the base's path", async () => {
+    const worker = (
+      (await import(pathToFileURL(join(root, "dist/server/worker.js")).href)) as {
+        default: { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
+      }
+    ).default;
+    const env = { ASSETS: { fetch: async () => new Response(null, { status: 404 }) } };
+    const response = await worker.fetch(new Request("http://localhost/shop/about"), env, {});
+    expect(response.status).toStrictEqual(200);
+    expect(await response.text()).toContain("<h1>About</h1>");
   });
 
   test("calls remote functions on the app's server, not on the CDN", async () => {
