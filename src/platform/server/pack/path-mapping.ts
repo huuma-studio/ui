@@ -1,13 +1,11 @@
-import { parse } from "@std/path/parse";
+import { parse } from "node:path";
 
 export interface PathMapping {
   path: string;
   statusCode: number;
 }
 
-const pathMappings = new Map<string, PathMapping>([
-  ["/!404", { path: "/*", statusCode: 404 }],
-]);
+const pathMappings = new Map<string, PathMapping>([["/!404", { path: "/*", statusCode: 404 }]]);
 
 export function mapPath(path: string): PathMapping {
   const parsedPath = parse(path);
@@ -18,9 +16,7 @@ export function mapPath(path: string): PathMapping {
   if (mappedPath) {
     statusCode = mappedPath.statusCode;
     path = `${parsedPath.dir}${
-      parsedPath.dir === "/"
-        ? mappedPath.path.replace(/\//, "")
-        : mappedPath.path
+      parsedPath.dir === "/" ? mappedPath.path.replace(/\//, "") : mappedPath.path
     }`;
   }
 

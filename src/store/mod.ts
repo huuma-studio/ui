@@ -1,8 +1,6 @@
 import { type Signal, untracked, WritableSignal } from "../signal/mod.ts";
 
-type StateInit<T extends Record<string, unknown>> = (
-  set: (state: Partial<T>) => void,
-) => T;
+type StateInit<T extends Record<string, unknown>> = (set: (state: Partial<T>) => void) => T;
 
 export function createStore<T extends Record<string, unknown>>(
   init: StateInit<T>,
@@ -28,6 +26,6 @@ export function createStore<T extends Record<string, unknown>>(
   }
 
   const state = init(set);
-  const signal = new WritableSignal({ ...state, ...(storedState || {}) });
+  const signal = new WritableSignal({ ...state, ...storedState });
   return signal;
 }

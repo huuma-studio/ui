@@ -8,6 +8,7 @@ export {
   createUIApp,
   type PageLike,
   type PageLikeProps,
+  type RootPageProps,
   UIApp,
   type UIAppContext,
 } from "./app.ts";

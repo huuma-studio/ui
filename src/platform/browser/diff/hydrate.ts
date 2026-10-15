@@ -11,24 +11,14 @@ import {
   VNodeProps,
   type VText,
 } from "../../../v-node/mod.ts";
-import {
-  type AttachmentRef,
-  AttachmentType,
-  type ParentAttachmentRef,
-} from "./attachment-ref.ts";
+import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { render } from "./render.ts";
 import { setAttribute } from "./types/attribute.ts";
-import type {
-  LinkComponentChangeSet,
-  MountComponentChangeSet,
-} from "./types/component.ts";
-import type {
-  LinkElementChangeSet,
-  ReplaceElementChangeSet,
-} from "./types/element.ts";
+import type { LinkComponentChangeSet, MountComponentChangeSet } from "./types/component.ts";
+import type { LinkElementChangeSet, ReplaceElementChangeSet } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
 import type { LinkTextChangeSet, ReplaceTextChangeSet } from "./types/text.ts";
 
@@ -72,7 +62,7 @@ function component(
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   return [
-    <LinkComponentChangeSet> {
+    <LinkComponentChangeSet>{
       [Props.Type]: Type.Component,
       [Props.Action]: Action.Link,
       [Props.Payload]: {
@@ -81,7 +71,7 @@ function component(
       },
     },
     ...hydrate(vComponent[VNodeProps.AST], nodes, attachmentRef),
-    <MountComponentChangeSet> {
+    <MountComponentChangeSet>{
       [Props.Type]: Type.Component,
       [Props.Action]: Action.Mount,
       [Props.Payload]: {
@@ -115,40 +105,32 @@ function element(
 
   // Replace dom node with effective vnode type
   if (node.nodeName.toLowerCase() !== vElement[VNodeProps.TAG].toLowerCase()) {
-    changes.push(
-      <ReplaceElementChangeSet> {
-        [Props.Type]: Type.Element,
-        [Props.Action]: Action.Replace,
-        [Props.Payload]: { vElement, node, attachmentRef },
-      },
-    );
+    changes.push(<ReplaceElementChangeSet>{
+      [Props.Type]: Type.Element,
+      [Props.Action]: Action.Replace,
+      [Props.Payload]: { vElement, node, attachmentRef },
+    });
     skipChildren = true;
   } else {
-    changes.push(
-      <LinkElementChangeSet> {
-        [Props.Type]: Type.Element,
-        [Props.Action]: Action.Link,
-        [Props.Payload]: { vElement, node, attachmentRef },
-      },
-    );
+    changes.push(<LinkElementChangeSet>{
+      [Props.Type]: Type.Element,
+      [Props.Action]: Action.Link,
+      [Props.Payload]: { vElement, node, attachmentRef },
+    });
   }
 
   // Attach events to the dom node
   vElement[VNodeProps.EVENT_REFS]?.forEach((eventRef) => {
-    changes.push(
-      <CreateEventChangeSet> {
-        [Props.Type]: Type.Event,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: { vNode: vElement, ...eventRef },
-      },
-    );
+    changes.push(<CreateEventChangeSet>{
+      [Props.Type]: Type.Event,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: { vNode: vElement, ...eventRef },
+    });
   });
 
   for (const prop in vElement[VNodeProps.PROPS]) {
     if (prop === "children") continue;
-    changes.push(
-      ...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement),
-    );
+    changes.push(...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement));
   }
 
   const nodes = skipChildren ? undefined : [...node.childNodes];
@@ -171,43 +153,34 @@ function element(
   return changes;
 }
 
-function text(
-  vText: VText<Node>,
-  node: Node,
-  attachmentRef: AttachmentRef,
-): ChangeSet<unknown>[] {
+function text(vText: VText<Node>, node: Node, attachmentRef: AttachmentRef): ChangeSet<unknown>[] {
   const changeSet: ChangeSet<unknown>[] = [];
   const text = vText[VNodeProps.TEXT];
 
   if (
     node instanceof Text &&
-    (node.textContent === text ||
-      (isVSignal(text) && node.textContent === text.get()))
+    (node.textContent === text || (isVSignal(text) && node.textContent === text.get()))
   ) {
-    changeSet.push(
-      <LinkTextChangeSet> {
-        [Props.Type]: Type.Text,
-        [Props.Action]: Action.Link,
-        [Props.Payload]: {
-          vText,
-          node: node,
-          attachmentRef,
-        },
+    changeSet.push(<LinkTextChangeSet>{
+      [Props.Type]: Type.Text,
+      [Props.Action]: Action.Link,
+      [Props.Payload]: {
+        vText,
+        node: node,
+        attachmentRef,
       },
-    );
+    });
   } else {
     // Attach node without moving the
     vText[VNodeProps.NODE_REF] = node;
-    changeSet.push(
-      <ReplaceTextChangeSet> {
-        [Props.Type]: Type.Text,
-        [Props.Action]: Action.Replace,
-        [Props.Payload]: {
-          vText,
-          attachmentRef,
-        },
+    changeSet.push(<ReplaceTextChangeSet>{
+      [Props.Type]: Type.Text,
+      [Props.Action]: Action.Replace,
+      [Props.Payload]: {
+        vText,
+        attachmentRef,
       },
-    );
+    });
   }
 
   return changeSet;

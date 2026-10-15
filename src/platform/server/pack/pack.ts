@@ -1,21 +1,14 @@
+import { HttpException } from "@huuma/route/http/exception/http-exception";
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
+import { UnsupportedMediaTypeException } from "@huuma/route/http/exception/unsupported-media-type-exception";
 import { array, object, string, unknown } from "@huuma/validate";
-import { info } from "@huuma/route/utils/logger";
-import { parse } from "@std/path/parse";
-import { join } from "@std/path/join";
-import { readFile } from "node:fs/promises";
-import process from "node:process";
 
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 
-import { generateHash, toCanonicalPath } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 
-export function packPages<T extends UIAppContext>(
-  pages: List["pages"],
-  app: UIApp<T>,
-) {
+export function packPages<T extends UIAppContext>(pages: List["pages"], app: UIApp<T>): UIApp<T> {
   for (const route in pages) {
     const _route = pages[route];
     const resolvers: Resolver<unknown>[] = [];
@@ -27,14 +20,12 @@ export function packPages<T extends UIAppContext>(
       resolvers.push(_route.page.resolver);
     }
 
-    const layouts: PageLike<unknown>[] = _route.layouts.map(
-      (layout) => {
-        if (typeof layout.resolver === "function") {
-          resolvers.push(layout.resolver);
-        }
-        return layout.default;
-      },
-    );
+    const layouts: PageLike<unknown>[] = _route.layouts.map((layout) => {
+      if (typeof layout.resolver === "function") {
+        resolvers.push(layout.resolver);
+      }
+      return layout.default;
+    });
 
     const middleware = _route.middleware
       .map((module) => {
@@ -56,109 +47,64 @@ export function packPages<T extends UIAppContext>(
   return app;
 }
 
-export async function packIslands<T extends UIAppContext>(
-  islands: List["islands"],
-  scripts: List["scripts"],
-  scriptsDirectory: string,
-  app: UIApp<T>,
-) {
-  if (islands) {
-    for (const [islandPath, island] of Object.entries(islands)) {
-      const islandHash = await generateHash(islandPath);
-      const script = scripts.find((s) =>
-        parse(s[1]).name === `${islandHash}-${parse(islandPath).name}`
-      );
-      if (script) {
-        app.addIsland(island.default, {
-          path: join(
-            "_huuma",
-            script[0],
-            script[1],
-          ),
-          contents: await readScript(
-            join(scriptsDirectory, script[1]),
-          ),
-          imports: script[2].imports,
-        });
-      } else {
-        info(
-          "PACK",
-          `Frontend script for island "${islandPath}" not found. Island was not added to Huuma UI`,
-        );
-      }
-    }
+const remoteFunctionsSchema = object({
+  remoteFunction: string(),
+  args: array(unknown()).optional(),
+});
+
+/**
+ * Refuses requests that the app's own browser stubs don't send, so other
+ * sites can't call remote functions with a visitor's cookies (cross-site
+ * request forgery):
+ *
+ * - Only `application/json` bodies. A cross-origin request with that type
+ *   needs a CORS preflight, which the app doesn't answer unless it allows
+ *   other origins itself. Forms and `text/plain` requests need none, so
+ *   they could otherwise run a remote function from any site. `415`.
+ * - Never `Sec-Fetch-Site: cross-site`, which current browsers send for
+ *   requests from other sites. `403`.
+ */
+export function checkRemoteRequest(request: Request): void {
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    throw new HttpException("Remote functions can't be called from other sites.", 403);
   }
-  return app;
+  const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  if (type !== "application/json") {
+    throw new UnsupportedMediaTypeException(
+      "Remote functions accept application/json requests only.",
+    );
+  }
 }
 
-export async function packScripts<T extends UIAppContext>(
-  scripts: List["scripts"],
-  scriptsDirectory: string,
+/**
+ * Serves the functions of one remote module at `endpoint`: the browser
+ * stub posts the function's name and arguments as JSON. Other requests are
+ * refused (`checkRemoteRequest()`).
+ */
+export function serveRemoteFunctions<T extends UIAppContext>(
   app: UIApp<T>,
-): Promise<UIApp<T>> {
-  if (scripts?.length) {
-    for (const script of scripts) {
-      app.addScript(
-        join("_huuma", script[0], script[1]),
-        await readScript(join(
-          scriptsDirectory,
-          script[1],
-        )),
-        script[2],
-      );
+  endpoint: string,
+  // deno-lint-ignore no-explicit-any
+  remoteFunctions: Record<string, (...args: any[]) => Promise<any>>,
+): UIApp<T> {
+  app.post(endpoint, async ({ request }) => {
+    checkRemoteRequest(request);
+    const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
+    if (
+      remoteFunction in remoteFunctions &&
+      typeof remoteFunctions[remoteFunction] === "function"
+    ) {
+      return await executeRemoteFunction(remoteFunctions, remoteFunction, args);
     }
-  }
-  return app;
-}
-
-export async function packRemoteFunctions<
-  T extends UIAppContext,
->(
-  _remoteFunctions: List["remoteFunctions"],
-  app: UIApp<T>,
-): Promise<UIApp<T>> {
-  const remoteFunctionsSchema = object({
-    remoteFunction: string(),
-    args: array(unknown()).optional(),
+    throw new NotFoundException(`Remote function "${remoteFunction}" not found`);
   });
-  if (_remoteFunctions) {
-    for (const [key, remoteFunctions] of Object.entries(_remoteFunctions)) {
-      const fileName = parse(key).name;
-      const fileHash = await generateHash(toCanonicalPath(key));
-      app.post(`/_huuma/remote/${fileHash}/${fileName}`, async ({ request }) => {
-        const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
-        if (
-          remoteFunction in remoteFunctions &&
-          typeof remoteFunctions[remoteFunction] === "function"
-        ) {
-          return await executeRemoteFunction(
-            remoteFunctions,
-            remoteFunction,
-            args,
-          );
-        }
-        throw new NotFoundException(
-          `Remote function "${remoteFunction}" not found`,
-        );
-      });
-    }
-  }
   return app;
-}
-
-async function readScript(path: string): Promise<Uint8Array<ArrayBuffer>> {
-  return new Uint8Array(
-    await readFile(join(
-      process.cwd(),
-      path,
-    )),
-  );
 }
 
 /**
  * @internal Not part of the public `@huuma/ui` API. Exported only so it can
  * be unit-tested directly; `mod.ts` does not re-export it and `pack.ts` is
- * not an entry point in `deno.json`'s exports map.
+ * not an entry point in `jsr.json`'s exports map.
  *
  * Invokes a single remote function and produces the HTTP response. Extracted
  * from the route handler so the return-value normalization and serialization
@@ -182,9 +128,7 @@ export async function executeRemoteFunction(
   remoteFunction: string,
   args: unknown[] | undefined,
 ): Promise<Response> {
-  const res = await remoteFunctions[remoteFunction](
-    ...(args?.length ? args : []),
-  );
+  const res = await remoteFunctions[remoteFunction](...(args?.length ? args : []));
 
   // void / undefined return → 204 No Content. JSON has no `undefined`, so
   // an empty 204 body lets the client resolve to a real `undefined` instead
@@ -210,10 +154,9 @@ export async function executeRemoteFunction(
     return new Response(
       JSON.stringify({
         name: "RemoteFunctionSerializationError",
-        message:
-          `Remote function "${remoteFunction}" returned a value that cannot be JSON-serialized: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+        message: `Remote function "${remoteFunction}" returned a value that cannot be JSON-serialized: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
       }),
       { status: 500, headers: { "content-type": "application/json" } },
     );

@@ -38,16 +38,11 @@ type VNodeSignalUpdater<T, V> = (
 ) => Subscriber<V>;
 let vNodeSignalUpdater: VNodeSignalUpdater<unknown, unknown> | undefined;
 
-export function setVNodeUpdater<T>(
-  updater: VNodeSignalUpdater<T, unknown>,
-): void {
-  vNodeSignalUpdater = <VNodeSignalUpdater<unknown, unknown>> updater;
+export function setVNodeUpdater<T>(updater: VNodeSignalUpdater<T, unknown>): void {
+  vNodeSignalUpdater = <VNodeSignalUpdater<unknown, unknown>>updater;
 }
 
-export function create<T>(
-  node: JSX.Element,
-  globalOptions: VGlobalOptions = {},
-): VNode<T> {
+export function create<T>(node: JSX.Element, globalOptions: VGlobalOptions = {}): VNode<T> {
   if (typeof globalOptions.beforeCreate === "function") {
     node = globalOptions.beforeCreate(node);
   }
@@ -108,14 +103,11 @@ export function update<T>(
 
   if (isElementNode(node)) {
     if (
-      vNode?.type === VType.ELEMENT && node.type === vNode[VNodeProps.TAG] &&
+      vNode?.type === VType.ELEMENT &&
+      node.type === vNode[VNodeProps.TAG] &&
       vNode[VNodeProps.KEY] === node.key
     ) {
-      return updateVElement(
-        <JSX.ComponentNode<string>> node,
-        vNode,
-        globalOptions,
-      );
+      return updateVElement(<JSX.ComponentNode<string>>node, vNode, globalOptions);
     }
     // Create the replacement before destroying the old subtree: a
     // throwing render must leave the previous tree untouched.
@@ -126,7 +118,8 @@ export function update<T>(
 
   if (isComponentNode(node)) {
     if (
-      isVComponent(vNode) && vNode[VNodeProps.FN] === node.type &&
+      isVComponent(vNode) &&
+      vNode[VNodeProps.FN] === node.type &&
       vNode[VNodeProps.KEY] === node.key
     ) {
       return updateVComponent(node, vNode, globalOptions);
@@ -137,10 +130,7 @@ export function update<T>(
   }
 
   if (isFragmentNode(node)) {
-    if (
-      vNode?.type === VType.FRAGMENT &&
-      keyFromNode(node) === vNode[VNodeProps.KEY]
-    ) {
+    if (vNode?.type === VType.FRAGMENT && keyFromNode(node) === vNode[VNodeProps.KEY]) {
       return updateVFragment(node, vNode, globalOptions);
     }
     const nextVNode = vFragment<T>(node, globalOptions);
@@ -154,10 +144,7 @@ export function update<T>(
   destroy(vNode);
 }
 
-function updateVText<T>(
-  node: string | number | JSX.SignalLike,
-  vText: VText<T>,
-): VText<T> {
+function updateVText<T>(node: string | number | JSX.SignalLike, vText: VText<T>): VText<T> {
   // A stale signal subscription is deliberately NOT dropped here: the
   // diff layer's Replace handler drains it at the commit point. Draining
   // during the vNode walk would leave the text unbound if a later render
@@ -196,7 +183,7 @@ function updateVElement<T>(
 ) {
   const { eventRefs, props } = element;
 
-  vElement[VNodeProps.PROPS] = <JSX.ComponentProps> props;
+  vElement[VNodeProps.PROPS] = <JSX.ComponentProps>props;
   vElement[VNodeProps.EVENT_REFS] = eventRefs;
 
   vElement[VNodeProps.CHILDREN] = track(
@@ -208,10 +195,7 @@ function updateVElement<T>(
   return vElement;
 }
 
-function vComponent<T>(
-  component: JSX.ComponentNode<JSX.Component>,
-  globalOptions: VGlobalOptions,
-) {
+function vComponent<T>(component: JSX.ComponentNode<JSX.Component>, globalOptions: VGlobalOptions) {
   const { type, props, key } = component;
 
   const vComponent: VComponent<T> = {
@@ -226,24 +210,23 @@ function vComponent<T>(
   };
 
   scopedFn(vComponent, () => {
-    typeof vNodeSignalUpdater === "function"
-      ? setSubscriber(
+    if (typeof vNodeSignalUpdater === "function") {
+      setSubscriber(
         () => {
           const node = vComponent[VNodeProps.FN](props);
           if (node instanceof Promise) {
             throw Error("Promise/Async not supported in scoped functions");
           }
-          return vComponent[VNodeProps.AST] = create(
-            node,
-            globalOptions,
-          );
+          return (vComponent[VNodeProps.AST] = create(node, globalOptions));
         },
         vNodeSignalUpdater(component, vComponent, globalOptions),
-      )
-      : vComponent[VNodeProps.AST] = create(
+      );
+    } else {
+      vComponent[VNodeProps.AST] = create(
         assertSyncCall(vComponent[VNodeProps.FN](props)),
         globalOptions,
       );
+    }
     vComponent[VNodeProps.MODE] = VMode.Created;
   });
 
@@ -259,11 +242,11 @@ function updateVComponent<T>(
     vComponent[VNodeProps.PROPS] = component.props;
     return typeof vNodeSignalUpdater === "function"
       ? setSubscriber(
-        () => {
-          return vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
-        },
-        vNodeSignalUpdater(component, vComponent, globalOptions),
-      )
+          () => {
+            return vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
+          },
+          vNodeSignalUpdater(component, vComponent, globalOptions),
+        )
       : vComponent[VNodeProps.FN](vComponent[VNodeProps.PROPS]);
   });
 
@@ -317,11 +300,7 @@ function updateVFragment<T>(
 ): VFragment<T> {
   const _children = childrenFrom(fragment);
   const children = isArray(_children) ? _children : [_children];
-  vFragment[VNodeProps.CHILDREN] = track(
-    vFragment[VNodeProps.CHILDREN],
-    children,
-    globalOptions,
-  );
+  vFragment[VNodeProps.CHILDREN] = track(vFragment[VNodeProps.CHILDREN], children, globalOptions);
   return vFragment;
 }
 
@@ -359,9 +338,7 @@ function track<T>(
      */
     if (nodeKey === vNodeKey) {
       removeByVNode(vNode, vNodes);
-      _children.push(
-        update(node, vNode, globalOptions, false),
-      );
+      _children.push(update(node, vNode, globalOptions, false));
       i++;
       continue;
     }
@@ -390,9 +367,7 @@ function track<T>(
   return _children;
 }
 
-export function assertSyncCall<T>(
-  node: Promise<T> | T,
-): T {
+export function assertSyncCall<T>(node: Promise<T> | T): T {
   if (node instanceof Promise) {
     throw new Error("Promise not allowed in sync call scope");
   }
@@ -409,10 +384,7 @@ export function removeByKey<T>(
   return remove(index, vNodes);
 }
 
-export function removeByVNode<T>(
-  vNode: VNode<T>,
-  vNodes: VNode<T>[],
-): VNode<T> | undefined {
+export function removeByVNode<T>(vNode: VNode<T>, vNodes: VNode<T>[]): VNode<T> | undefined {
   const index = vNodes.findIndex((v) => {
     return v === vNode;
   });

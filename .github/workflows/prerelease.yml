@@ -1,0 +1,59 @@
+name: Publish pre-release to JSR
+# Publishes jsr.json's version from `next` on every push (every merged PR)
+# when it's a pre-release (e.g. 0.3.0-beta.1). JSR skips a version that's
+# already published, so only a version bump publishes. JSR doesn't mark
+# pre-releases as latest, so apps only get one when they ask for it.
+# Releases publish from `main` (publish.yml).
+on:
+  push:
+    branches:
+      - next
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A regular version (e.g. 0.2.11) publishes from `main` only.
+      - name: Read the version
+        id: version
+        run: |
+          version=$(jq -r .version jsr.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT"; echo "Publishing @huuma/ui@$version, unless it's already on JSR" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT"; echo "::notice::$version isn't a pre-release; nothing to publish from next." ;;
+          esac
+
+  publish:
+    needs: version
+    if: needs.version.outputs.prerelease == 'true'
+    runs-on: ubuntu-latest
+
+    # One run per version at a time. A group holds a single waiting run, so
+    # a shared group would let a newer version bump replace a waiting older
+    # one, which would then never be published. Runs of the same version
+    # can replace each other: JSR publishes it once either way.
+    concurrency:
+      group: prerelease-${{ needs.version.outputs.version }}
+      cancel-in-progress: false
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs the dependencies: JSR publish resolves npm packages
+      # through node_modules.
+      - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
+        with:
+          node-version: "24"
+
+      - name: Publish package
+        run: vp exec jsr publish
