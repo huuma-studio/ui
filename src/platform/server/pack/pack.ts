@@ -1,4 +1,6 @@
+import { HttpException } from "@huuma/route/http/exception/http-exception";
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
+import { UnsupportedMediaTypeException } from "@huuma/route/http/exception/unsupported-media-type-exception";
 import { array, object, string, unknown } from "@huuma/validate";
 
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
@@ -51,8 +53,33 @@ const remoteFunctionsSchema = object({
 });
 
 /**
+ * Refuses requests that the app's own browser stubs don't send, so other
+ * sites can't call remote functions with a visitor's cookies (cross-site
+ * request forgery):
+ *
+ * - Only `application/json` bodies. A cross-origin request with that type
+ *   needs a CORS preflight, which the app doesn't answer unless it allows
+ *   other origins itself. Forms and `text/plain` requests need none, so
+ *   they could otherwise run a remote function from any site. `415`.
+ * - Never `Sec-Fetch-Site: cross-site`, which current browsers send for
+ *   requests from other sites. `403`.
+ */
+export function checkRemoteRequest(request: Request): void {
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    throw new HttpException("Remote functions can't be called from other sites.", 403);
+  }
+  const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  if (type !== "application/json") {
+    throw new UnsupportedMediaTypeException(
+      "Remote functions accept application/json requests only.",
+    );
+  }
+}
+
+/**
  * Serves the functions of one remote module at `endpoint`: the browser
- * stub posts the function's name and arguments.
+ * stub posts the function's name and arguments as JSON. Other requests are
+ * refused (`checkRemoteRequest()`).
  */
 export function serveRemoteFunctions<T extends UIAppContext>(
   app: UIApp<T>,
@@ -61,6 +88,7 @@ export function serveRemoteFunctions<T extends UIAppContext>(
   remoteFunctions: Record<string, (...args: any[]) => Promise<any>>,
 ): UIApp<T> {
   app.post(endpoint, async ({ request }) => {
+    checkRemoteRequest(request);
     const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
     if (
       remoteFunction in remoteFunctions &&

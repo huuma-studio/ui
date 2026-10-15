@@ -333,6 +333,10 @@ const handleSubmit = async (event: Event) => {
 
 Note: request-body schema validation failures and unknown-function-name errors still go through the framework's global error handler and may not yet produce a structured `{ name, message }` body. Network-level fetch failures surface as `TypeError: Failed to fetch`.
 
+### Calls from other sites
+
+Remote functions answer only the JSON requests the generated stub sends: a request with another `Content-Type` gets `415`, and one a browser marks as cross-site (`Sec-Fetch-Site: cross-site`) gets `403`. So another site can't call them with your visitors' cookies (cross-site request forgery). To call one from a script or test, `POST` to its endpoint with `content-type: application/json` and a body of `{ "remoteFunction": "<name>", "args": [...] }`. Remote functions still decide themselves who may call them, e.g. by checking the session.
+
 ## Signals and Reactivity
 
 Huuma UI uses a signal-based reactivity system for efficient UI updates:
