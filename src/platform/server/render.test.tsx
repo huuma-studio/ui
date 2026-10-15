@@ -167,10 +167,54 @@ describe("rendering untrusted values", () => {
       "<script>if (a < b && c) {}</script>",
     );
     expect(render(<script>{'x = "</script><script>alert(1)</SCRIPT>"'}</script>)).toStrictEqual(
-      '<script>x = "<\\/script><script>alert(1)<\\/SCRIPT>"</script>',
+      '<script>x = "</\\u0073cript><\\u0073cript>alert(1)</\\u0053CRIPT>"</script>',
+    );
+    // After `<!--`, an opening `<script` would make the browser ignore the
+    // element's real end.
+    expect(render(<script>{'s = "<!--<script>"'}</script>)).toStrictEqual(
+      '<script>s = "<!--<\\u0073cript>"</script>',
     );
     expect(render(<style>{"</style><script>alert(1)</script>"}</style>)).toStrictEqual(
       "<style><\\/style><script>alert(1)</script></style>",
+    );
+  });
+
+  test("makes <script> and <style> safe as a whole, not child by child", () => {
+    // A closing tag split across children only appears once they're joined.
+    expect(
+      render(
+        <style>
+          {"</sty"}
+          {"le><img src=x onerror=alert(1)>"}
+        </style>,
+      ),
+    ).toStrictEqual("<style><\\/style><img src=x onerror=alert(1)></style>");
+    expect(
+      render(
+        <script>
+          {"</scr"}
+          {"ipt><img src=x onerror=alert(1)>"}
+        </script>,
+      ),
+    ).toStrictEqual("<script></\\u0073cript><img src=x onerror=alert(1)></script>");
+    // Text in fragments and components is raw too.
+    const Code = () => <>{"if (a < b && c) {}"}</>;
+    expect(
+      render(
+        <script>
+          <>{"if (a < b && c) {}"}</>
+        </script>,
+      ),
+    ).toStrictEqual("<script>if (a < b && c) {}</script>");
+    expect(
+      render(
+        <script>
+          <Code />
+        </script>,
+      ),
+    ).toStrictEqual("<script>if (a < b && c) {}</script>");
+    expect(render(<style>{["nav > a {}", " b > i {}"]}</style>)).toStrictEqual(
+      "<style>nav > a {} b > i {}</style>",
     );
   });
 

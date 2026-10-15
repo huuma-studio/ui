@@ -85,23 +85,56 @@ function elementToString<T>(vNode: VElement<T>): string {
   if (dangerouslySetInnerHTML) {
     return `<${tag}${stringFrom(attributes)}>${dangerouslySetInnerHTML.__html}</${tag}>`;
   }
-  const raw = RAW_TEXT_TAGS.has(tag.toLowerCase());
+  if (RAW_TEXT_TAGS.has(tag.toLowerCase())) {
+    // The whole content first, then made safe once: a closing tag split
+    // across children (`{"</sty"}{"le>"}`) only appears once they're joined.
+    const content = children?.map((child) => rawContent(child)).join("") ?? "";
+    return `<${tag}${stringFrom(attributes)}>${rawText(content, tag)}</${tag}>`;
+  }
   return `<${tag}${stringFrom(attributes)}>${
-    children
-      ?.map((child) =>
-        raw && child?.type === VType.TEXT ? rawText(textFromVText(child), tag) : stringify(child),
-      )
-      .join("") ?? ""
+    children?.map((child) => stringify(child)).join("") ?? ""
   }</${tag}>`;
 }
 
 /**
- * Text of a `<script>` or `<style>` element, unescaped: only its own closing
- * tag (`</script`, in any case) could end the element early, so that one
- * becomes `<\/script`, which JavaScript and CSS read as `</script`.
+ * The content of a `<script>` or `<style>` element: text as it is, also
+ * inside fragments and components. Elements become their markup, which
+ * the browser reads as text there.
+ */
+function rawContent<T>(vNode: VNode<T>): string {
+  if (!vNode) return "";
+  switch (vNode.type) {
+    case VType.TEXT:
+      return textFromVText(vNode);
+    case VType.COMPONENT:
+      return rawContent(vNode[VNodeProps.AST]);
+    case VType.FRAGMENT:
+      return vNode[VNodeProps.CHILDREN]?.map((child) => rawContent(child)).join("") ?? "";
+    default:
+      return stringify(vNode);
+  }
+}
+
+/**
+ * The content of a `<script>` or `<style>` element, unescaped (HTML doesn't
+ * decode entities there), with the sequences that could end it early made
+ * harmless:
+ *
+ * - `<script` and `</script`, in any case: their `s` becomes `\u0073` (or
+ *   `\u0053`), which JavaScript and JSON read as `s` (like React 19). The
+ *   opening one matters too: after `<!--`, `<script` would make the browser
+ *   ignore the element's real `</script>`.
+ * - `</style`, in any case: becomes `<\/style`, which CSS reads as `</style`.
  */
 function rawText(text: string, tag: string): string {
-  return text.replace(new RegExp(`</(${tag})`, "gi"), "<\\/$1");
+  if (tag.toLowerCase() === "script") {
+    return text.replace(
+      /(<\/?)(s)(cript)/gi,
+      (_, start: string, s: string, rest: string) =>
+        `${start}\\u00${s === "s" ? "73" : "53"}${rest}`,
+    );
+  }
+  return text.replace(/<\/(style)/gi, "<\\/$1");
 }
 
 function stringFrom(attributes: JSX.Attributes): string {
