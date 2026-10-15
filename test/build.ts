@@ -54,12 +54,12 @@ export async function startServer(root: string): Promise<{ origin: string; serve
 /**
  * Runs the build in Cloudflare's workerd with `wrangler dev`, from a
  * `wrangler.jsonc` with `config` that serves `dist/client` as static
- * assets. Resolves with its origin.
+ * assets. Resolves with its origin and a function that stops it.
  */
 export async function startWorker(
   root: string,
   config: Record<string, unknown>,
-): Promise<{ origin: string; server: ChildProcess }> {
+): Promise<{ origin: string; stop: () => void }> {
   await writeFile(
     join(root, "wrangler.jsonc"),
     JSON.stringify({ name: "huuma-fixture", compatibility_date: "2026-10-01", ...config }),
@@ -78,22 +78,53 @@ export async function startWorker(
       cwd: root,
       env: { ...process.env, WRANGLER_SEND_METRICS: "false", WRANGLER_LOG_PATH: root },
       stdio: ["ignore", "pipe", "pipe"],
+      // Its own process group: bin/wrangler.js starts the CLI as a child,
+      // which starts workerd. Killing only the first process leaves them
+      // running.
+      detached: true,
     },
   );
-  await started(server, "wrangler dev", "Ready on");
-  return { origin: `http://127.0.0.1:${port}`, server };
+  const stop = () => {
+    try {
+      process.kill(-server.pid!, "SIGKILL");
+    } catch {
+      // Already stopped.
+    }
+  };
+  await started(server, "wrangler dev", "Ready on", stop);
+  return { origin: `http://127.0.0.1:${port}`, stop };
 }
 
-// Resolves once `server` printed `ready`; rejects if it exits first.
-function started(server: ChildProcess, name: string, ready: string): Promise<void> {
+// How long a server may take to start, below the tests' hook timeouts.
+const START_TIMEOUT = 40_000;
+
+// Resolves once `server` printed `ready`. Rejects if it exits first, or
+// stops it and rejects if it doesn't start in time: the caller only gets
+// the process once it started, so it couldn't stop it.
+function started(
+  server: ChildProcess,
+  name: string,
+  ready: string,
+  stop: () => void = () => server.kill(),
+): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let output = "";
+    const timer = setTimeout(() => {
+      stop();
+      reject(new Error(`${name} didn't start in ${START_TIMEOUT / 1000}s: ${output}`));
+    }, START_TIMEOUT);
     const read = (chunk: Buffer) => {
       output += chunk.toString();
-      if (output.includes(ready)) resolve();
+      if (output.includes(ready)) {
+        clearTimeout(timer);
+        resolve();
+      }
     };
     server.stdout!.on("data", read);
     server.stderr!.on("data", read);
-    server.once("exit", (code) => reject(new Error(`${name} exited (${code}): ${output}`)));
+    server.once("exit", (code) => {
+      clearTimeout(timer);
+      reject(new Error(`${name} exited (${code}): ${output}`));
+    });
   });
 }

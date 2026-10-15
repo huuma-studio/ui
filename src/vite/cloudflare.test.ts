@@ -2,7 +2,6 @@
 // with `dist/client` as Workers' static assets, at the base / and below
 // another base.
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import type { ChildProcess } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -19,7 +18,7 @@ const STARTUP = 60_000;
 function describeWorker(name: string, base: string, assets: Record<string, string>) {
   describe(name, () => {
     let root: string;
-    let server: ChildProcess;
+    let stop: (() => void) | undefined;
     let origin: string;
     let manifest: Manifest;
     const nodeEnv = process.env.NODE_ENV;
@@ -31,14 +30,14 @@ function describeWorker(name: string, base: string, assets: Record<string, strin
       manifest = JSON.parse(
         await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
       ) as Manifest;
-      ({ origin, server } = await startWorker(root, {
+      ({ origin, stop } = await startWorker(root, {
         main: "dist/server/worker.js",
         assets: { directory: "dist/client", ...assets },
       }));
     }, STARTUP);
     afterAll(async () => {
       process.env.NODE_ENV = nodeEnv;
-      server?.kill();
+      stop?.();
       await rm(root, { recursive: true, force: true });
     });
 
