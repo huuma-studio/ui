@@ -85,3 +85,29 @@ describe("attributes in the browser and from the server", () => {
     expect(attributesOf(node)).toStrictEqual(attributesOf(fromServer(props)));
   });
 });
+
+describe("an input's value", () => {
+  test("is cleared by false, like the server leaves it out", () => {
+    const node = document.createElement("input");
+    const before = vElementWith({ value: "typed" }, node);
+    for (const change of setAttribute("value", "typed", before)) attribute(change);
+    expect(node.value).toStrictEqual("typed");
+
+    for (const change of compareAttributes(vElementWith({ value: false }, node), before)) {
+      attribute(change as AttributeChangeSet);
+    }
+    expect(node.value).toStrictEqual("");
+    expect(node.hasAttribute("value")).toStrictEqual(false);
+    expect(renderToStringSync(jsx("input", { value: false }))).toStrictEqual("<input/>");
+  });
+
+  test("takes strings and numbers as they are", () => {
+    const node = document.createElement("input");
+    for (const value of ["a", 5]) {
+      for (const change of setAttribute("value", value, vElementWith({ value }, node))) {
+        attribute(change);
+      }
+      expect(node.value).toStrictEqual(String(value));
+    }
+  });
+});

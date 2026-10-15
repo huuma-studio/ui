@@ -75,8 +75,12 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     }
     return;
   }
-  if (name === "value" && value != null) {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = String(value);
+  if (name === "value") {
+    // The field's current value, by the same rule as the attribute:
+    // `false` clears it, like the server, which writes no value.
+    const text = attributeValue(name, value);
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = text ?? "";
+    if (text === undefined) (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
     return;
   }
   // The same rules as the server renderer (attributes.ts): invalid names,
