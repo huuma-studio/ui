@@ -1,5 +1,6 @@
 import { type HasVNodeRef, type VElement, VNodeProps } from "../../../../v-node/mod.ts";
 import { BOOLEAN_ATTRIBUTES } from "../../../../jsx-runtime/boolean-attributes.ts";
+import { attributeValue, isValidAttributeName } from "../../../../jsx-runtime/attributes.ts";
 import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
@@ -78,10 +79,23 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = String(value);
     return;
   }
-  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, value != null ? String(value) : "");
+  // The same rules as the server renderer (attributes.ts): invalid names,
+  // string event handlers and javascript: URLs are left out; `true`/`false`
+  // follow one rule.
+  const text = attributeValue(name, value);
+  if (text === undefined) {
+    // An invalid name can't be on the element, and removeAttribute() would
+    // throw on it.
+    if (isValidAttributeName(name)) {
+      (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
+    }
+    return;
+  }
+  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, text);
 }
 
 function remove({ name, vNode }: DeleteAttributePayload): void {
+  if (!isValidAttributeName(name)) return;
   if (name === "checked") {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = false;
   }
@@ -186,7 +200,9 @@ export function setAttribute(
       },
     ];
   }
-  if (typeof value === "string" || typeof value === "number" || value === true) {
+  // createOrUpdate() decides how `false` is written: `"false"` for
+  // `aria-*` and `data-*`, left out otherwise.
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return [
       {
         [Props.Action]: Action.Create,
@@ -195,18 +211,6 @@ export function setAttribute(
           vNode,
           name: key,
           value,
-        },
-      },
-    ];
-  }
-  if (value === false) {
-    return [
-      {
-        [Props.Type]: Type.Attribute,
-        [Props.Action]: Action.Delete,
-        [Props.Payload]: {
-          vNode,
-          name: key,
         },
       },
     ];
