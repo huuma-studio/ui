@@ -3,9 +3,18 @@
 import { devWarn } from "../utils/dev.ts";
 import { BOOLEAN_ATTRIBUTES } from "./boolean-attributes.ts";
 
-// An XML name, which is what `setAttribute()` accepts (like React's check).
-// Other names could close the start tag or add attributes in server-rendered
-// HTML, e.g. a spread prop named `x onmouseover=alert(1) y`.
+// An XML name, like React's check: `NameStartChar` and `NameChar` of XML 1.0,
+// https://www.w3.org/TR/xml/#NT-NameStartChar. Other names could close the
+// start tag or add attributes in server-rendered HTML, e.g. a spread prop
+// named `x onmouseover=alert(1) y`.
+//
+// Stricter than needed today: the HTML parser only ends an attribute name at
+// whitespace, `/`, `>` or `=`
+// (https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state),
+// and the DOM standard's `setAttribute()` now only rejects those, NUL and the
+// empty name (https://dom.spec.whatwg.org/#valid-attribute-local-name; Chromium
+// 155 accepts `@click`). Older browsers still throw on anything that isn't an
+// XML name, which this rule keeps the browser runtime clear of.
 const NAME_START =
   ":A-Z_a-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u02FF\\u0370-\\u037D\\u037F-\\u1FFF" +
   "\\u200C-\\u200D\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD";
