@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { jsx, type JSX } from "../../jsx-runtime/mod.ts";
+import { jsx, jsxAttr, jsxEscape, jsxTemplate, type JSX } from "../../jsx-runtime/mod.ts";
 import { renderToString } from "./mod.ts";
 import { renderToStringSync } from "./render.ts";
 
@@ -262,5 +262,41 @@ describe("rendering untrusted values", () => {
     expect(
       render(<div aria-expanded={false} data-open={true} title={true} lang={false} />),
     ).toStrictEqual('<div aria-expanded="false" data-open="true" title></div>');
+  });
+});
+
+// Templates as the precompile transform builds them: static HTML strings
+// from the source code, with dynamic children in `jsxEscape()` and dynamic
+// attributes in `jsxAttr()`.
+describe("rendering precompiled templates", () => {
+  test("escapes dynamic children once", () => {
+    const untrusted = "<img src=x onerror=alert(1)> & co";
+    expect(renderToStringSync(jsxTemplate(["<p>", "</p>"], jsxEscape(untrusted)))).toStrictEqual(
+      "<p>&lt;img src=x onerror=alert(1)&gt; &amp; co</p>",
+    );
+    // Numbers, null, arrays and elements, like JSX children.
+    expect(
+      renderToStringSync(
+        jsxTemplate(["<ul>", "</ul>"], jsxEscape([1, null, false, <li>{"a < b"}</li>])),
+      ),
+    ).toStrictEqual("<ul>1<li>a &lt; b</li></ul>");
+  });
+
+  test("writes the static strings as they are", () => {
+    expect(
+      renderToStringSync(jsxTemplate(['<p class="x">&amp; ', "</p>"], jsxEscape("&"))),
+    ).toStrictEqual('<p class="x">&amp; &amp;</p>');
+  });
+
+  test("checks dynamic attributes with jsxAttr()", () => {
+    const template = jsxTemplate(
+      ["<a ", " ", ">", "</a>"],
+      jsxAttr("href", "javascript:alert(1)"),
+      jsxAttr("title", '"><script>alert(1)</script>'),
+      jsxEscape("link"),
+    );
+    expect(renderToStringSync(template)).toStrictEqual(
+      '<a  title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;">link</a>',
+    );
   });
 });

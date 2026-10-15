@@ -137,7 +137,15 @@ export function jsxAttr(name: string, value: unknown): JSX.Element {
   return { templates: [bare ? name : `${name}="${escape(text)}"`], nodes: [""] };
 }
 
-// TODO: We escape in the render step but to be sure check impact of not escaping here!
+/**
+ * The precompile transform wraps each dynamic child of a template in
+ * `jsxEscape()`. It doesn't escape on purpose: the child becomes one of the
+ * template's `nodes`, which are rendered like any JSX child, so text in it
+ * is escaped once, by the renderer. Escaping here too would escape it twice
+ * (`<` → `&lt;` → `&amp;lt;`). Only the template's static strings, which
+ * come from the source code, are written as they are; dynamic attributes go
+ * through `jsxAttr()`, which escapes their value itself.
+ */
 export function jsxEscape(node: JSX.Element): JSX.Element {
   return node;
 }
