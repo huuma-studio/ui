@@ -105,6 +105,23 @@ describe("vite build", () => {
     expect(html).not.toContain("@id/");
   });
 
+  test("keeps the manifest out of Cloudflare Workers' assets, and caches hashed files", async () => {
+    const ignore = await readFile(join(root, "dist/client/.assetsignore"), "utf8");
+    expect(ignore.split("\n")).toContain(".vite");
+    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+    expect(headers).toContain("/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n");
+  });
+
+  test("builds the app as a Cloudflare Worker", async () => {
+    const worker = (
+      (await import(pathToFileURL(join(root, "dist/server/worker.js")).href)) as {
+        default: unknown;
+      }
+    ).default;
+    // At the base /, the Worker is the app.
+    expect(worker).toBe(app);
+  });
+
   test("renders the pages like the Deno pipeline", async () => {
     // The snapshot is what the Deno pipeline rendered before it was removed.
     await expect(await renderFixture(app)).toMatchFileSnapshot("../../test/snapshots/basic.txt");
@@ -192,6 +209,18 @@ describe("a build with a URL base, e.g. a CDN", () => {
     expect(root.headers.get("location")).toStrictEqual("/shop/");
   });
 
+  test("builds a Worker that strips the base's path", async () => {
+    const worker = (
+      (await import(pathToFileURL(join(root, "dist/server/worker.js")).href)) as {
+        default: { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
+      }
+    ).default;
+    const env = { ASSETS: { fetch: async () => new Response(null, { status: 404 }) } };
+    const response = await worker.fetch(new Request("http://localhost/shop/about"), env, {});
+    expect(response.status).toStrictEqual(200);
+    expect(await response.text()).toContain("<h1>About</h1>");
+  });
+
   test("calls remote functions on the app's server, not on the CDN", async () => {
     // Bundled into the island that calls it.
     const island = manifest["app/remote/sum.client.tsx"]!;
@@ -234,6 +263,33 @@ test.each(["./host.server.ts", "./host.server", "#host"])(
   },
 );
 
+// `vite build` loads vite.config.ts once per environment, so each gets its
+// own instance of the plugin (the other tests pass it inline, shared).
+describe("a build from vite.config.ts, like `vite build`", () => {
+  let root: string;
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(fixtures, ".tmp-build-config-"));
+    await cp(join(fixtures, "basic"), root, { recursive: true });
+    const builder = await createBuilder({
+      root,
+      configFile: join(root, "vite.config.ts"),
+      logLevel: "silent",
+    });
+    await builder.buildApp();
+  });
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("tells server.js and Workers which files have a hash", async () => {
+    const server = await readFile(join(root, "dist/server/server.js"), "utf8");
+    expect(server).toMatch(/hashed: \[\s*"assets\/[^"]+-[\w-]{8}\.js"/);
+    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+    expect(headers).toContain("/assets/*\n");
+  });
+});
+
 describe("a build with unhashed file names", () => {
   let root: string;
   let server: ChildProcess;
@@ -271,6 +327,11 @@ describe("a build with unhashed file names", () => {
     expect(runtime.file).toMatch(/^assets\/runtime-.+\.js$/);
     const entry = await fetch(`${origin}/${runtime.file}`);
     expect(entry.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
+
+    // The same for Cloudflare Workers.
+    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+    expect(headers).toContain("/assets/*\n");
+    expect(headers).not.toContain("counter.client");
   });
 });
 

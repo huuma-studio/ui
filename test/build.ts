@@ -2,9 +2,10 @@
 // the build tests and the browser tests.
 import { createBuilder, type InlineConfig } from "vite";
 import { type ChildProcess, spawn } from "node:child_process";
-import { cp, mkdtemp } from "node:fs/promises";
+import { cp, mkdtemp, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { createServer } from "node:net";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { huuma } from "../src/vite/mod.ts";
@@ -46,15 +47,84 @@ export async function startServer(root: string): Promise<{ origin: string; serve
     stdio: ["ignore", "pipe", "pipe"],
   });
   // Route logs once the server is listening.
-  await new Promise<void>((resolve, reject) => {
+  await started(server, "server.js", "Listening on");
+  return { origin: `http://127.0.0.1:${port}`, server };
+}
+
+/**
+ * Runs the build in Cloudflare's workerd with `wrangler dev`, from a
+ * `wrangler.jsonc` with `config` that serves `dist/client` as static
+ * assets. Resolves with its origin and a function that stops it.
+ */
+export async function startWorker(
+  root: string,
+  config: Record<string, unknown>,
+): Promise<{ origin: string; stop: () => void }> {
+  await writeFile(
+    join(root, "wrangler.jsonc"),
+    JSON.stringify({ name: "huuma-fixture", compatibility_date: "2026-10-01", ...config }),
+  );
+  const [port, inspectorPort] = [await freePort(), await freePort()];
+  // The CLI, which wrangler's package exports don't include.
+  const wrangler = join(
+    dirname(createRequire(import.meta.url).resolve("wrangler/package.json")),
+    "bin/wrangler.js",
+  );
+  const args = ["dev", "--ip", "127.0.0.1", "--port", String(port)];
+  const server = spawn(
+    process.execPath,
+    [wrangler, ...args, "--inspector-port", String(inspectorPort)],
+    {
+      cwd: root,
+      env: { ...process.env, WRANGLER_SEND_METRICS: "false", WRANGLER_LOG_PATH: root },
+      stdio: ["ignore", "pipe", "pipe"],
+      // Its own process group: bin/wrangler.js starts the CLI as a child,
+      // which starts workerd. Killing only the first process leaves them
+      // running.
+      detached: true,
+    },
+  );
+  const stop = () => {
+    try {
+      process.kill(-server.pid!, "SIGKILL");
+    } catch {
+      // Already stopped.
+    }
+  };
+  await started(server, "wrangler dev", "Ready on", stop);
+  return { origin: `http://127.0.0.1:${port}`, stop };
+}
+
+// How long a server may take to start, below the tests' hook timeouts.
+const START_TIMEOUT = 40_000;
+
+// Resolves once `server` printed `ready`. Rejects if it exits first, or
+// stops it and rejects if it doesn't start in time: the caller only gets
+// the process once it started, so it couldn't stop it.
+function started(
+  server: ChildProcess,
+  name: string,
+  ready: string,
+  stop: () => void = () => server.kill(),
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     let output = "";
+    const timer = setTimeout(() => {
+      stop();
+      reject(new Error(`${name} didn't start in ${START_TIMEOUT / 1000}s: ${output}`));
+    }, START_TIMEOUT);
     const read = (chunk: Buffer) => {
       output += chunk.toString();
-      if (output.includes("Listening on")) resolve();
+      if (output.includes(ready)) {
+        clearTimeout(timer);
+        resolve();
+      }
     };
     server.stdout!.on("data", read);
     server.stderr!.on("data", read);
-    server.once("exit", (code) => reject(new Error(`server.js exited (${code}): ${output}`)));
+    server.once("exit", (code) => {
+      clearTimeout(timer);
+      reject(new Error(`${name} exited (${code}): ${output}`));
+    });
   });
-  return { origin: `http://127.0.0.1:${port}`, server };
 }

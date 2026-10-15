@@ -3,28 +3,37 @@ import { join, parse, relative, resolve } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
 import { appBase } from "./base.ts";
-import { RUNTIME_INPUT } from "./client-build.ts";
+import { CLIENT_BUILD_FILE, readClientBuild, RUNTIME_INPUT } from "./client-build.ts";
 import { SERVER_ID } from "./entry.ts";
 import { RUNTIME_ID } from "./islands.ts";
+import { writeWorkersFiles } from "./workers.ts";
 
 /**
  * Starts the built app on Node, serving the client build's files too:
  * `dist/server/server.js`. Server only, in the production build.
  */
 export const NODE_ID = "virtual:huuma/node";
-const RESOLVED_NODE_ID = `\0${NODE_ID}`;
+
+/**
+ * The app as a Cloudflare Worker: `dist/server/worker.js`. Server only, in
+ * the production build.
+ */
+export const WORKER_ID = "virtual:huuma/worker";
+
+// The modules this plugin generates for the server build.
+const ENTRIES = new RegExp(`^(${NODE_ID}|${WORKER_ID})$`);
+const RESOLVED_ENTRIES = new RegExp(`^\0(${NODE_ID}|${WORKER_ID})$`);
 
 /**
  * The production build (`vite build`): the client environment builds the
  * browser runtime and the islands into `dist/client`, with a manifest;
  * then the ssr environment builds the app into `dist/server`, reading the
  * client's manifest for the islands' browser paths: `app.js` exports the
- * app, `server.js` starts it on Node.
+ * app, `server.js` starts it on Node, `worker.js` is it as a Cloudflare
+ * Worker. The client build also gets the files Workers reads
+ * (`workers.ts`).
  */
 export function buildPlugin(root: () => string): Plugin {
-  // The client build's files with a content hash in their name, which
-  // `server.js` caches for good.
-  const hashed = new Set<string>();
   // The islands' files, which the client build emits as chunks.
   const islands = new Set<string>();
   return {
@@ -52,7 +61,7 @@ export function buildPlugin(root: () => string): Plugin {
           ssr: {
             build: {
               outDir: config.environments?.ssr?.build?.outDir ?? join(outDir, "server"),
-              rolldownOptions: { input: { app: SERVER_ID, server: NODE_ID } },
+              rolldownOptions: { input: { app: SERVER_ID, server: NODE_ID, worker: WORKER_ID } },
             },
           },
         },
@@ -60,29 +69,42 @@ export function buildPlugin(root: () => string): Plugin {
     },
     // The server reads the client's manifest, so the client builds first.
     async buildApp(builder) {
-      await builder.build(builder.environments.client);
+      const client = builder.environments.client;
+      await builder.build(client);
+      if (client.config.build.write) {
+        await writeWorkersFiles({
+          outDir: resolve(client.config.root, client.config.build.outDir),
+          publicDir: client.config.publicDir,
+          hashed: new Set((await readClientBuild(builder.config)).hashed),
+          warn: (message) => client.logger.warn(message),
+        });
+      }
       await builder.build(builder.environments.ssr);
     },
     resolveId: {
-      filter: { id: new RegExp(`^${NODE_ID}$`) },
-      handler() {
-        return RESOLVED_NODE_ID;
+      filter: { id: ENTRIES },
+      handler(id) {
+        return `\0${id}`;
       },
     },
     load: {
-      filter: { id: new RegExp(`^\0${NODE_ID}$`) },
-      handler() {
+      filter: { id: RESOLVED_ENTRIES },
+      async handler(id) {
+        const entry = id.slice(1);
         if (this.environment.config.consumer !== "server" || this.environment.mode !== "build") {
-          this.error(`${NODE_ID} starts the built app and is only part of the server build.`);
+          this.error(`${entry} starts the built app and is only part of the server build.`);
         }
         const config = this.environment.getTopLevelConfig();
+        if (entry === WORKER_ID) {
+          return { code: workerModule(appBase(config.base)), moduleType: "js" };
+        }
         const client = resolve(config.root, config.environments.client.build.outDir);
         const server = resolve(config.root, this.environment.config.build.outDir);
         return {
           code: nodeModule({
             client: `${relative(server, client).replaceAll("\\", "/")}/`,
             base: appBase(config.base),
-            hashed: [...hashed].sort(),
+            hashed: (await readClientBuild(config)).hashed,
           }),
           moduleType: "js",
         };
@@ -92,7 +114,6 @@ export function buildPlugin(root: () => string): Plugin {
       if (this.environment.config.consumer !== "client" || this.environment.mode !== "build") {
         return;
       }
-      hashed.clear();
       islands.clear();
       for (const island of await listIslands(root())) {
         const id = join(island.filePath, island.fileName);
@@ -105,11 +126,22 @@ export function buildPlugin(root: () => string): Plugin {
         });
       }
     },
+    // The files with a content hash in their name, which `server.js` and
+    // Workers cache for good, go to a file next to Vite's manifest:
+    // `vite build` with a config file gives each environment its own
+    // instance of this plugin, so the server build can't share memory
+    // with the client build.
     generateBundle(options, bundle) {
       if (this.environment.config.consumer !== "client") return;
-      for (const file of Object.values(bundle)) {
-        if (hasHash(file, options, islands)) hashed.add(file.fileName);
-      }
+      const hashed = Object.values(bundle)
+        .filter((file) => hasHash(file, options, islands))
+        .map((file) => file.fileName)
+        .sort();
+      this.emitFile({
+        type: "asset",
+        fileName: CLIENT_BUILD_FILE,
+        source: JSON.stringify({ hashed }),
+      });
     },
   };
 }
@@ -194,6 +226,17 @@ export function nodeModule(options: { client: string; base: string; hashed: stri
     `  base: ${JSON.stringify(options.base)},`,
     `  hashed: ${JSON.stringify(options.hashed)},`,
     "});",
+    "",
+  ].join("\n");
+}
+
+/** Generates the source of `virtual:huuma/worker`. */
+export function workerModule(base: string): string {
+  return [
+    `import app from ${JSON.stringify(SERVER_ID)};`,
+    'import { worker } from "@huuma/ui/vite/runtime";',
+    "",
+    `export default worker(app, ${JSON.stringify(base)});`,
     "",
   ].join("\n");
 }
