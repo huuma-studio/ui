@@ -71,6 +71,11 @@ tester.run("async-remote-functions", rule("async-remote-functions"), {
     remote("const save = async () => {}; export default save;"),
     remote('import save from "./db.ts"; export default save;'),
     remote("export default interface Input { email: string }"),
+    remote("const save = async () => {}; export default save satisfies Handler;"),
+    remote('import save from "./db.ts"; export default (save as Handler);'),
+    remote(
+      "export default function save(id: string): Promise<void>;\nexport default function save(id: number): Promise<void>;\nexport default async function save(id: unknown) {}",
+    ),
     { code: "export function helper() {}", filename: "helper.ts" },
     { code: 'export * from "./helpers.ts";', filename: "helper.ts" },
   ],
@@ -95,6 +100,10 @@ tester.run("async-remote-functions", rule("async-remote-functions"), {
     remoteError("export default { save: async () => {} };"),
     remoteError("function hello() {} export default hello;"),
     remoteError("export default handlers;"),
+    remoteError("function hello() {} export default hello satisfies Handler;"),
+    remoteError(
+      "export default function save(id: string): Promise<void>;\nexport default function save(id: unknown) {}",
+    ),
     exportAllError('export * from "./db.ts";'),
     exportAllError('export * as db from "./db.ts";'),
   ],

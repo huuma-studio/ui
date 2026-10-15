@@ -127,8 +127,13 @@ const asyncRemoteFunctions: Rule = {
           }
           // The default export is a remote function too, named `default`.
           if (node.type === "ExportDefaultDeclaration") {
-            const declaration = node.declaration;
+            let declaration = node.declaration;
             if (declaration?.type === "TSInterfaceDeclaration") continue;
+            // An overload signature: the implementation is checked.
+            if (declaration?.type === "TSDeclareFunction") continue;
+            while (declaration && TRANSPARENT.has(declaration.type)) {
+              declaration = declaration.expression;
+            }
             // `export default save` is checked like `export { save }`.
             const binding =
               declaration?.type === "Identifier" ? names.get(declaration.name ?? "") : undefined;
