@@ -125,6 +125,20 @@ const asyncRemoteFunctions: Rule = {
                 "Huuma remote modules can't use `export *`: export each remote function by name",
             });
           }
+          // The default export is a remote function too, named `default`.
+          if (node.type === "ExportDefaultDeclaration") {
+            const declaration = node.declaration;
+            if (declaration?.type === "TSInterfaceDeclaration") continue;
+            // `export default save` is checked like `export { save }`.
+            const binding =
+              declaration?.type === "Identifier" ? names.get(declaration.name ?? "") : undefined;
+            const valid =
+              declaration?.type === "Identifier"
+                ? binding !== undefined && binding !== "other"
+                : isAsyncFunction(declaration);
+            if (!valid) context.report({ node, message });
+            continue;
+          }
           if (node.type !== "ExportNamedDeclaration") continue;
           // Types never reach the client.
           if (node.exportKind === "type") continue;
