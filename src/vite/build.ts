@@ -3,7 +3,7 @@ import { join, parse, relative, resolve } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
 import { appBase } from "./base.ts";
-import { RUNTIME_INPUT } from "./client-build.ts";
+import { CLIENT_BUILD_FILE, readClientBuild, RUNTIME_INPUT } from "./client-build.ts";
 import { SERVER_ID } from "./entry.ts";
 import { RUNTIME_ID } from "./islands.ts";
 import { writeWorkersFiles } from "./workers.ts";
@@ -34,9 +34,6 @@ const RESOLVED_ENTRIES = new RegExp(`^\0(${NODE_ID}|${WORKER_ID})$`);
  * (`workers.ts`).
  */
 export function buildPlugin(root: () => string): Plugin {
-  // The client build's files with a content hash in their name, which
-  // `server.js` caches for good.
-  const hashed = new Set<string>();
   // The islands' files, which the client build emits as chunks.
   const islands = new Set<string>();
   return {
@@ -78,7 +75,7 @@ export function buildPlugin(root: () => string): Plugin {
         await writeWorkersFiles({
           outDir: resolve(client.config.root, client.config.build.outDir),
           publicDir: client.config.publicDir,
-          hashed,
+          hashed: new Set((await readClientBuild(builder.config)).hashed),
           warn: (message) => client.logger.warn(message),
         });
       }
@@ -92,7 +89,7 @@ export function buildPlugin(root: () => string): Plugin {
     },
     load: {
       filter: { id: RESOLVED_ENTRIES },
-      handler(id) {
+      async handler(id) {
         const entry = id.slice(1);
         if (this.environment.config.consumer !== "server" || this.environment.mode !== "build") {
           this.error(`${entry} starts the built app and is only part of the server build.`);
@@ -107,7 +104,7 @@ export function buildPlugin(root: () => string): Plugin {
           code: nodeModule({
             client: `${relative(server, client).replaceAll("\\", "/")}/`,
             base: appBase(config.base),
-            hashed: [...hashed].sort(),
+            hashed: (await readClientBuild(config)).hashed,
           }),
           moduleType: "js",
         };
@@ -117,7 +114,6 @@ export function buildPlugin(root: () => string): Plugin {
       if (this.environment.config.consumer !== "client" || this.environment.mode !== "build") {
         return;
       }
-      hashed.clear();
       islands.clear();
       for (const island of await listIslands(root())) {
         const id = join(island.filePath, island.fileName);
@@ -130,11 +126,22 @@ export function buildPlugin(root: () => string): Plugin {
         });
       }
     },
+    // The files with a content hash in their name, which `server.js` and
+    // Workers cache for good, go to a file next to Vite's manifest:
+    // `vite build` with a config file gives each environment its own
+    // instance of this plugin, so the server build can't share memory
+    // with the client build.
     generateBundle(options, bundle) {
       if (this.environment.config.consumer !== "client") return;
-      for (const file of Object.values(bundle)) {
-        if (hasHash(file, options, islands)) hashed.add(file.fileName);
-      }
+      const hashed = Object.values(bundle)
+        .filter((file) => hasHash(file, options, islands))
+        .map((file) => file.fileName)
+        .sort();
+      this.emitFile({
+        type: "asset",
+        fileName: CLIENT_BUILD_FILE,
+        source: JSON.stringify({ hashed }),
+      });
     },
   };
 }

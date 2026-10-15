@@ -263,6 +263,33 @@ test.each(["./host.server.ts", "./host.server", "#host"])(
   },
 );
 
+// `vite build` loads vite.config.ts once per environment, so each gets its
+// own instance of the plugin (the other tests pass it inline, shared).
+describe("a build from vite.config.ts, like `vite build`", () => {
+  let root: string;
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(fixtures, ".tmp-build-config-"));
+    await cp(join(fixtures, "basic"), root, { recursive: true });
+    const builder = await createBuilder({
+      root,
+      configFile: join(root, "vite.config.ts"),
+      logLevel: "silent",
+    });
+    await builder.buildApp();
+  });
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("tells server.js and Workers which files have a hash", async () => {
+    const server = await readFile(join(root, "dist/server/server.js"), "utf8");
+    expect(server).toMatch(/hashed: \[\s*"assets\/[^"]+-[\w-]{8}\.js"/);
+    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+    expect(headers).toContain("/assets/*\n");
+  });
+});
+
 describe("a build with unhashed file names", () => {
   let root: string;
   let server: ChildProcess;
