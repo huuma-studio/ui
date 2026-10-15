@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import type { JSX } from "../../jsx-runtime/mod.ts";
+import { jsx, type JSX } from "../../jsx-runtime/mod.ts";
 import { renderToString } from "./mod.ts";
+import { renderToStringSync } from "./render.ts";
 
 function Title() {
   return <h1>Hello World!</h1>;
@@ -104,5 +105,78 @@ describe(renderToString.name, () => {
         {},
       ),
     ).toStrictEqual('<div><a href="https://huuma.studio">Link</a></div>');
+  });
+});
+
+// Spec #131's probe: what the renderer makes of markup from outside the code.
+describe("rendering untrusted values", () => {
+  const render = (node: JSX.Element) => renderToStringSync(node);
+
+  test("escapes text, attribute values and textarea content", () => {
+    expect(render(<p>{"<img src=x onerror=alert(1)>"}</p>)).toStrictEqual(
+      "<p>&lt;img src=x onerror=alert(1)&gt;</p>",
+    );
+    expect(render(<p title={'"><script>alert(1)</script>'} />)).toStrictEqual(
+      '<p title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"></p>',
+    );
+    expect(render(<textarea>{"</textarea><script>alert(1)</script>"}</textarea>)).toStrictEqual(
+      "<textarea>&lt;/textarea&gt;&lt;script&gt;alert(1)&lt;/script&gt;</textarea>",
+    );
+  });
+
+  test("leaves out spread props with invalid attribute names", () => {
+    const attributes = {
+      "x onmouseover=alert(1) y": "1",
+      "a><script>alert(1)</script": "x",
+      'a"b': "c",
+      "data-ok": "1",
+    };
+    expect(render(<div {...attributes} />)).toStrictEqual('<div data-ok="1"></div>');
+  });
+
+  test("throws on an invalid tag name", () => {
+    const tag = "img src=x onerror=alert(1)";
+    expect(() => render(jsx(tag, {}))).toThrow(
+      'Can\'t render the element "img src=x onerror=alert(1)": invalid tag name.',
+    );
+    expect(render(jsx("my-element", {}))).toStrictEqual("<my-element></my-element>");
+  });
+
+  test("leaves out javascript: URLs in URL attributes", () => {
+    expect(render(<a href="javascript:alert(1)">x</a>)).toStrictEqual("<a>x</a>");
+    expect(render(<a href={" \u0001JaVa\tScRiPt:alert(1)"}>x</a>)).toStrictEqual("<a>x</a>");
+    expect(render(<iframe src="javascript:alert(1)" />)).toStrictEqual("<iframe></iframe>");
+    expect(render(<form action="javascript:alert(1)" />)).toStrictEqual("<form></form>");
+    expect(render(<button formaction="javascript:alert(1)" />)).toStrictEqual("<button></button>");
+    // Other URLs, and the word in other attributes, stay.
+    expect(render(<a href="/javascript:x">x</a>)).toStrictEqual('<a href="/javascript:x">x</a>');
+    expect(render(<a title="javascript:alert(1)">x</a>)).toStrictEqual(
+      '<a title="javascript:alert(1)">x</a>',
+    );
+  });
+
+  test("leaves out string event handlers", () => {
+    expect(render(<div onclick="alert(1)" onMouseOver="alert(1)" />)).toStrictEqual("<div></div>");
+  });
+
+  test("writes <script> and <style> text as it is, but can't be closed early", () => {
+    expect(render(<style>{"a > b { content: '&'; }"}</style>)).toStrictEqual(
+      "<style>a > b { content: '&'; }</style>",
+    );
+    expect(render(<script>{"if (a < b && c) {}"}</script>)).toStrictEqual(
+      "<script>if (a < b && c) {}</script>",
+    );
+    expect(render(<script>{'x = "</script><script>alert(1)</SCRIPT>"'}</script>)).toStrictEqual(
+      '<script>x = "<\\/script><script>alert(1)<\\/SCRIPT>"</script>',
+    );
+    expect(render(<style>{"</style><script>alert(1)</script>"}</style>)).toStrictEqual(
+      "<style><\\/style><script>alert(1)</script></style>",
+    );
+  });
+
+  test("writes true and false like the browser runtime", () => {
+    expect(
+      render(<div aria-expanded={false} data-open={true} title={true} lang={false} />),
+    ).toStrictEqual('<div aria-expanded="false" data-open="true" title></div>');
   });
 });
