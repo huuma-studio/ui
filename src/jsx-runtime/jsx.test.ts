@@ -64,8 +64,16 @@ describe("jsxAttr non-boolean attributes", () => {
   });
 
   test("emits the bare name for static true", () => {
+    expect(jsxAttr("title", true)).toStrictEqual({ templates: ["title"], nodes: [""] });
+  });
+
+  test("writes true and false as strings for aria-* and data-*", () => {
     expect(jsxAttr("data-active", true)).toStrictEqual({
-      templates: ["data-active"],
+      templates: ['data-active="true"'],
+      nodes: [""],
+    });
+    expect(jsxAttr("aria-expanded", false)).toStrictEqual({
+      templates: ['aria-expanded="false"'],
       nodes: [""],
     });
   });

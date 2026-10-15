@@ -1,5 +1,6 @@
 import { escape } from "../utils/escape.ts";
 
+import { attributeValue } from "./attributes.ts";
 import { eventName, isEventName } from "./event.ts";
 import { BOOLEAN_ATTRIBUTES } from "./boolean-attributes.ts";
 import type { Signal } from "../signal/mod.ts";
@@ -127,18 +128,13 @@ export function createElement(
 }
 
 export function jsxAttr(name: string, value: unknown): JSX.Element {
-  if (BOOLEAN_ATTRIBUTES.has(name)) {
-    // A boolean attribute is true by its presence alone: a falsy value
-    // must be omitted, a truthy value must emit the bare name.
-    return value ? { templates: [escape(name)], nodes: [""] } : "";
-  }
-  if (typeof value === "string" || typeof value === "number" || value === true) {
-    return {
-      templates: [value === true ? escape(name) : `${escape(name)}="${escape(`${value}`)}"`],
-      nodes: [""],
-    };
-  }
-  return "";
+  // The same rules as the renderer: invalid names, string event handlers
+  // and javascript: URLs are left out (attributes.ts).
+  const text = attributeValue(name, value);
+  if (text === undefined) return "";
+  // `true` and boolean attributes as the bare name, the same as `=""`.
+  const bare = text === "" && (value === true || BOOLEAN_ATTRIBUTES.has(name));
+  return { templates: [bare ? name : `${name}="${escape(text)}"`], nodes: [""] };
 }
 
 // TODO: We escape in the render step but to be sure check impact of not escaping here!
