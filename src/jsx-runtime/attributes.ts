@@ -66,9 +66,10 @@ export function attributeValue(name: string, value: unknown): string | undefined
     devWarn(`Left out the attribute ${JSON.stringify(name)}: it isn't a valid attribute name.`);
     return undefined;
   }
-  if (BOOLEAN_ATTRIBUTES.has(name)) return value ? "" : undefined;
+  // HTML attribute names are case-insensitive: `DISABLED` is `disabled`.
+  const lower = name.toLowerCase();
+  if (BOOLEAN_ATTRIBUTES.has(lower)) return value ? "" : undefined;
   if (typeof value === "boolean") {
-    const lower = name.toLowerCase();
     if (lower.startsWith("aria-") || lower.startsWith("data-")) return String(value);
     return value ? "" : undefined;
   }
@@ -81,7 +82,7 @@ export function attributeValue(name: string, value: unknown): string | undefined
     return undefined;
   }
   const text = String(value);
-  if (URL_ATTRIBUTES.has(name.toLowerCase()) && JAVASCRIPT_URL.test(text)) {
+  if (URL_ATTRIBUTES.has(lower) && JAVASCRIPT_URL.test(text)) {
     devWarn(`Left out the attribute "${name}": it has a javascript: URL.`);
     return undefined;
   }

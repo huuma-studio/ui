@@ -54,6 +54,9 @@ describe(attributeValue.name, () => {
     expect(attributeValue("disabled", 1)).toStrictEqual("");
     expect(attributeValue("disabled", false)).toStrictEqual(undefined);
     expect(attributeValue("disabled", "")).toStrictEqual(undefined);
+    // Whatever the case of the name: HTML reads `DISABLED` as `disabled`.
+    expect(attributeValue("DISABLED", 0)).toStrictEqual(undefined);
+    expect(attributeValue("Disabled", 1)).toStrictEqual("");
   });
 
   test("writes true and false by React's rule", () => {

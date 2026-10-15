@@ -23,6 +23,7 @@ const CASES: Record<string, unknown>[] = [
   { title: false },
   { title: "x", tabindex: 0 },
   { disabled: true, hidden: false },
+  { DISABLED: 0, Hidden: 1 },
   { href: "javascript:alert(1)" },
   { onclick: "alert(1)" },
   { "x onerror=alert(1)": "1", "data-ok": "1" },
