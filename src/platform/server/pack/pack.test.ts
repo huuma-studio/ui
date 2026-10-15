@@ -1,5 +1,7 @@
 import { assert, describe, expect, test } from "vite-plus/test";
-import { executeRemoteFunction } from "./pack.ts";
+
+import { createUIApp } from "../app.ts";
+import { executeRemoteFunction, serveRemoteFunctions } from "./pack.ts";
 
 // Type alias for the per-file remote-function map shape used by the helper.
 // Tests pass plain functions returning Promises; the helper awaits them by
@@ -140,4 +142,62 @@ test("executeRemoteFunction: user-thrown error propagates (NOT wrapped) — lock
   assert(error instanceof ValidationError);
   expect(error.message).toContain("email is required");
   expect(error.name).toStrictEqual("ValidationError");
+});
+
+describe(serveRemoteFunctions.name, () => {
+  // Calls of `add`, to check refused requests never reach it.
+  const calls: unknown[][] = [];
+  const app = createUIApp(({ children }) => children);
+  serveRemoteFunctions(app, "/_huuma/remote/1a2b3c4d/math.remote", {
+    add: (a: number, b: number) => {
+      calls.push([a, b]);
+      return resolve(a + b);
+    },
+  });
+  const handle = app.deliver();
+  const call = (headers: Record<string, string>) =>
+    handle(
+      new Request("http://localhost/_huuma/remote/1a2b3c4d/math.remote", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ remoteFunction: "add", args: [1, 2] }),
+      }),
+      { remoteAddr: { transport: "tcp", hostname: "127.0.0.1", port: 1 } },
+    );
+
+  test("answers the JSON requests the browser stub sends", async () => {
+    for (const type of ["application/json", "application/json; charset=utf-8"]) {
+      const response = await call({ "content-type": type, "sec-fetch-site": "same-origin" });
+      expect(response.status, type).toStrictEqual(200);
+      expect(await response.json(), type).toStrictEqual(3);
+    }
+    // Without Sec-Fetch-Site too, e.g. from older browsers or other clients.
+    expect((await call({ "content-type": "application/json" })).status).toStrictEqual(200);
+  });
+
+  test("refuses bodies a form or another site can send without a preflight", async () => {
+    calls.length = 0;
+    for (const headers of [
+      { "content-type": "text/plain" },
+      { "content-type": "application/x-www-form-urlencoded" },
+      { "content-type": "multipart/form-data; boundary=x" },
+      {} as Record<string, string>,
+    ]) {
+      const response = await call(headers);
+      expect(response.status, JSON.stringify(headers)).toStrictEqual(415);
+      await response.body?.cancel();
+    }
+    expect(calls).toStrictEqual([]);
+  });
+
+  test("refuses requests a browser marks as cross-site", async () => {
+    calls.length = 0;
+    const response = await call({
+      "content-type": "application/json",
+      "sec-fetch-site": "cross-site",
+    });
+    expect(response.status).toStrictEqual(403);
+    await response.body?.cancel();
+    expect(calls).toStrictEqual([]);
+  });
 });
