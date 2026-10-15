@@ -54,6 +54,7 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 
 ## Server-side validation
 
+- The route only accepts `content-type: application/json` (otherwise `415`) and refuses requests a browser marks `Sec-Fetch-Site: cross-site` (`403`), so other sites can't call remote functions with a visitor's cookies (CSRF). Scripts and tests calling an endpoint directly must send the JSON content type.
 - The framework validates the request body with `@huuma/validate` in the route it registers for each remote module.
 - Schema: `{ remoteFunction: string, args?: unknown[] }`.
 - The server looks up `remoteFunction` on the imported module and invokes it with the args.
