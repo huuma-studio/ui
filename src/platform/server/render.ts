@@ -47,17 +47,21 @@ export function renderToStringSync(node: JSX.Element, globalOptions?: VGlobalOpt
   return stringify(createSync<unknown>(node, globalOptions));
 }
 
-function stringify<T>(vNode: VNode<T>): string {
+/**
+ * `foreign`: inside `<svg>` or `<math>`, where the HTML parser reads
+ * markup differently (see `elementToString()`).
+ */
+function stringify<T>(vNode: VNode<T>, foreign = false): string {
   if (!vNode) return "";
   switch (vNode.type) {
     case VType.TEXT:
       return vNode[VNodeProps.SKIP_ESCAPING] ? textFromVText(vNode) : escape(textFromVText(vNode));
     case VType.ELEMENT:
-      return elementToString(vNode);
+      return elementToString(vNode, foreign);
     case VType.COMPONENT:
-      return stringify(vNode[VNodeProps.AST]);
+      return stringify(vNode[VNodeProps.AST], foreign);
     case VType.FRAGMENT:
-      return vNode[VNodeProps.CHILDREN]?.map((child) => stringify(child)).join("") ?? "";
+      return vNode[VNodeProps.CHILDREN]?.map((child) => stringify(child, foreign)).join("") ?? "";
     default:
       throw Error("Node type is not supported!");
   }
@@ -67,7 +71,7 @@ function stringify<T>(vNode: VNode<T>): string {
 // break the script or style.
 const RAW_TEXT_TAGS = new Set(["script", "style"]);
 
-function elementToString<T>(vNode: VElement<T>): string {
+function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
   const tag = vNode[VNodeProps.TAG];
   const props = vNode[VNodeProps.PROPS];
   if (!isValidTagName(tag)) {
@@ -80,19 +84,27 @@ function elementToString<T>(vNode: VElement<T>): string {
   }
 
   const children = vNode[VNodeProps.CHILDREN];
+  const lower = tag.toLowerCase();
+  // Inside <svg> and <math> ("foreign content"), the HTML parser reads
+  // <script> and <style> content as markup, not as raw text, so their text
+  // must be escaped there, like any text (entities are decoded). SVG's
+  // <foreignObject> holds HTML again. The other places where HTML takes
+  // over again (SVG <desc>/<title>, MathML <mi> and friends) stay foreign
+  // here: escaping is the safe side, at worst a style there doesn't apply.
+  const childrenForeign = foreign ? lower !== "foreignobject" : lower === "svg" || lower === "math";
 
   const { dangerouslySetInnerHTML, children: _c, ...attributes } = props;
   if (dangerouslySetInnerHTML) {
     return `<${tag}${stringFrom(attributes)}>${dangerouslySetInnerHTML.__html}</${tag}>`;
   }
-  if (RAW_TEXT_TAGS.has(tag.toLowerCase())) {
+  if (!foreign && RAW_TEXT_TAGS.has(lower)) {
     // The whole content first, then made safe once: a closing tag split
     // across children (`{"</sty"}{"le>"}`) only appears once they're joined.
     const content = children?.map((child) => rawContent(child)).join("") ?? "";
     return `<${tag}${stringFrom(attributes)}>${rawText(content, tag)}</${tag}>`;
   }
   return `<${tag}${stringFrom(attributes)}>${
-    children?.map((child) => stringify(child)).join("") ?? ""
+    children?.map((child) => stringify(child, childrenForeign)).join("") ?? ""
   }</${tag}>`;
 }
 

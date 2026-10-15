@@ -218,6 +218,46 @@ describe("rendering untrusted values", () => {
     );
   });
 
+  test("escapes <style> and <script> text inside <svg> and <math>", () => {
+    // There the HTML parser reads their content as markup, so raw text could
+    // add elements (and decodes entities, so escaped CSS still works).
+    const untrusted = "<img src=x onerror=alert(1)>";
+    const Wrapped = () => <>{untrusted}</>;
+    expect(
+      render(
+        <svg>
+          <style>{untrusted}</style>
+          <style>
+            <>{untrusted}</>
+          </style>
+          <style>
+            <Wrapped />
+          </style>
+        </svg>,
+      ),
+    ).toStrictEqual(
+      "<svg>" + "<style>&lt;img src=x onerror=alert(1)&gt;</style>".repeat(3) + "</svg>",
+    );
+    expect(render(jsx("math", { children: jsx("script", { children: "a < b" }) }))).toStrictEqual(
+      "<math><script>a &lt; b</script></math>",
+    );
+    // <foreignObject> holds HTML again, and <svg> nested in it is foreign again.
+    expect(
+      render(
+        <svg>
+          <foreignObject>
+            <style>{"a > b {}"}</style>
+            <svg>
+              <style>{"a > b {}"}</style>
+            </svg>
+          </foreignObject>
+        </svg>,
+      ),
+    ).toStrictEqual(
+      "<svg><foreignObject><style>a > b {}</style><svg><style>a &gt; b {}</style></svg></foreignObject></svg>",
+    );
+  });
+
   test("writes true and false like the browser runtime", () => {
     expect(
       render(<div aria-expanded={false} data-open={true} title={true} lang={false} />),

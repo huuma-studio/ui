@@ -82,6 +82,37 @@ describe.skipIf(chromium === undefined)("<script> and <style> in a browser", () 
     ).toStrictEqual({ elements: ["SCRIPT"], after: "after", injected: false });
   });
 
+  test("inside <svg>, style text can't add elements, and its CSS applies", async () => {
+    const untrusted = '<img src=x onerror="window.injected=1">';
+    const result = await load(
+      <svg>
+        <style>
+          <>{`#box { fill: rgb(4, 5, 6) } svg > #box {} ${untrusted}`}</>
+        </style>
+        <rect id="box" width="10" height="10" />
+      </svg>,
+    );
+    expect(result).toStrictEqual({ elements: ["svg"], after: "after", injected: false });
+    expect(
+      await page!.evaluate(() => getComputedStyle(document.getElementById("box")!).fill),
+    ).toStrictEqual("rgb(4, 5, 6)");
+  });
+
+  test("inside <foreignObject>, style text is raw again", async () => {
+    const result = await load(
+      <svg>
+        <foreignObject>
+          <style>{"main > svg #inner { color: rgb(7, 8, 9) }"}</style>
+          <p id="inner">inner</p>
+        </foreignObject>
+      </svg>,
+    );
+    expect(result).toStrictEqual({ elements: ["svg"], after: "after", injected: false });
+    expect(
+      await page!.evaluate(() => getComputedStyle(document.getElementById("inner")!).color),
+    ).toStrictEqual("rgb(7, 8, 9)");
+  });
+
   test("a style's text can't end it early, and its CSS applies", async () => {
     const result = await load(
       <style>{`#after { color: rgb(1, 2, 3); } /* </style><img src=x onerror="window.injected=1"> */`}</style>,
