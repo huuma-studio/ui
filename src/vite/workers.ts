@@ -63,30 +63,45 @@ export async function writeWorkersFiles(options: {
     .map((entry) => relative(outDir, join(entry.parentPath, entry.name)).replaceAll("\\", "/"));
 
   const paths = immutablePaths(files, hashed);
-  if (paths.length > MAX_RULES) {
+  const ownHeaders = await readPublic("_headers");
+  const rules = ruleCount(ownHeaders) + paths.length;
+  if (paths.length && rules > MAX_RULES) {
     options.warn(
-      `${paths.length} hashed files need their own _headers rule, but Cloudflare ` +
-        `applies only ${MAX_RULES}. Keep hashed files in a directory of their own, ` +
-        "like Vite's assets/, so one rule covers them.",
+      `_headers would have ${rules} rules (${paths.length} for hashed files), but ` +
+        `Cloudflare applies only ${MAX_RULES}. Keep hashed files in a directory of ` +
+        "their own, like Vite's assets/, so one rule covers them, or use fewer rules " +
+        "in public/_headers.",
     );
   }
-  await addTo("_headers", paths.length ? immutableHeaders(paths) : "");
+  await write("_headers", ownHeaders, paths.length ? immutableHeaders(paths) : "");
   // Vite's manifest, which `server.js` doesn't serve either.
-  await addTo(".assetsignore", "# Added by @huuma/ui: Vite's manifest.\n.vite\n");
+  await write(
+    ".assetsignore",
+    await readPublic(".assetsignore"),
+    "# Added by @huuma/ui: Vite's manifest.\n.vite\n",
+  );
 
-  async function addTo(name: string, content: string) {
-    let own = "";
-    if (publicDir) {
-      try {
-        own = await readFile(join(publicDir, name), "utf8");
-      } catch {
-        // No such file in the public dir.
-      }
+  // A file of the public dir, which Vite copied to `outDir`; "" if none.
+  async function readPublic(name: string): Promise<string> {
+    if (!publicDir) return "";
+    try {
+      return await readFile(join(publicDir, name), "utf8");
+    } catch {
+      return "";
     }
+  }
+
+  async function write(name: string, own: string, content: string) {
     if (!own && !content) return;
     await writeFile(
       join(outDir, name),
       own && content ? `${own.trimEnd()}\n\n${content}` : own + content,
     );
   }
+}
+
+// The rules in a `_headers` file: each starts with an unindented URL
+// pattern, followed by indented headers. `#` starts a comment.
+function ruleCount(headers: string): number {
+  return headers.split(/\r?\n/).filter((line) => /^[^\s#]/.test(line)).length;
 }

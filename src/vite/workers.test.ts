@@ -97,11 +97,26 @@ describe(writeWorkersFiles.name, () => {
     expect(await readdir(outDir)).toContain("_headers");
   });
 
+  test("counts the public dir's rules too", async () => {
+    const own = Array.from({ length: 100 }, (_, i) => `# rule ${i}\n/page-${i}\n  X-Rule: ${i}`);
+    await writeFile(join(publicDir, "_headers"), own.join("\n"));
+    await write(["assets/a-1234abcd.js"]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("would have 101 rules (1 for hashed files)");
+  });
+
+  test("doesn't warn about the public dir's rules alone", async () => {
+    const own = Array.from({ length: 101 }, (_, i) => `/page-${i}\n  X-Rule: ${i}`);
+    await writeFile(join(publicDir, "_headers"), own.join("\n"));
+    await write([]);
+    expect(warnings).toStrictEqual([]);
+  });
+
   test("warns when Cloudflare would drop rules", async () => {
     const hashed = Array.from({ length: 101 }, (_, i) => `chunk-${i}.js`);
     for (const file of [...hashed, "robots.txt"]) await writeFile(join(outDir, file), "");
     await write(hashed);
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("Cloudflare applies only 100");
+    expect(warnings[0]).toContain("would have 101 rules (101 for hashed files)");
   });
 });
