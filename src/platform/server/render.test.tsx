@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import type { JSX } from "../../jsx-runtime/mod.ts";
+import { jsx, jsxAttr, jsxEscape, jsxTemplate, type JSX } from "../../jsx-runtime/mod.ts";
 import { renderToString } from "./mod.ts";
+import { renderToStringSync } from "./render.ts";
 
 function Title() {
   return <h1>Hello World!</h1>;
@@ -104,5 +105,198 @@ describe(renderToString.name, () => {
         {},
       ),
     ).toStrictEqual('<div><a href="https://huuma.studio">Link</a></div>');
+  });
+});
+
+// Spec #131's probe: what the renderer makes of markup from outside the code.
+describe("rendering untrusted values", () => {
+  const render = (node: JSX.Element) => renderToStringSync(node);
+
+  test("escapes text, attribute values and textarea content", () => {
+    expect(render(<p>{"<img src=x onerror=alert(1)>"}</p>)).toStrictEqual(
+      "<p>&lt;img src=x onerror=alert(1)&gt;</p>",
+    );
+    expect(render(<p title={'"><script>alert(1)</script>'} />)).toStrictEqual(
+      '<p title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"></p>',
+    );
+    expect(render(<textarea>{"</textarea><script>alert(1)</script>"}</textarea>)).toStrictEqual(
+      "<textarea>&lt;/textarea&gt;&lt;script&gt;alert(1)&lt;/script&gt;</textarea>",
+    );
+  });
+
+  test("leaves out spread props with invalid attribute names", () => {
+    const attributes = {
+      "x onmouseover=alert(1) y": "1",
+      "a><script>alert(1)</script": "x",
+      'a"b': "c",
+      "data-ok": "1",
+    };
+    expect(render(<div {...attributes} />)).toStrictEqual('<div data-ok="1"></div>');
+  });
+
+  test("throws on an invalid tag name", () => {
+    const tag = "img src=x onerror=alert(1)";
+    expect(() => render(jsx(tag, {}))).toThrow(
+      'Can\'t render the element "img src=x onerror=alert(1)": invalid tag name.',
+    );
+    expect(render(jsx("my-element", {}))).toStrictEqual("<my-element></my-element>");
+  });
+
+  test("leaves out javascript: URLs in URL attributes", () => {
+    expect(render(<a href="javascript:alert(1)">x</a>)).toStrictEqual("<a>x</a>");
+    expect(render(<a href={" \u0001JaVa\tScRiPt:alert(1)"}>x</a>)).toStrictEqual("<a>x</a>");
+    expect(render(<iframe src="javascript:alert(1)" />)).toStrictEqual("<iframe></iframe>");
+    expect(render(<form action="javascript:alert(1)" />)).toStrictEqual("<form></form>");
+    expect(render(<button formaction="javascript:alert(1)" />)).toStrictEqual("<button></button>");
+    // Other URLs, and the word in other attributes, stay.
+    expect(render(<a href="/javascript:x">x</a>)).toStrictEqual('<a href="/javascript:x">x</a>');
+    expect(render(<a title="javascript:alert(1)">x</a>)).toStrictEqual(
+      '<a title="javascript:alert(1)">x</a>',
+    );
+  });
+
+  test("leaves out string event handlers", () => {
+    expect(render(<div onclick="alert(1)" onMouseOver="alert(1)" />)).toStrictEqual("<div></div>");
+  });
+
+  test("writes <script> and <style> text as it is, but can't be closed early", () => {
+    expect(render(<style>{"a > b { content: '&'; }"}</style>)).toStrictEqual(
+      "<style>a > b { content: '&'; }</style>",
+    );
+    expect(render(<script>{"if (a < b && c) {}"}</script>)).toStrictEqual(
+      "<script>if (a < b && c) {}</script>",
+    );
+    expect(render(<script>{'x = "</script><script>alert(1)</SCRIPT>"'}</script>)).toStrictEqual(
+      '<script>x = "</\\u0073cript><\\u0073cript>alert(1)</\\u0053CRIPT>"</script>',
+    );
+    // After `<!--`, an opening `<script` would make the browser ignore the
+    // element's real end.
+    expect(render(<script>{'s = "<!--<script>"'}</script>)).toStrictEqual(
+      '<script>s = "<!--<\\u0073cript>"</script>',
+    );
+    expect(render(<style>{"</style><script>alert(1)</script>"}</style>)).toStrictEqual(
+      "<style><\\/style><script>alert(1)</script></style>",
+    );
+  });
+
+  test("makes <script> and <style> safe as a whole, not child by child", () => {
+    // A closing tag split across children only appears once they're joined.
+    expect(
+      render(
+        <style>
+          {"</sty"}
+          {"le><img src=x onerror=alert(1)>"}
+        </style>,
+      ),
+    ).toStrictEqual("<style><\\/style><img src=x onerror=alert(1)></style>");
+    expect(
+      render(
+        <script>
+          {"</scr"}
+          {"ipt><img src=x onerror=alert(1)>"}
+        </script>,
+      ),
+    ).toStrictEqual("<script></\\u0073cript><img src=x onerror=alert(1)></script>");
+    // Text in fragments and components is raw too.
+    const Code = () => <>{"if (a < b && c) {}"}</>;
+    expect(
+      render(
+        <script>
+          <>{"if (a < b && c) {}"}</>
+        </script>,
+      ),
+    ).toStrictEqual("<script>if (a < b && c) {}</script>");
+    expect(
+      render(
+        <script>
+          <Code />
+        </script>,
+      ),
+    ).toStrictEqual("<script>if (a < b && c) {}</script>");
+    expect(render(<style>{["nav > a {}", " b > i {}"]}</style>)).toStrictEqual(
+      "<style>nav > a {} b > i {}</style>",
+    );
+  });
+
+  test("escapes <style> and <script> text inside <svg> and <math>", () => {
+    // There the HTML parser reads their content as markup, so raw text could
+    // add elements (and decodes entities, so escaped CSS still works).
+    const untrusted = "<img src=x onerror=alert(1)>";
+    const Wrapped = () => <>{untrusted}</>;
+    expect(
+      render(
+        <svg>
+          <style>{untrusted}</style>
+          <style>
+            <>{untrusted}</>
+          </style>
+          <style>
+            <Wrapped />
+          </style>
+        </svg>,
+      ),
+    ).toStrictEqual(
+      "<svg>" + "<style>&lt;img src=x onerror=alert(1)&gt;</style>".repeat(3) + "</svg>",
+    );
+    expect(render(jsx("math", { children: jsx("script", { children: "a < b" }) }))).toStrictEqual(
+      "<math><script>a &lt; b</script></math>",
+    );
+    // <foreignObject> holds HTML again, and <svg> nested in it is foreign again.
+    expect(
+      render(
+        <svg>
+          <foreignObject>
+            <style>{"a > b {}"}</style>
+            <svg>
+              <style>{"a > b {}"}</style>
+            </svg>
+          </foreignObject>
+        </svg>,
+      ),
+    ).toStrictEqual(
+      "<svg><foreignObject><style>a > b {}</style><svg><style>a &gt; b {}</style></svg></foreignObject></svg>",
+    );
+  });
+
+  test("writes true and false like the browser runtime", () => {
+    expect(
+      render(<div aria-expanded={false} data-open={true} title={true} lang={false} />),
+    ).toStrictEqual('<div aria-expanded="false" data-open="true" title></div>');
+  });
+});
+
+// Templates as the precompile transform builds them: static HTML strings
+// from the source code, with dynamic children in `jsxEscape()` and dynamic
+// attributes in `jsxAttr()`.
+describe("rendering precompiled templates", () => {
+  test("escapes dynamic children once", () => {
+    const untrusted = "<img src=x onerror=alert(1)> & co";
+    expect(renderToStringSync(jsxTemplate(["<p>", "</p>"], jsxEscape(untrusted)))).toStrictEqual(
+      "<p>&lt;img src=x onerror=alert(1)&gt; &amp; co</p>",
+    );
+    // Numbers, null, arrays and elements, like JSX children.
+    expect(
+      renderToStringSync(
+        jsxTemplate(["<ul>", "</ul>"], jsxEscape([1, null, false, <li>{"a < b"}</li>])),
+      ),
+    ).toStrictEqual("<ul>1<li>a &lt; b</li></ul>");
+  });
+
+  test("writes the static strings as they are", () => {
+    expect(
+      renderToStringSync(jsxTemplate(['<p class="x">&amp; ', "</p>"], jsxEscape("&"))),
+    ).toStrictEqual('<p class="x">&amp; &amp;</p>');
+  });
+
+  test("checks dynamic attributes with jsxAttr()", () => {
+    const template = jsxTemplate(
+      ["<a ", " ", ">", "</a>"],
+      jsxAttr("href", "javascript:alert(1)"),
+      jsxAttr("title", '"><script>alert(1)</script>'),
+      jsxEscape("link"),
+    );
+    expect(renderToStringSync(template)).toStrictEqual(
+      '<a  title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;">link</a>',
+    );
   });
 });

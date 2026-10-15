@@ -230,6 +230,16 @@ Pages, layouts, middlewares, islands, remote functions, `createUIApp()`, `Script
 
 With Tailwind, `@huuma/theme`'s `tailwindcss()` ran in `dev.ts`. Until Huuma supports CSS imports, compile the stylesheet into `public/` with the Tailwind CLI, e.g. `npx @tailwindcss/cli -i src/styles.css -o public/styles.css --watch` next to the dev server.
 
+## Attributes
+
+Attributes go to the HTML as you write them: `class` and `for`, not `className` and `htmlFor`. Events are `on-*` props with a function, e.g. `on-click={() => …}`. The server and the browser write attributes the same way:
+
+- Strings and numbers become the attribute's value, escaped. `<script>` and `<style>` content is written as it is (escaping would break it), except that `</script` or `</style` inside can't close the element.
+- `true` and `false`: boolean attributes (`disabled`, `checked`, …) are there for `true` and left out for `false`. `aria-*` and `data-*` attributes get `"true"` and `"false"`. Other attributes are there, empty, for `true` and left out for `false`.
+- Left out, with a warning in development, because escaping can't make them safe: attribute names that aren't valid (e.g. from spread props built from request data), string event handlers (`onclick="…"`), and `javascript:` URLs in `href`, `src`, `action`, `formaction`, `xlink:href` and `data`. An invalid tag name fails the render.
+
+Warnings appear outside production, that is unless `NODE_ENV=production` or `HUUMA_ENV=PROD` is set, once per message and at most 100.
+
 ## Remote server functions
 
 Remote server functions provide a type-safe way to handle form submissions and server-side data mutations. They run exclusively on the server and can be called from both server and client components. Remote server functions are defined in files with the `.remote.ts` suffix and must be exported async functions. Remote server functions only accept JSON-conform data as function input.
