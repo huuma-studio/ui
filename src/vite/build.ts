@@ -6,6 +6,7 @@ import { appBase } from "./base.ts";
 import { RUNTIME_INPUT } from "./client-build.ts";
 import { SERVER_ID } from "./entry.ts";
 import { RUNTIME_ID } from "./islands.ts";
+import { writeWorkersFiles } from "./workers.ts";
 
 /**
  * Starts the built app on Node, serving the client build's files too:
@@ -19,7 +20,8 @@ const RESOLVED_NODE_ID = `\0${NODE_ID}`;
  * browser runtime and the islands into `dist/client`, with a manifest;
  * then the ssr environment builds the app into `dist/server`, reading the
  * client's manifest for the islands' browser paths: `app.js` exports the
- * app, `server.js` starts it on Node.
+ * app, `server.js` starts it on Node. The client build also gets the files
+ * Cloudflare Workers reads (`workers.ts`).
  */
 export function buildPlugin(root: () => string): Plugin {
   // The client build's files with a content hash in their name, which
@@ -60,7 +62,16 @@ export function buildPlugin(root: () => string): Plugin {
     },
     // The server reads the client's manifest, so the client builds first.
     async buildApp(builder) {
-      await builder.build(builder.environments.client);
+      const client = builder.environments.client;
+      await builder.build(client);
+      if (client.config.build.write) {
+        await writeWorkersFiles({
+          outDir: resolve(client.config.root, client.config.build.outDir),
+          publicDir: client.config.publicDir,
+          hashed,
+          warn: (message) => client.logger.warn(message),
+        });
+      }
       await builder.build(builder.environments.ssr);
     },
     resolveId: {

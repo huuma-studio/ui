@@ -105,6 +105,13 @@ describe("vite build", () => {
     expect(html).not.toContain("@id/");
   });
 
+  test("keeps the manifest out of Cloudflare Workers' assets, and caches hashed files", async () => {
+    const ignore = await readFile(join(root, "dist/client/.assetsignore"), "utf8");
+    expect(ignore.split("\n")).toContain(".vite");
+    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+    expect(headers).toContain("/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n");
+  });
+
   test("renders the pages like the Deno pipeline", async () => {
     // The snapshot is what the Deno pipeline rendered before it was removed.
     await expect(await renderFixture(app)).toMatchFileSnapshot("../../test/snapshots/basic.txt");
@@ -271,6 +278,11 @@ describe("a build with unhashed file names", () => {
     expect(runtime.file).toMatch(/^assets\/runtime-.+\.js$/);
     const entry = await fetch(`${origin}/${runtime.file}`);
     expect(entry.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
+
+    // The same for Cloudflare Workers.
+    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+    expect(headers).toContain("/assets/*\n");
+    expect(headers).not.toContain("counter.client");
   });
 });
 

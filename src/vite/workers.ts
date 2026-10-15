@@ -1,0 +1,92 @@
+/*
+ * Files in the client build for Cloudflare Workers' static assets, which
+ * serve `dist/client` before the Worker runs: `.assetsignore` and
+ * `_headers`. Wrangler reads both and uploads neither. They do for Workers
+ * what `server.js` does on Node: keep `.vite/` private and cache the
+ * hashed files for good.
+ */
+import { readdir, readFile, writeFile } from "node:fs/promises";
+import { join, relative } from "node:path";
+
+// The Cache-Control header `server.js` sends for hashed files.
+const IMMUTABLE = "public, max-age=31536000, immutable";
+
+// Cloudflare applies at most 100 rules from `_headers`.
+const MAX_RULES = 100;
+
+/**
+ * The paths of `_headers` rules for the hashed files, given all files of
+ * the client build (relative, with `/`). A top-level directory whose files
+ * all have a hash, like Vite's `assets/`, is one rule (`/assets/*`).
+ * Elsewhere, e.g. next to a public file without a hash, each hashed file
+ * gets its own rule.
+ */
+export function immutablePaths(files: readonly string[], hashed: ReadonlySet<string>): string[] {
+  const paths = new Set<string>();
+  for (const file of [...hashed].sort()) {
+    const slash = file.indexOf("/");
+    const directory = slash === -1 ? undefined : file.slice(0, slash + 1);
+    if (directory && files.every((other) => !other.startsWith(directory) || hashed.has(other))) {
+      paths.add(`/${directory}*`);
+    } else {
+      paths.add(`/${file}`);
+    }
+  }
+  return [...paths];
+}
+
+/** The `_headers` rules that cache `paths` for good. */
+export function immutableHeaders(paths: readonly string[]): string {
+  return [
+    "# Added by @huuma/ui: files with a content hash in their name never change.",
+    ...paths.map((path) => `${path}\n  Cache-Control: ${IMMUTABLE}`),
+    "",
+  ].join("\n");
+}
+
+/**
+ * Writes `.assetsignore` and `_headers` to the client build in `outDir`.
+ * Files of the same name in `publicDir`, which Vite copied, are kept, and
+ * the rules are added to them.
+ */
+export async function writeWorkersFiles(options: {
+  outDir: string;
+  /** Vite's resolved `publicDir`: `""` without one. */
+  publicDir: string;
+  /** The client build's files with a content hash in their name. */
+  hashed: ReadonlySet<string>;
+  warn: (message: string) => void;
+}): Promise<void> {
+  const { outDir, publicDir, hashed } = options;
+  const files = (await readdir(outDir, { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(outDir, join(entry.parentPath, entry.name)).replaceAll("\\", "/"));
+
+  const paths = immutablePaths(files, hashed);
+  if (paths.length > MAX_RULES) {
+    options.warn(
+      `${paths.length} hashed files need their own _headers rule, but Cloudflare ` +
+        `applies only ${MAX_RULES}. Keep hashed files in a directory of their own, ` +
+        "like Vite's assets/, so one rule covers them.",
+    );
+  }
+  await addTo("_headers", paths.length ? immutableHeaders(paths) : "");
+  // Vite's manifest, which `server.js` doesn't serve either.
+  await addTo(".assetsignore", "# Added by @huuma/ui: Vite's manifest.\n.vite\n");
+
+  async function addTo(name: string, content: string) {
+    let own = "";
+    if (publicDir) {
+      try {
+        own = await readFile(join(publicDir, name), "utf8");
+      } catch {
+        // No such file in the public dir.
+      }
+    }
+    if (!own && !content) return;
+    await writeFile(
+      join(outDir, name),
+      own && content ? `${own.trimEnd()}\n\n${content}` : own + content,
+    );
+  }
+}
