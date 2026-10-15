@@ -12,6 +12,11 @@ import { extname, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
+import { belowBase } from "./base.ts";
+
+// Part of this module's API before `belowBase()` moved to `base.ts`.
+export { belowBase };
+
 export interface StartOptions {
   /** The client build's output directory (`dist/client`). */
   client: string | URL;
@@ -55,28 +60,6 @@ export function start(app: FetchHandler, options: StartOptions): Promise<NodeSer
       signal: options.signal,
     },
   );
-}
-
-/**
- * The request as the app sees it, without `base`, as in Vite's dev
- * server: `/shop/about` becomes `/about`. Outside of `base`, `/` redirects
- * to it, and everything else is not found.
- */
-export function belowBase(request: Request, base: string): Request | Response {
-  if (base === "/") return request;
-  const url = new URL(request.url);
-  if (url.pathname.startsWith(base)) {
-    url.pathname = url.pathname.slice(base.length - 1);
-    // With the request's method, headers, body and signal.
-    return new Request(url, request);
-  }
-  if (url.pathname === "/" || url.pathname === "/index.html") {
-    return new Response(null, { status: 302, headers: { Location: base + url.search } });
-  }
-  return new Response(`The server's public base URL is ${base}.`, {
-    status: 404,
-    headers: { "Content-Type": "text/plain" },
-  });
 }
 
 function port(value: string | undefined): number | undefined {
