@@ -158,9 +158,10 @@ Options of `huuma()`:
 
 `vite build` (or `vp build`) builds the browser scripts and the app:
 
-- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, plus Vite's `public/` directory.
+- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, plus Vite's `public/` directory, and two files for [Cloudflare Workers](#cloudflare-workers).
 - `dist/server/app.js`: the app, as the default export, with a standard `fetch(request)` handler: it renders pages and runs remote functions. It doesn't serve `dist/client/` and doesn't strip the `base` (see below); `server.js` does both. To run `app.js` on another runtime's server, e.g. `deno serve` or Bun, serve the files in `dist/client/` there too, below the base, and strip a base other than `/` before the app gets a request.
 - `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: files named with their content hash (Vite names them so by default) are cached for good; other files, like those from `public/`, for an hour.
+- `dist/server/worker.js`: the app as a Cloudflare Worker (see [Cloudflare Workers](#cloudflare-workers)).
 
 ```sh
 HUUMA_ENV=PROD PORT=3000 node dist/server/server.js
@@ -212,6 +213,35 @@ deno run -A dist/server/server.js
 ```
 
 With a `package.json`, Deno takes the packages from `node_modules`, like Node.js.
+
+## Cloudflare Workers
+
+`dist/server/worker.js` runs the app as a [Cloudflare Worker](https://developers.cloudflare.com/workers/), with `dist/client/` as the Worker's [static assets](https://developers.cloudflare.com/workers/static-assets/). Add a `wrangler.jsonc` next to `vite.config.ts`:
+
+```jsonc
+{
+  "name": "my-app",
+  "main": "dist/server/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "dist/client" },
+}
+```
+
+Then build and deploy, or try the build locally in Cloudflare's runtime first:
+
+```sh
+vite build
+npx wrangler dev      # local, in workerd
+npx wrangler deploy
+```
+
+Wrangler bundles `worker.js` with the packages it imports from `node_modules`.
+
+- **Caching:** the build writes `dist/client/_headers`, which caches files named with their content hash for good, like `server.js`. It also writes `dist/client/.assetsignore`, which keeps Vite's manifest (`.vite/`) out of the upload. If `public/` has its own `_headers` or `.assetsignore`, the build keeps it and adds its rules to it.
+- **Base:** with a `base` other than `/`, e.g. `/shop/`, name the assets binding `ASSETS`: `"assets": { "directory": "dist/client", "binding": "ASSETS" }`. The Worker then strips the base like `server.js` and serves the files of `dist/client/` through the binding.
+- **Environment:** vars and secrets reach `process.env`. `wrangler deploy` builds the Worker with `NODE_ENV` set to `production`. Set `HUUMA_ENV` to `PROD` in `vars` for `@huuma/route`'s production mode.
+
+Not there yet: Worker bindings, such as KV, D1 or R2, in pages and remote functions. Only middleware gets them, as `ctx.env`. Also, `vite` runs the dev server on Node, so try the build with `wrangler dev` before you deploy.
 
 ## Migrating from the Deno Setup
 
