@@ -115,9 +115,12 @@ export function buildPlugin(root: () => string): Plugin {
         }
         const client = resolve(config.root, config.environments.client.build.outDir);
         const server = resolve(config.root, this.environment.config.build.outDir);
+        // A URL relative to `server.js`: each directory's name encoded,
+        // as it can come from the base, e.g. `sale%` from `/sale%25/`.
+        const url = relative(server, client).split(sep).map(encodeURIComponent).join("/");
         return {
           code: nodeModule({
-            client: `${relative(server, client).replaceAll("\\", "/")}/`,
+            client: `${url}/`,
             base: appBase(config.base),
             hashed: (await readClientBuild(config)).hashed,
           }),

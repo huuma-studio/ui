@@ -159,6 +159,23 @@ describe(writeWorkersFiles.name, () => {
       expect(await readFile(join(assetsDir, ".assetsignore"), "utf8")).toContain(".vite\n");
     });
 
+    test("names the base in the rules as in URLs, encoded", async () => {
+      // The directory of the base `/sale%25/`.
+      const sale = join(assetsDir, "sale%");
+      await mkdir(join(sale, "assets"), { recursive: true });
+      await writeFile(join(sale, "assets/a-1234abcd.js"), "");
+      await writeWorkersFiles({
+        assetsDir,
+        outDir: sale,
+        publicDir: "",
+        hashed: new Set(["assets/a-1234abcd.js"]),
+        warn: (message) => warnings.push(message),
+      });
+      expect(await readFile(join(assetsDir, "_headers"), "utf8")).toStrictEqual(
+        immutableHeaders(["/sale%25/assets/*"]),
+      );
+    });
+
     test("removes the public dir's copies, which Workers would serve", async () => {
       await write(["assets/a-1234abcd.js"]);
       expect(await readdir(outDir)).not.toContain("_headers");

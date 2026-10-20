@@ -80,7 +80,11 @@ export async function writeWorkersFiles(options: {
 
   // The rules' paths start at `assetsDir`: `/shop/assets/*` for `/assets/*` in `dist/client/shop`.
   const below = relative(assetsDir, outDir).replaceAll("\\", "/");
-  const paths = immutablePaths(files, hashed).map((path) => (below ? `/${below}${path}` : path));
+  const paths = immutablePaths(files, hashed).map((path) =>
+    // Encoded, as Workers matches the rules against URLs: `/sale%25/…`
+    // for the directory `sale%` of the base `/sale%25/`.
+    (below ? `/${below}${path}` : path).split("/").map(encodeURIComponent).join("/"),
+  );
   const ownHeaders = await readPublic("_headers");
   const rules = ruleCount(ownHeaders) + paths.length;
   if (paths.length && rules > MAX_RULES) {

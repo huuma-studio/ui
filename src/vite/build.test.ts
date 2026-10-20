@@ -314,6 +314,35 @@ test("removes the files of an earlier build with another base", async () => {
   }
 });
 
+// The directory is the decoded base, e.g. `sale%` for `/sale%25/`:
+// `server.js` must find it through a URL.
+test.each([
+  ["/sale%25/", "sale%"],
+  ["/x%2520/", "x%20"],
+])("serves the files below the encoded base %s on Node", async (base, directory) => {
+  const nodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  const root = await buildFixture(".tmp-build-encoded-", { base });
+  let server: ChildProcess | undefined;
+  try {
+    const manifest = JSON.parse(
+      await readFile(join(root, "dist/client", directory, ".vite/manifest.json"), "utf8"),
+    ) as Manifest;
+    const counter = manifest["app/counter.client.tsx"]!;
+    let origin: string;
+    ({ origin, server } = await startServer(root));
+
+    expect(await (await fetch(`${origin}${base}about`)).text()).toContain("<h1>About</h1>");
+    const file = await fetch(`${origin}${base}${counter.file}`);
+    expect(file.status).toStrictEqual(200);
+    expect(file.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
+  } finally {
+    process.env.NODE_ENV = nodeEnv;
+    server?.kill();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 // Also when the import's name doesn't show it's server-only code.
 test.each(["./host.server.ts", "./host.server", "#host"])(
   "fails when an island imports server-only code: %s",

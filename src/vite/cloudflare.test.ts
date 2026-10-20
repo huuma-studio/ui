@@ -7,6 +7,7 @@ import { join } from "node:path";
 
 import { buildFixture, startWorker } from "../../test/build.ts";
 import { remoteEndpoint } from "../platform/server/remote.ts";
+import { baseDirectory } from "./base.ts";
 
 type Manifest = Record<string, { file: string }>;
 
@@ -28,7 +29,10 @@ function describeWorker(name: string, base: string) {
       process.env.NODE_ENV = "production";
       root = await buildFixture(".tmp-build-worker-", { base });
       manifest = JSON.parse(
-        await readFile(join(root, "dist/client", base, ".vite/manifest.json"), "utf8"),
+        await readFile(
+          join(root, "dist/client", baseDirectory(base), ".vite/manifest.json"),
+          "utf8",
+        ),
       ) as Manifest;
       ({ origin, stop } = await startWorker(root, {
         main: "dist/server/worker.js",
@@ -89,3 +93,6 @@ describeWorker("a Cloudflare Worker", "/");
 
 // Workers serves the files below the base, and the Worker strips the base.
 describeWorker("a Cloudflare Worker below a base", "/shop/");
+
+// In the directory `sale%`, which the rules in `_headers` name encoded.
+describeWorker("a Cloudflare Worker below an encoded base", "/sale%25/");
