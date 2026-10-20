@@ -1,7 +1,7 @@
 // Builds copies of the basic fixture and starts them like in production, for
 // the build tests and the browser tests.
 import { createBuilder, type InlineConfig } from "vite";
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { cp, mkdtemp, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
@@ -78,13 +78,20 @@ export async function startWorker(
       cwd: root,
       env: { ...process.env, WRANGLER_SEND_METRICS: "false", WRANGLER_LOG_PATH: root },
       stdio: ["ignore", "pipe", "pipe"],
-      // Its own process group: bin/wrangler.js starts the CLI as a child,
-      // which starts workerd. Killing only the first process leaves them
-      // running.
-      detached: true,
+      // bin/wrangler.js starts the CLI as a child, which starts workerd:
+      // killing only the first process leaves them running. On POSIX, its
+      // own process group, to kill them all together. Windows has no
+      // process groups, and a detached process would get its own console.
+      detached: !windows,
+      windowsHide: true,
     },
   );
   const stop = () => {
+    if (windows) {
+      // The process and its children (/T), or nothing if it already stopped.
+      spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], { stdio: "ignore" });
+      return;
+    }
     try {
       process.kill(-server.pid!, "SIGKILL");
     } catch {
@@ -94,6 +101,8 @@ export async function startWorker(
   await started(server, "wrangler dev", "Ready on", stop);
   return { origin: `http://127.0.0.1:${port}`, stop };
 }
+
+const windows = process.platform === "win32";
 
 // How long a server may take to start, below the tests' hook timeouts.
 const START_TIMEOUT = 40_000;
