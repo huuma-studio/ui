@@ -28,7 +28,7 @@ function describeWorker(name: string, base: string, assets: Record<string, strin
       process.env.NODE_ENV = "production";
       root = await buildFixture(".tmp-build-worker-", { base });
       manifest = JSON.parse(
-        await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
+        await readFile(join(root, "dist/client", base, ".vite/manifest.json"), "utf8"),
       ) as Manifest;
       ({ origin, stop } = await startWorker(root, {
         main: "dist/server/worker.js",

@@ -1,12 +1,13 @@
 import type { Plugin, Rolldown, UserConfig } from "vite";
-import { join, parse, relative, resolve } from "node:path";
+import { readdir, rm } from "node:fs/promises";
+import { join, parse, relative, resolve, sep } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
-import { appBase } from "./base.ts";
+import { appBase, baseDirectory } from "./base.ts";
 import { CLIENT_BUILD_FILE, readClientBuild, RUNTIME_INPUT } from "./client-build.ts";
 import { SERVER_ID } from "./entry.ts";
 import { RUNTIME_ID } from "./islands.ts";
-import { writeWorkersFiles } from "./workers.ts";
+import { assetsDirectory, writeWorkersFiles } from "./workers.ts";
 
 /**
  * Starts the built app on Node, serving the client build's files too:
@@ -26,7 +27,9 @@ const RESOLVED_ENTRIES = new RegExp(`^\0(${NODE_ID}|${WORKER_ID})$`);
 
 /**
  * The production build (`vite build`): the client environment builds the
- * browser runtime and the islands into `dist/client`, with a manifest;
+ * browser runtime and the islands into `dist/client`, with a manifest,
+ * below the base's path: `dist/client/shop` at the base `/shop/`, so the
+ * files' paths are their URLs' paths;
  * then the ssr environment builds the app into `dist/server`, reading the
  * client's manifest for the islands' browser paths: `app.js` exports the
  * app, `server.js` starts it on Node, `worker.js` is it as a Cloudflare
@@ -46,7 +49,9 @@ export function buildPlugin(root: () => string): Plugin {
         environments: {
           client: {
             build: {
-              outDir: config.environments?.client?.build?.outDir ?? join(outDir, "client"),
+              outDir:
+                config.environments?.client?.build?.outDir ??
+                join(outDir, "client", baseDirectory(config.base ?? "/")),
               manifest: true,
               rolldownOptions: {
                 // The islands are added in `buildStart`, once discovered.
@@ -70,10 +75,20 @@ export function buildPlugin(root: () => string): Plugin {
     // The server reads the client's manifest, so the client builds first.
     async buildApp(builder) {
       const client = builder.environments.client;
+      const outDir = resolve(client.config.root, client.config.build.outDir);
+      const assetsDir = assetsDirectory(outDir, client.config.base);
+      // Only in `dist/client`, which this plugin chose, not in a directory of the app's.
+      const ours =
+        assetsDir === resolve(builder.config.root, builder.config.build.outDir, "client");
+      const { emptyOutDir, write } = client.config.build;
+      if (ours && write && emptiesOutDir(client.config.root, outDir, emptyOutDir)) {
+        await removeOtherBuilds(assetsDir, outDir);
+      }
       await builder.build(client);
-      if (client.config.build.write) {
+      if (write) {
         await writeWorkersFiles({
-          outDir: resolve(client.config.root, client.config.build.outDir),
+          assetsDir,
+          outDir,
           publicDir: client.config.publicDir,
           hashed: new Set((await readClientBuild(builder.config)).hashed),
           warn: (message) => client.logger.warn(message),
@@ -228,6 +243,33 @@ export function nodeModule(options: { client: string; base: string; hashed: stri
     "});",
     "",
   ].join("\n");
+}
+
+// Whether Vite empties the client build's `outDir` before it builds:
+// `emptyOutDir`, or by default when it's inside the project's root.
+function emptiesOutDir(root: string, outDir: string, emptyOutDir: boolean | null): boolean {
+  return emptyOutDir ?? outDir.startsWith(root.endsWith(sep) ? root : root + sep);
+}
+
+/**
+ * Removes what an earlier build with another base left in `assetsDir`,
+ * next to `outDir` in it: e.g. `dist/client/assets` from the base `/`,
+ * when the base is now `/shop/`. Workers would serve it at `/assets/`.
+ * Vite empties `outDir` itself.
+ */
+async function removeOtherBuilds(assetsDir: string, outDir: string): Promise<void> {
+  if (assetsDir === outDir) return;
+  const [first] = relative(assetsDir, outDir).split(sep);
+  let entries: string[];
+  try {
+    entries = await readdir(assetsDir);
+  } catch {
+    // No earlier build.
+    return;
+  }
+  for (const entry of entries) {
+    if (entry !== first) await rm(join(assetsDir, entry), { recursive: true, force: true });
+  }
 }
 
 /** Generates the source of `virtual:huuma/worker`. */

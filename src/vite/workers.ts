@@ -1,12 +1,13 @@
 /*
- * Files in the client build for Cloudflare Workers' static assets, which
- * serve `dist/client` before the Worker runs: `.assetsignore` and
- * `_headers`. Wrangler reads both and uploads neither. They do for Workers
- * what `server.js` does on Node: keep `.vite/` private and cache the
- * hashed files for good.
+ * Files for Cloudflare Workers' static assets, which serve `dist/client`
+ * before the Worker runs: `.assetsignore` and `_headers`. Wrangler reads
+ * both and uploads neither. They do for Workers what `server.js` does on
+ * Node: keep `.vite/` private and cache the hashed files for good.
  */
-import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+
+import { baseDirectory } from "./base.ts";
 
 // The Cache-Control header `server.js` sends for hashed files.
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -45,24 +46,41 @@ export function immutableHeaders(paths: readonly string[]): string {
 }
 
 /**
- * Writes `.assetsignore` and `_headers` to the client build in `outDir`.
- * Files of the same name in `publicDir`, which Vite copied, are kept, and
- * the rules are added to them.
+ * The directory Workers serves at `/`: the client build's `outDir`
+ * without the base, e.g. `dist/client` for `dist/client/shop` at the base
+ * `/shop/`. That's `outDir` itself when it doesn't end with the base.
+ */
+export function assetsDirectory(outDir: string, base: string): string {
+  const directory = baseDirectory(base).split("/").join(sep);
+  return directory && outDir.endsWith(sep + directory)
+    ? outDir.slice(0, -(directory.length + 1))
+    : outDir;
+}
+
+/**
+ * Writes `.assetsignore` and `_headers` to `assetsDir`, for the client
+ * build in `outDir`, which is `assetsDir` or a directory in it. Files of
+ * the same name in `publicDir` are kept, and the rules are added to them.
+ * Vite copied them to `outDir`; when that's below `assetsDir`, the copies
+ * are removed, since Workers would serve them as files.
  */
 export async function writeWorkersFiles(options: {
+  assetsDir: string;
   outDir: string;
   /** Vite's resolved `publicDir`: `""` without one. */
   publicDir: string;
-  /** The client build's files with a content hash in their name. */
+  /** The client build's files with a content hash in their name, relative to `outDir`. */
   hashed: ReadonlySet<string>;
   warn: (message: string) => void;
 }): Promise<void> {
-  const { outDir, publicDir, hashed } = options;
+  const { assetsDir, outDir, publicDir, hashed } = options;
   const files = (await readdir(outDir, { recursive: true, withFileTypes: true }))
     .filter((entry) => entry.isFile())
     .map((entry) => relative(outDir, join(entry.parentPath, entry.name)).replaceAll("\\", "/"));
 
-  const paths = immutablePaths(files, hashed);
+  // The rules' paths start at `assetsDir`: `/shop/assets/*` for `/assets/*` in `dist/client/shop`.
+  const below = relative(assetsDir, outDir).replaceAll("\\", "/");
+  const paths = immutablePaths(files, hashed).map((path) => (below ? `/${below}${path}` : path));
   const ownHeaders = await readPublic("_headers");
   const rules = ruleCount(ownHeaders) + paths.length;
   if (paths.length && rules > MAX_RULES) {
@@ -92,9 +110,10 @@ export async function writeWorkersFiles(options: {
   }
 
   async function write(name: string, own: string, content: string) {
+    if (assetsDir !== outDir) await rm(join(outDir, name), { force: true });
     if (!own && !content) return;
     await writeFile(
-      join(outDir, name),
+      join(assetsDir, name),
       own && content ? `${own.trimEnd()}\n\n${content}` : own + content,
     );
   }

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
-import { immutableHeaders, immutablePaths, writeWorkersFiles } from "./workers.ts";
+import { assetsDirectory, immutableHeaders, immutablePaths, writeWorkersFiles } from "./workers.ts";
 
 describe(immutablePaths.name, () => {
   test("covers a directory of hashed files with one rule", () => {
@@ -35,13 +35,33 @@ describe(immutableHeaders.name, () => {
   });
 });
 
+describe(assetsDirectory.name, () => {
+  const dist = ["", "app", "dist", "client"].join(sep);
+
+  test("is the build's directory at the base /", () => {
+    expect(assetsDirectory(dist, "/")).toStrictEqual(dist);
+  });
+
+  test("is the build's directory without the base", () => {
+    expect(assetsDirectory(join(dist, "shop"), "/shop/")).toStrictEqual(dist);
+    expect(assetsDirectory(join(dist, "a", "b"), "https://cdn.example/a/b/")).toStrictEqual(dist);
+  });
+
+  test("is the build's directory when it doesn't end with the base", () => {
+    expect(assetsDirectory(dist, "/shop/")).toStrictEqual(dist);
+    expect(assetsDirectory(join(dist, "workshop"), "/shop/")).toStrictEqual(join(dist, "workshop"));
+  });
+});
+
 describe(writeWorkersFiles.name, () => {
   let root: string;
+  let assetsDir: string;
   let outDir: string;
   let publicDir: string;
   const warnings: string[] = [];
   const write = (hashed: string[]) =>
     writeWorkersFiles({
+      assetsDir,
       outDir,
       publicDir,
       hashed: new Set(hashed),
@@ -50,7 +70,7 @@ describe(writeWorkersFiles.name, () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "huuma-workers-"));
-    outDir = join(root, "dist/client");
+    assetsDir = outDir = join(root, "dist/client");
     publicDir = join(root, "public");
     await mkdir(join(outDir, "assets"), { recursive: true });
     await mkdir(join(outDir, ".vite"));
@@ -118,5 +138,30 @@ describe(writeWorkersFiles.name, () => {
     await write(hashed);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("would have 101 rules (101 for hashed files)");
+  });
+
+  describe("below a base", () => {
+    beforeEach(async () => {
+      // The build at the base /shop/: Vite copied the public dir's files to it.
+      assetsDir = outDir;
+      outDir = join(assetsDir, "shop");
+      await mkdir(join(outDir, "assets"), { recursive: true });
+      await writeFile(join(outDir, "assets/a-1234abcd.js"), "");
+      await writeFile(join(publicDir, "_headers"), "/shop/*\n  X-Frame-Options: DENY\n");
+      await writeFile(join(outDir, "_headers"), "/shop/*\n  X-Frame-Options: DENY\n");
+    });
+
+    test("writes the files where Workers reads them, with the rules below the base", async () => {
+      await write(["assets/a-1234abcd.js"]);
+      expect(await readFile(join(assetsDir, "_headers"), "utf8")).toStrictEqual(
+        `/shop/*\n  X-Frame-Options: DENY\n\n${immutableHeaders(["/shop/assets/*"])}`,
+      );
+      expect(await readFile(join(assetsDir, ".assetsignore"), "utf8")).toContain(".vite\n");
+    });
+
+    test("removes the public dir's copies, which Workers would serve", async () => {
+      await write(["assets/a-1234abcd.js"]);
+      expect(await readdir(outDir)).not.toContain("_headers");
+    });
   });
 });

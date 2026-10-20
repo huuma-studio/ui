@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { appBase, belowBase } from "./base.ts";
+import { appBase, baseDirectory, belowBase } from "./base.ts";
 
 describe(appBase.name, () => {
   test("keeps a path", () => {
@@ -17,6 +17,25 @@ describe(appBase.name, () => {
   test("is / for a relative base", () => {
     expect(appBase("./")).toStrictEqual("/");
     expect(appBase("")).toStrictEqual("/");
+  });
+});
+
+describe(baseDirectory.name, () => {
+  test("is the base's path, relative", () => {
+    expect(baseDirectory("/")).toStrictEqual("");
+    expect(baseDirectory("/shop/")).toStrictEqual("shop");
+    expect(baseDirectory("/shop")).toStrictEqual("shop");
+    expect(baseDirectory("/a/b/")).toStrictEqual("a/b");
+    expect(baseDirectory("https://cdn.example/shop/")).toStrictEqual("shop");
+    expect(baseDirectory("./")).toStrictEqual("");
+  });
+
+  test("stays inside dist/client", () => {
+    expect(baseDirectory("/a/../../b/")).toStrictEqual("b");
+  });
+
+  test("is decoded, like the paths of files", () => {
+    expect(baseDirectory("/my%20shop/")).toStrictEqual("my shop");
   });
 });
 

@@ -13,6 +13,17 @@ export function appBase(base: string): string {
 }
 
 /**
+ * The directory below `dist/client` that the client build writes to: the
+ * app's base as a relative path, so that a file's path on disk is the
+ * path of its URL. `/shop/` is `shop`, and `/` is `""`.
+ */
+export function baseDirectory(base: string): string {
+  // Through URL, like Vite's base, which resolves `.` and `..`.
+  const path = new URL(appBase(base), "http://localhost").pathname;
+  return decodeURI(path).split("/").filter(Boolean).join("/");
+}
+
+/**
  * The request as the app sees it, without `base`, as in Vite's dev
  * server, for `server.js` and `worker.js`: `/shop/about` becomes `/about`. Outside of `base`, `/` redirects
  * to it, and everything else is not found.

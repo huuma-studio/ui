@@ -184,7 +184,7 @@ describe("a build with a URL base, e.g. a CDN", () => {
     process.env.NODE_ENV = "production";
     root = await buildFixture(".tmp-build-cdn-", { base: "https://cdn.example/shop/" });
     manifest = JSON.parse(
-      await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
+      await readFile(join(root, "dist/client/shop/.vite/manifest.json"), "utf8"),
     ) as Manifest;
     ({ origin, server } = await startServer(root));
   });
@@ -201,10 +201,24 @@ describe("a build with a URL base, e.g. a CDN", () => {
     expect(html).toContain(`from "https://cdn.example/shop/${counter.file}";`);
   });
 
+  test("builds the client files below the base's path, as their URLs", async () => {
+    const counter = manifest["app/counter.client.tsx"]!;
+    expect(await readdir(join(root, "dist/client"))).toStrictEqual(
+      [".assetsignore", "_headers", "shop"].sort(),
+    );
+    await expect(readFile(join(root, "dist/client/shop", counter.file))).resolves.toBeDefined();
+    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+    expect(headers).toContain(
+      "/shop/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n",
+    );
+  });
+
   test("serves the app and the client files below the base's path", async () => {
     const counter = manifest["app/counter.client.tsx"]!;
     expect((await fetch(`${origin}/shop/about`)).status).toStrictEqual(200);
-    expect((await fetch(`${origin}/shop/${counter.file}`)).status).toStrictEqual(200);
+    const file = await fetch(`${origin}/shop/${counter.file}`);
+    expect(file.status).toStrictEqual(200);
+    expect(file.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
     const root = await fetch(`${origin}/`, { redirect: "manual" });
     expect(root.headers.get("location")).toStrictEqual("/shop/");
   });
@@ -224,11 +238,32 @@ describe("a build with a URL base, e.g. a CDN", () => {
   test("calls remote functions on the app's server, not on the CDN", async () => {
     // Bundled into the island that calls it.
     const island = manifest["app/remote/sum.client.tsx"]!;
-    const stub = await readFile(join(root, "dist/client", island.file), "utf8");
+    const stub = await readFile(join(root, "dist/client/shop", island.file), "utf8");
     const endpoint = `/shop${await remoteEndpoint("app/sum.remote.ts")}`;
     expect(stub).toContain(`fetch(\`${endpoint}\``);
     expect(stub).not.toContain("cdn.example");
   });
+});
+
+test("removes the files of an earlier build with another base", async () => {
+  // Built at the base /, as before the app moved below /shop/.
+  const root = await buildFixture(".tmp-build-rebase-");
+  try {
+    const builder = await createBuilder({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [huuma()],
+      base: "/shop/",
+    });
+    await builder.buildApp();
+    // No `assets/` from the base /, which Workers would serve at /assets/.
+    expect(await readdir(join(root, "dist/client"))).toStrictEqual(
+      [".assetsignore", "_headers", "shop"].sort(),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 // Also when the import's name doesn't show it's server-only code.
