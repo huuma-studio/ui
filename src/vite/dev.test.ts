@@ -195,6 +195,24 @@ describe("dev server", () => {
     expect(await response.json()).toStrictEqual(3);
   });
 
+  test("gives remote functions and pages the request context", async () => {
+    const response = await fetch(origin + (await remoteEndpoint("app/context.remote.ts")), {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-user": "ada" },
+      body: JSON.stringify({ remoteFunction: "whoAmI", args: [] }),
+    });
+    // `auth` from the app's middleware in server.ts.
+    expect(await response.json()).toStrictEqual("ada");
+
+    const page = await (
+      await fetch(`${origin}/context?q=search`, { headers: { "x-user": "ada" } })
+    ).text();
+    expect(page).toContain('<dd id="user">ada</dd>');
+    // No bindings on Node.
+    expect(page).toContain('<dd id="greeting">none</dd>');
+    expect(page).toContain('<dd id="query">search</dd>');
+  });
+
   test("answers a request a web Request can't represent with 400", async () => {
     // `TRACE` reaches the app's middleware, but a web Request refuses it.
     // `fetch()` can't send it either, so it goes over a socket.

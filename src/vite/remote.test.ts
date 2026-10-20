@@ -160,7 +160,9 @@ describe("remote modules", () => {
     };
 
     const endpoint = await remoteEndpoint("app/sum.remote.ts");
-    expect(Object.keys(remote)).toStrictEqual([endpoint]);
+    expect(Object.keys(remote).sort()).toStrictEqual(
+      [endpoint, await remoteEndpoint("app/context.remote.ts")].sort(),
+    );
     expect(await remote[endpoint].add(1, 2)).toStrictEqual(3);
   });
 

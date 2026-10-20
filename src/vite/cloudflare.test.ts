@@ -1,7 +1,7 @@
 // The build in Cloudflare's workerd, through `wrangler dev`: `worker.js`
 // with `dist/client` as Workers' static assets, at the base / and below
 // another base.
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -37,6 +37,8 @@ function describeWorker(name: string, base: string) {
       ({ origin, stop } = await startWorker(root, {
         main: "dist/server/worker.js",
         assets: { directory: "dist/client" },
+        // Local to wrangler dev, empty at the start.
+        kv_namespaces: [{ binding: "KV", id: "huuma-fixture" }],
       }));
     }, STARTUP);
     afterAll(async () => {
@@ -85,6 +87,34 @@ function describeWorker(name: string, base: string) {
       // The CSRF checks work in a Worker too.
       const text = await fetch(endpoint, { method: "POST", body: "{}" });
       expect(text.status).toStrictEqual(415);
+    });
+
+    test("gives remote functions and pages the request context, with bindings", async () => {
+      const endpoint = path((await remoteEndpoint("app/context.remote.ts")).slice(1));
+      const call = async (remoteFunction: string, args: unknown[], user?: string) => {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...(user ? { "x-user": user } : {}) },
+          body: JSON.stringify({ remoteFunction, args }),
+        });
+        return response.status === 204 ? undefined : ((await response.json()) as unknown);
+      };
+
+      // `auth` from the app's middleware in server.ts.
+      expect(await call("whoAmI", [], "ada")).toStrictEqual("ada");
+      expect(await call("whoAmI", [])).toStrictEqual(null);
+      // Stored through waitUntil(), after the response.
+      expect(await call("remember", ["greeting", "hello"])).toBeUndefined();
+      await vi.waitFor(async () =>
+        expect(await call("recall", ["greeting"])).toStrictEqual("hello"),
+      );
+
+      const page = await (
+        await fetch(path("context?q=search"), { headers: { "x-user": "ada" } })
+      ).text();
+      expect(page).toContain('<dd id="user">ada</dd>');
+      expect(page).toContain('<dd id="greeting">hello</dd>');
+      expect(page).toContain('<dd id="query">search</dd>');
     });
   });
 }

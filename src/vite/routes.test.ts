@@ -58,7 +58,7 @@ describe(ROUTES_ID, () => {
       default: List["pages"];
     };
 
-    expect(Object.keys(pages)).toStrictEqual(["/", "/remote", "/about", "/!404"]);
+    expect(Object.keys(pages)).toStrictEqual(["/", "/remote", "/context", "/about", "/!404"]);
     for (const route of Object.values(pages)) {
       expect(typeof route.page.default).toStrictEqual("function");
       expect(route.layouts.map((layout) => typeof layout.default)).toStrictEqual(["function"]);
