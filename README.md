@@ -175,7 +175,7 @@ Not there yet: CSS imported by islands or pages. Put stylesheets in `public/` an
 
 ## Linting
 
-`@huuma/ui/lint` checks remote functions, hooks and islands: remote modules export async functions only, async components don't call hooks (`$signal`, …), and islands aren't async. It works with Oxlint, ESLint and `deno lint`.
+`@huuma/ui/lint` checks remote functions, hooks and islands: remote modules export async functions only, async components don't call hooks (`$signal`, …), islands aren't async, and islands don't read the [request context](#request-context). It works with Oxlint, ESLint and `deno lint`.
 
 For Oxlint, in `.oxlintrc.json`:
 
@@ -185,7 +185,8 @@ For Oxlint, in `.oxlintrc.json`:
   "rules": {
     "huuma/async-remote-functions": "error",
     "huuma/no-async-hook-calling": "error",
-    "huuma/no-async-client-jsx": "error"
+    "huuma/no-async-client-jsx": "error",
+    "huuma/no-request-context-in-islands": "error"
   }
 }
 ```
@@ -241,7 +242,9 @@ Wrangler bundles `worker.js` with the packages it imports from `node_modules`.
 - **Base:** with a `base` other than `/`, e.g. `/shop/`, the configuration stays the same. The files are in `dist/client/shop/`, so Workers serves them at `/shop/` before the Worker runs, and the Worker strips the base for the app, like `server.js`. `_headers` and `.assetsignore` stay at the top of `dist/client/`, where Workers reads them.
 - **Environment:** vars and secrets reach `process.env`. `wrangler deploy` builds the Worker with `NODE_ENV` set to `production`. Set `HUUMA_ENV` to `PROD` in `vars` for `@huuma/route`'s production mode.
 
-Not there yet: Worker bindings, such as KV, D1 or R2, in pages and remote functions. Only middleware gets them, as `ctx.env`. Also, `vite` runs the dev server on Node, so try the build with `wrangler dev` before you deploy.
+- **Bindings:** KV, D1, R2 and the Worker's other bindings reach server code as `requestContext().env`, and middleware as `ctx.env` (see [Request context](#request-context)).
+
+Not there yet: `vite` runs the dev server on Node, without bindings, so try the build with `wrangler dev` before you deploy.
 
 ## Migrating from the Deno Setup
 
@@ -376,6 +379,54 @@ Note: request-body schema validation failures and unknown-function-name errors s
 ### Calls from other sites
 
 Remote functions answer only the JSON requests the generated stub sends: a request with another `Content-Type` gets `415`, and one a browser marks as cross-site (`Sec-Fetch-Site: cross-site`) gets `403`. So another site can't call them with your visitors' cookies (cross-site request forgery). To call one from a script or test, `POST` to its endpoint with `content-type: application/json` and a body of `{ "remoteFunction": "<name>", "args": [...] }`. Remote functions still decide themselves who may call them, e.g. by checking the session.
+
+## Request context
+
+Server code reads the current request with `requestContext()` from `@huuma/ui/server`: remote functions, pages, layouts, the root component, `metadata()` and resolvers, middleware, and code they call, such as `*.server.ts` modules. No need to pass the request along.
+
+```ts
+// app/todos.remote.ts
+import { UnauthorizedException } from "@huuma/route/http/exception/unauthorized-exception";
+import { requestContext } from "@huuma/ui/server";
+
+export async function addTodo(text: string) {
+  const { env, auth } = requestContext();
+  if (!auth) throw new UnauthorizedException();
+  await env.DB.prepare("insert into todos (text) values (?)").bind(text).run();
+}
+```
+
+It's a read-only view of the request with `request`, `params`, `searchParams`, `auth`, `env`, `connection` (the client's address) and `waitUntil(promise)`. Its values are live: `auth` that a later middleware sets shows.
+
+- **Auth for remote functions:** remote functions run the app-wide middleware from `server.ts` (`app.use()`), but not the pages' `middleware.ts`. So check the session there, set `ctx.auth`, and read it in the remote function:
+
+  ```ts
+  // server.ts
+  const app = createUIApp(Root);
+
+  app.use(async (ctx, next) => {
+    ctx.auth = await userFromSession(ctx.request);
+    return await next();
+  });
+
+  export default app;
+  ```
+
+- **Bindings:** on Cloudflare Workers, `env` holds the Worker's bindings. Declare their types once, in any module of the app, e.g. from what `wrangler types` generates:
+
+  ```ts
+  // env.d.ts
+  export {};
+
+  declare module "@huuma/ui/server" {
+    interface Env extends Cloudflare.Env {}
+  }
+  ```
+
+  Or list them yourself: `interface Env { DB: D1Database }`. `ctx.env` in middleware gets the same type. On Node and Deno, `env` is `{}`, also in `vite` dev; read vars with `process.env` everywhere.
+- **`waitUntil(promise)`** keeps work running after the response is sent (`ctx.waitUntil()` on Workers). Work a request starts keeps its context, so that work can still call `requestContext()`.
+- **Outside a request**, e.g. at a module's top level, `requestContext()` throws. `hasRequestContext()` tells whether a request is running, for helpers that run in both places.
+- **Not in islands:** islands render in the browser too, where there's no request. Read what an island needs in its page and pass it as props. The lint rule `huuma/no-request-context-in-islands` catches calls in `*.client.tsx`.
 
 ## Signals and Reactivity
 

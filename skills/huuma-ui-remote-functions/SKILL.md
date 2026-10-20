@@ -61,6 +61,13 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 - If the body fails schema validation, `remoteFunctionsSchema.parse(body)` throws and is handled by the framework's global error handler — **not** yet by the structured error path above. The same applies to `NotFoundException` ("Remote function not found"). Both are open improvements; do not rely on a structured body for these yet.
 - Validate **business** input inside the remote function itself and throw a descriptive `Error` — its `name` and `message` will reach the client.
 
+## The request: auth, headers, bindings
+
+- Remote functions only get their arguments. Read the request with `requestContext()` from `@huuma/ui/server`: `request` (headers, cookies), `params`, `searchParams`, `auth`, `env`, `connection`, `waitUntil()`. It also works in `*.server.ts` helpers they call.
+- **Auth checks:** remote endpoints run the app-wide middleware from `server.ts` (`app.use()`), not `app/**/middleware.ts`. Set `ctx.auth` there, and check `requestContext().auth` in the remote function; throw (e.g. `UnauthorizedException` from `@huuma/route/http/exception/unauthorized-exception`) when it's missing.
+- **Bindings:** on Cloudflare Workers, `requestContext().env` holds KV, D1, R2, … typed through `declare module "@huuma/ui/server" { interface Env { … } }` (or `interface Env extends Cloudflare.Env {}` with `wrangler types`). On Node and Deno, and in `vite` dev, `env` is `{}`.
+- **After the response:** `requestContext().waitUntil(promise)` keeps work running (`ctx.waitUntil()` on Workers); that work still has the request context.
+
 ## Secrets and side effects
 
 - Remote functions run on the server. Database access, secrets, and private APIs belong here.
@@ -76,6 +83,7 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 ## Things to check
 
 - Every value export of a `.remote.ts` module is an async function.
+- Remote functions that change data check `requestContext().auth`, set by an `app.use()` middleware in `server.ts`.
 - Only JSON-serializable arguments are passed.
 - Return values are JSON-serializable, or `void`/`undefined` intentionally. Watch for accidental `BigInt`, `function`, `Symbol`, or circular references — they produce a `500 RemoteFunctionSerializationError`.
 - The `.remote.ts` file is imported only from islands (or server-safe code), not from server components that will ship to the client.
