@@ -286,19 +286,29 @@ test("takes a base without a trailing slash like one with it", async () => {
 test("removes the files of an earlier build with another base", async () => {
   // Built at the base /, as before the app moved below /shop/.
   const root = await buildFixture(".tmp-build-rebase-");
-  try {
+  const build = async (base: string) => {
     const builder = await createBuilder({
       root,
       configFile: false,
       logLevel: "silent",
       plugins: [huuma()],
-      base: "/shop/",
+      base,
     });
     await builder.buildApp();
+  };
+  try {
+    await build("/shop/");
     // No `assets/` from the base /, which Workers would serve at /assets/.
     expect(await readdir(join(root, "dist/client"))).toStrictEqual(
       [".assetsignore", "_headers", "shop"].sort(),
     );
+
+    // Deeper: no `shop/assets/` from the base /shop/ either.
+    await build("/shop/admin/");
+    expect(await readdir(join(root, "dist/client"))).toStrictEqual(
+      [".assetsignore", "_headers", "shop"].sort(),
+    );
+    expect(await readdir(join(root, "dist/client/shop"))).toStrictEqual(["admin"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
