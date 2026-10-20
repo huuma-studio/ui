@@ -159,3 +159,55 @@ describe("hydrating text", () => {
     expect(markup(main)).toStrictEqual("<p>xy<i>i</i></p>");
   });
 });
+
+// The values of the probe in spec #132: in the browser too, a signal shows
+// its value like the same value written statically on the server.
+const TEXT_VALUES: JSX.SignalValue[] = [null, undefined, false, true, 0, "", "x"];
+
+describe("signal text in the browser", () => {
+  test.each(TEXT_VALUES)("creates text for %o like the server renders it", (value) => {
+    const fn = () => <p>{signal(value)}</p>;
+    const main = serve("");
+    hydrate(fn);
+
+    expect(markup(main)).toStrictEqual(renderToStringSync(<p>{value}</p>));
+  });
+
+  test.each(TEXT_VALUES)("updates text to %o like the server renders it", (value) => {
+    const text = signal<JSX.SignalValue>("before");
+    const fn = () => <p>{text}</p>;
+    const main = serve(renderToStringSync(fn()));
+    hydrate(fn);
+
+    text.set(value);
+    expect(markup(main)).toStrictEqual(renderToStringSync(<p>{value}</p>));
+    text.set("after");
+    expect(markup(main)).toStrictEqual("<p>after</p>");
+  });
+
+  test.each(TEXT_VALUES)("hydrates text of %o and keeps the next element", (value) => {
+    const text = signal<JSX.SignalValue>(value);
+    const fn = () => (
+      <p>
+        {text}
+        <b>x</b>
+      </p>
+    );
+    const main = serve(renderToStringSync(fn()));
+    const b = main.querySelector("b");
+    hydrate(fn);
+
+    expect(main.querySelector("b")).toBe(b);
+    expect(markup(main)).toStrictEqual(
+      renderToStringSync(
+        <p>
+          {value}
+          <b>x</b>
+        </p>,
+      ),
+    );
+    text.set("y");
+    expect(markup(main)).toStrictEqual("<p>y<b>x</b></p>");
+    expect(main.querySelector("b")).toBe(b);
+  });
+});

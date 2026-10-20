@@ -4,7 +4,7 @@ import { flushCleanups, VNodeProps, type VSignal, type VText } from "../../../..
 import { type AttachmentRef, AttachmentType, moveAttachmentRef } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import { isSignal } from "../update.ts";
-import { toText } from "../../../../utils/text.ts";
+import { toText, valueToText } from "../../../../utils/text.ts";
 
 interface BaseTextChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Text;
@@ -98,7 +98,7 @@ function createBoundNode(vText: VText<Node>): Text {
       },
       {
         update: (value: JSX.SignalValue) => {
-          node.textContent = String(value);
+          node.textContent = valueToText(value);
         },
         cleanupCallback(cleanup) {
           vText[VNodeProps.CLEANUP].push(cleanup);
@@ -181,7 +181,7 @@ function bindSignal(vText: VText<Node> & { [VNodeProps.TEXT]: VSignal }, node: N
     },
     {
       update: (value: JSX.SignalValue) => {
-        node.textContent = String(value);
+        node.textContent = valueToText(value);
       },
       cleanupCallback: (cleanup) => {
         vText[VNodeProps.CLEANUP].push(cleanup);

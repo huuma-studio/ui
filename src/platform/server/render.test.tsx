@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 
 import { jsx, jsxAttr, jsxEscape, jsxTemplate, type JSX } from "../../jsx-runtime/mod.ts";
+import { signal } from "../../signal/mod.ts";
 import { renderToString } from "./mod.ts";
 import { renderToStringSync } from "./render.ts";
 
@@ -262,6 +263,24 @@ describe("rendering untrusted values", () => {
     expect(
       render(<div aria-expanded={false} data-open={true} title={true} lang={false} />),
     ).toStrictEqual('<div aria-expanded="false" data-open="true" title></div>');
+  });
+});
+
+// The values of the probe in spec #132: a signal renders its value like
+// the same value written statically.
+const TEXT_VALUES: JSX.SignalValue[] = [null, undefined, false, true, 0, "", "x"];
+
+describe("rendering signal text", () => {
+  test.each(TEXT_VALUES)("renders a signal holding %o like the static value", (value) => {
+    expect(renderToStringSync(<p>{signal(value)}</p>)).toStrictEqual(
+      renderToStringSync(<p>{value}</p>),
+    );
+  });
+
+  test("renders null, undefined and booleans as nothing", () => {
+    for (const value of [null, undefined, false, true]) {
+      expect(renderToStringSync(<p>{signal(value)}</p>)).toStrictEqual("<p></p>");
+    }
   });
 });
 
