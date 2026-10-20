@@ -158,8 +158,8 @@ Options of `huuma()`:
 
 `vite build` (or `vp build`) builds the browser scripts and the app:
 
-- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, plus Vite's `public/` directory, and two files for [Cloudflare Workers](#cloudflare-workers).
-- `dist/server/app.js`: the app, as the default export, with a standard `fetch(request)` handler: it renders pages and runs remote functions. It doesn't serve `dist/client/` and doesn't strip the `base` (see below); `server.js` does both. To run `app.js` on another runtime's server, e.g. `deno serve` or Bun, serve the files in `dist/client/` there too, below the base, and strip a base other than `/` before the app gets a request.
+- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, plus Vite's `public/` directory, and two files for [Cloudflare Workers](#cloudflare-workers). Each file's path in it is its URL's path: with a `base` other than `/` (see below), e.g. `/shop/`, the files are in `dist/client/shop/`.
+- `dist/server/app.js`: the app, as the default export, with a standard `fetch(request)` handler: it renders pages and runs remote functions. It doesn't serve `dist/client/` and doesn't strip the `base` (see below); `server.js` does both. To run `app.js` on another runtime's server, e.g. `deno serve` or Bun, serve the files in `dist/client/` there too, at `/` as they are, and strip a base other than `/` before the app gets a request.
 - `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: files named with their content hash (Vite names them so by default) are cached for good; other files, like those from `public/`, for an hour.
 - `dist/server/worker.js`: the app as a Cloudflare Worker (see [Cloudflare Workers](#cloudflare-workers)).
 
@@ -169,7 +169,7 @@ HUUMA_ENV=PROD PORT=3000 node dist/server/server.js
 
 `PORT` (default `8000`) and `HOST` (default: all interfaces) set where it listens; `HUUMA_ENV=PROD` is `@huuma/route`'s production mode. Set `build.outDir` to build somewhere else than `dist/`.
 
-With a [`base`](https://vite.dev/config/shared-options.html#base) other than `/`, e.g. `/shop/`, the app lives below it, in the dev server and with `server.js` alike: `/shop/about` renders the page `app/about/page.tsx`, `/` redirects to `/shop/`, and other paths outside of it are not found. Remote functions are called below the base too. Links in your pages need the base themselves, e.g. from `import.meta.env.BASE_URL`. With a URL as the base, e.g. `https://cdn.example/shop/` for a CDN, built pages load their scripts from that URL, while the app lives below its path, `/shop/`, and remote functions are called there.
+With a [`base`](https://vite.dev/config/shared-options.html#base) other than `/`, e.g. `/shop/`, the app lives below it, in the dev server and with `server.js` alike: `/shop/about` renders the page `app/about/page.tsx`, `/` redirects to `/shop/`, and other paths outside of it are not found. Remote functions are called below the base too. Links in your pages need the base themselves, e.g. from `import.meta.env.BASE_URL`. With a URL as the base, e.g. `https://cdn.example/shop/` for a CDN, built pages load their scripts from that URL, while the app lives below its path, `/shop/`, and remote functions are called there. The client files are then in `dist/client/shop/`, so you upload `dist/client/` to the CDN's root as it is.
 
 Not there yet: CSS imported by islands or pages. Put stylesheets in `public/` and link them in `root.tsx`, or add them with `app.addStylesheet()`.
 
@@ -238,7 +238,7 @@ npx wrangler deploy
 Wrangler bundles `worker.js` with the packages it imports from `node_modules`.
 
 - **Caching:** the build writes `dist/client/_headers`, which caches files named with their content hash for good, like `server.js`. It also writes `dist/client/.assetsignore`, which keeps Vite's manifest (`.vite/`) out of the upload. If `public/` has its own `_headers` or `.assetsignore`, the build keeps it and adds its rules to it.
-- **Base:** with a `base` other than `/`, e.g. `/shop/`, name the assets binding `ASSETS`: `"assets": { "directory": "dist/client", "binding": "ASSETS" }`. The Worker then strips the base like `server.js` and serves the files of `dist/client/` through the binding.
+- **Base:** with a `base` other than `/`, e.g. `/shop/`, the configuration stays the same. The files are in `dist/client/shop/`, so Workers serves them at `/shop/` before the Worker runs, and the Worker strips the base for the app, like `server.js`. `_headers` and `.assetsignore` stay at the top of `dist/client/`, where Workers reads them.
 - **Environment:** vars and secrets reach `process.env`. `wrangler deploy` builds the Worker with `NODE_ENV` set to `production`. Set `HUUMA_ENV` to `PROD` in `vars` for `@huuma/route`'s production mode.
 
 Not there yet: Worker bindings, such as KV, D1 or R2, in pages and remote functions. Only middleware gets them, as `ctx.env`. Also, `vite` runs the dev server on Node, so try the build with `wrangler dev` before you deploy.
