@@ -2,7 +2,6 @@ import {
   isVComponent,
   isVElement,
   isVFragment,
-  isVSignal,
   isVText,
   type VComponent,
   type VElement,
@@ -11,6 +10,7 @@ import {
   VNodeProps,
   type VText,
 } from "../../../v-node/mod.ts";
+import { toText } from "../../../utils/text.ts";
 import { alignText } from "./align-text.ts";
 import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 
@@ -157,12 +157,7 @@ function element(
 
 function text(vText: VText<Node>, node: Node, attachmentRef: AttachmentRef): ChangeSet<unknown>[] {
   const changeSet: ChangeSet<unknown>[] = [];
-  const text = vText[VNodeProps.TEXT];
-
-  if (
-    node instanceof Text &&
-    (node.textContent === text || (isVSignal(text) && node.textContent === text.get()))
-  ) {
+  if (node instanceof Text && node.textContent === toText(vText[VNodeProps.TEXT])) {
     changeSet.push(<LinkTextChangeSet>{
       [Props.Type]: Type.Text,
       [Props.Action]: Action.Link,
