@@ -11,6 +11,7 @@ import {
   VNodeProps,
   type VText,
 } from "../../../v-node/mod.ts";
+import { alignText } from "./align-text.ts";
 import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 
 import { diff } from "./diff.ts";
@@ -134,6 +135,7 @@ function element(
   }
 
   const nodes = skipChildren ? undefined : [...node.childNodes];
+  if (nodes) alignText(vElement[VNodeProps.CHILDREN] ?? [], nodes);
 
   const childrenAttachmentRef: ParentAttachmentRef = {
     type: AttachmentType.Parent,

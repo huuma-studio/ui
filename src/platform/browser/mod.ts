@@ -5,6 +5,7 @@ import { create, setVNodeUpdater, update } from "../../v-node/sync.ts";
 import type { TransferState } from "../server/transfer-state.ts";
 // TODO: Move TransferState type to general location
 
+import { alignText } from "./diff/align-text.ts";
 import { attachmentRefFrom, createRootAttachmentRef } from "./diff/attachment-ref.ts";
 import { diff } from "./diff/diff.ts";
 import { dispatch } from "./diff/dispatch.ts";
@@ -89,6 +90,7 @@ export function launch(islands: Island[], transferState: TransferState): void {
             const options = { url: new URL(globalThis.window.location.href), transferState };
             const vNode = create<Node>(element, options);
             if (isVComponent(vNode)) {
+              alignText([vNode], nodes);
               dispatch(hydrate(vNode, nodes, attachmentRef));
               registerMountedIsland({ element, vNode, options });
             }

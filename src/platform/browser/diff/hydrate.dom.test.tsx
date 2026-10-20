@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-// Hydrating server-rendered text.
+// Hydrating text the server wrote next to other text, or empty text, which
+// the browser parses as one text node or as none (spec #132).
 import { describe, expect, test } from "vite-plus/test";
 
 import type { JSX } from "../../../jsx-runtime/mod.ts";
@@ -39,5 +40,122 @@ describe("hydrating text", () => {
     name.set("Grace");
     expect(markup(main)).toStrictEqual("<p><b>x</b>Grace</p>");
     expect(main.querySelector("p")!.lastChild).toBe(text);
+  });
+
+  test("keeps the next element after empty text", () => {
+    const error = signal("");
+    const fn = () => (
+      <p>
+        {error}
+        <b>x</b>
+      </p>
+    );
+    const main = serve(renderToStringSync(fn()));
+    const b = main.querySelector("b");
+    hydrate(fn);
+
+    expect(main.querySelector("b")).toBe(b);
+    error.set("Failed");
+    expect(markup(main)).toStrictEqual("<p>Failed<b>x</b></p>");
+    expect(main.querySelector("b")).toBe(b);
+  });
+
+  test("keeps the elements after adjacent text, with both texts bound", () => {
+    const a = signal("a");
+    const b = signal("b");
+    const fn = () => (
+      <p>
+        {a}
+        {b}
+        <i>i</i>
+      </p>
+    );
+    const main = serve(renderToStringSync(fn()));
+    const i = main.querySelector("i");
+    hydrate(fn);
+
+    expect(main.querySelector("i")).toBe(i);
+    a.set("A");
+    expect(markup(main)).toStrictEqual("<p>Ab<i>i</i></p>");
+    b.set("B");
+    expect(markup(main)).toStrictEqual("<p>AB<i>i</i></p>");
+    expect(main.querySelector("i")).toBe(i);
+  });
+
+  test("gives static and signal text next to each other a node each", () => {
+    const name = signal("Ada");
+    const fn = () => (
+      <p>
+        Hello {name}! <b>x</b>
+      </p>
+    );
+    const main = serve(renderToStringSync(fn()));
+    const b = main.querySelector("b");
+    hydrate(fn);
+
+    const p = main.querySelector("p")!;
+    expect([...p.childNodes].map((node) => node.textContent)).toStrictEqual([
+      "Hello ",
+      "Ada",
+      "! ",
+      "x",
+    ]);
+    name.set("Grace");
+    expect(p.innerHTML).toStrictEqual("Hello Grace! <b>x</b>");
+    expect(main.querySelector("b")).toBe(b);
+  });
+
+  test("binds empty text after the last element", () => {
+    const hint = signal("");
+    const fn = () => (
+      <p>
+        <b>x</b>
+        {hint}
+      </p>
+    );
+    const main = serve(renderToStringSync(fn()));
+    const b = main.querySelector("b");
+    hydrate(fn);
+
+    hint.set("!");
+    expect(markup(main)).toStrictEqual("<p><b>x</b>!</p>");
+    expect(main.querySelector("b")).toBe(b);
+  });
+
+  test("keeps the island's first element after empty text at its root", () => {
+    const error = signal("");
+    const fn = () => (
+      <>
+        {error}
+        <b>x</b>
+      </>
+    );
+    const main = serve(renderToStringSync(fn()));
+    const b = main.querySelector("b");
+    hydrate(fn);
+
+    expect(main.querySelector("b")).toBe(b);
+    error.set("Failed");
+    expect(markup(main)).toStrictEqual("Failed<b>x</b>");
+    expect(main.querySelector("b")).toBe(b);
+  });
+
+  test("shows the browser's text when it differs from the server's", () => {
+    const a = signal("a");
+    const b = signal("b");
+    const fn = () => (
+      <p>
+        {a}
+        {b}
+        <i>i</i>
+      </p>
+    );
+    const main = serve(renderToStringSync(fn()));
+    a.set("x");
+    hydrate(fn);
+
+    expect(markup(main)).toStrictEqual("<p>xb<i>i</i></p>");
+    b.set("y");
+    expect(markup(main)).toStrictEqual("<p>xy<i>i</i></p>");
   });
 });
