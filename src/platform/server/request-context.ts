@@ -61,7 +61,8 @@ function view(ctx: RouteRequestContext): RequestContext {
       return ctx.auth;
     },
     get env() {
-      return ctx.env as Env;
+      // What the platform passes, typed as the app declares it.
+      return ctx.env as unknown as Env;
     },
     get connection() {
       return ctx.connection;
