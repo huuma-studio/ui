@@ -245,6 +245,44 @@ describe("a build with a URL base, e.g. a CDN", () => {
   });
 });
 
+test("takes a base without a trailing slash like one with it", async () => {
+  // Vite resolves "/shop" to "/shop/"; the client's directory is chosen before that.
+  const nodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  const root = await buildFixture(".tmp-build-slash-", { base: "/shop" });
+  let server: ChildProcess | undefined;
+  try {
+    const manifest = JSON.parse(
+      await readFile(join(root, "dist/client/shop/.vite/manifest.json"), "utf8"),
+    ) as Manifest;
+    const counter = manifest["app/counter.client.tsx"]!;
+    let origin: string;
+    ({ origin, server } = await startServer(root));
+
+    const html = await (await fetch(`${origin}/shop/`)).text();
+    expect(html).toContain("<h1>Home</h1>");
+    expect(html).toContain(`from "/shop/${counter.file}";`);
+    expect(await (await fetch(`${origin}/shop/about`)).text()).toContain("<h1>About</h1>");
+    const file = await fetch(`${origin}/shop/${counter.file}`);
+    expect(file.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
+    const home = await fetch(`${origin}/`, { redirect: "manual" });
+    expect(home.headers.get("location")).toStrictEqual("/shop/");
+    expect(await readFile(join(root, "dist/client/_headers"), "utf8")).toContain("/shop/assets/*");
+
+    const worker = (
+      (await import(pathToFileURL(join(root, "dist/server/worker.js")).href)) as {
+        default: { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
+      }
+    ).default;
+    const page = await worker.fetch(new Request("http://localhost/shop/about"), {}, {});
+    expect(await page.text()).toContain("<h1>About</h1>");
+  } finally {
+    process.env.NODE_ENV = nodeEnv;
+    server?.kill();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("removes the files of an earlier build with another base", async () => {
   // Built at the base /, as before the app moved below /shop/.
   const root = await buildFixture(".tmp-build-rebase-");
