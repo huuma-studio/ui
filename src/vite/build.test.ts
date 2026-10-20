@@ -167,9 +167,10 @@ describe("node dist/server/server.js", () => {
     expect(await response.text()).toContain("export");
   });
 
-  test("doesn't serve the client manifest", async () => {
-    const response = await fetch(`${origin}/.vite/manifest.json`);
-    expect(response.status).toStrictEqual(404);
+  test("doesn't serve the client manifest or Workers' files", async () => {
+    for (const path of [".vite/manifest.json", "_headers", ".assetsignore"]) {
+      expect((await fetch(`${origin}/${path}`)).status, path).toStrictEqual(404);
+    }
   });
 });
 

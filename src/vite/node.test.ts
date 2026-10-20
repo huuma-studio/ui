@@ -25,6 +25,8 @@ describe(clientFiles.name, () => {
     await writeFile(join(client, "robots.txt"), "User-agent: *");
     await writeFile(join(client, ".vite/manifest.json"), "{}");
     await writeFile(join(client, ".env"), "SECRET=1");
+    // Cloudflare Workers' configuration, which the build writes.
+    await writeFile(join(client, "_headers"), "/assets/*\n  Cache-Control: immutable\n");
     files = clientFiles({ client, hashed: ["assets/app-3f2a.js", "assets/app-9c1d.css"] });
   });
   afterAll(async () => {
@@ -73,6 +75,7 @@ describe(clientFiles.name, () => {
       "/missing.js",
       "/.vite/manifest.json",
       "/.env",
+      "/_headers",
       "/assets/../.env",
       "/assets/%2e%2e/.env",
       "/..%2f..%2fetc%2fpasswd",
