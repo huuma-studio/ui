@@ -129,13 +129,10 @@ function updateText(
    * The committed subscription must match the current binding - the
    * Cleanup entries record which signal they belong to, so compare
    * against those instead of the previous snapshot. A snapshot delta
-   * misses two cases: a pass that aborted after the vNode walk already
-   * recorded the new signal (the retry sees no change), and a text whose
-   * hydration linked it without ever subscribing.
+   * misses a pass that aborted after the vNode walk already recorded the
+   * new signal: the retry sees no change.
    */
-  const needsRebind = isSignal(vText)
-    ? !vText[VNodeProps.CLEANUP].some((cleanup) => cleanup.signal === vText[VNodeProps.TEXT])
-    : vText[VNodeProps.CLEANUP].length > 0;
+  const needsRebind = isSignal(vText) ? !isBound(vText) : vText[VNodeProps.CLEANUP].length > 0;
 
   if (needsRebind) {
     vText[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
@@ -261,6 +258,11 @@ function removePreviousVNode(vNode: VNode<Node>, previousVNodes: VNode<Node>[]):
     return undefined;
   }
   return previousVNodes.splice(existingIndex, 1)[0];
+}
+
+/** Whether the subscription to `vText`'s signal is committed: one of its cleanups is for it. */
+export function isBound(vText: VText<Node> & { [VNodeProps.TEXT]: VSignal }): boolean {
+  return vText[VNodeProps.CLEANUP].some((cleanup) => cleanup.signal === vText[VNodeProps.TEXT]);
 }
 
 export function isSignal(

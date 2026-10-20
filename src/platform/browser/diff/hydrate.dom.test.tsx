@@ -211,3 +211,45 @@ describe("signal text in the browser", () => {
     expect(main.querySelector("b")).toBe(b);
   });
 });
+
+describe("signal text when its component renders again", () => {
+  /** Counts the writes to `node`'s text. */
+  function countWrites(node: Node): { count: number } {
+    const writes = { count: 0 };
+    let prototype: object | null = node;
+    let descriptor: PropertyDescriptor | undefined;
+    while (prototype && !descriptor) {
+      descriptor = Object.getOwnPropertyDescriptor(prototype, "textContent");
+      prototype = Object.getPrototypeOf(prototype);
+    }
+    Object.defineProperty(node, "textContent", {
+      get() {
+        return descriptor!.get!.call(this);
+      },
+      set(value: string) {
+        writes.count++;
+        descriptor!.set!.call(this, value);
+      },
+    });
+    return writes;
+  }
+
+  test.each(["hydrated", "created"])("stays subscribed once when %s", (how) => {
+    const name = signal("Ada");
+    const tick = signal(0);
+    // Reads `tick` itself, so it renders again when `tick` changes.
+    const fn = () => <p data-tick={String(tick.get())}>{name}</p>;
+    const main = serve(how === "hydrated" ? renderToStringSync(fn()) : "");
+    hydrate(fn);
+    const text = main.querySelector("p")!.firstChild!;
+
+    for (let i = 1; i <= 3; i++) tick.set(i);
+    expect(main.querySelector("p")!.getAttribute("data-tick")).toStrictEqual("3");
+    expect(main.querySelector("p")!.firstChild).toBe(text);
+
+    const writes = countWrites(text);
+    name.set("Grace");
+    expect(markup(main)).toStrictEqual('<p data-tick="3">Grace</p>');
+    expect(writes.count).toStrictEqual(1);
+  });
+});
