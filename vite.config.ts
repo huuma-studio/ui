@@ -25,6 +25,7 @@ export default defineConfig({
       "huuma/async-remote-functions": "error",
       "huuma/no-async-hook-calling": "error",
       "huuma/no-async-client-jsx": "error",
+      "huuma/no-request-context-in-islands": "error",
     },
   },
   fmt: {

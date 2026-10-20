@@ -143,3 +143,51 @@ tester.run("no-async-client-jsx", rule("no-async-client-jsx"), {
     islandError("const Counter = async () => null; export default Counter;"),
   ],
 });
+const contextError = (code: string, name = "requestContext") => ({
+  ...island(code),
+  errors: [
+    {
+      message: `${name}() works on the server only, but islands render in the browser too: read the request in the page and pass the island what it needs as props`,
+    },
+  ],
+});
+
+tester.run("no-request-context-in-islands", rule("no-request-context-in-islands"), {
+  valid: [
+    // Pages, layouts, remote functions and server modules may.
+    {
+      code: 'import { requestContext } from "@huuma/ui/server";\nexport default function Page() { return requestContext().request.url; }',
+      filename: "app/page.tsx",
+    },
+    {
+      code: 'import { requestContext } from "@huuma/ui/server";\nexport async function save() { requestContext(); }',
+      filename: "app/todos.remote.ts",
+    },
+    // Types only, or other functions of the module.
+    island('import type { RequestContext } from "@huuma/ui/server";\nlet c: RequestContext;'),
+    island('import { type RequestContext, Meta } from "@huuma/ui/server";\nMeta({});'),
+    // A function of the same name from elsewhere.
+    island('import { requestContext } from "./context.ts";\nrequestContext();'),
+    island("function requestContext() {}\nrequestContext();"),
+  ],
+  invalid: [
+    contextError(
+      'import { requestContext } from "@huuma/ui/server";\nexport default function Counter() { const { auth } = requestContext(); return null; }',
+    ),
+    contextError(
+      'import { hasRequestContext } from "@huuma/ui/server";\nif (hasRequestContext()) {}',
+      "hasRequestContext",
+    ),
+    // Renamed imports.
+    contextError('import { requestContext as ctx } from "@huuma/ui/server";\nctx();'),
+    contextError('import { "requestContext" as ctx } from "@huuma/ui/server";\nctx();'),
+    // A namespace import.
+    contextError('import * as server from "@huuma/ui/server";\nserver.requestContext();'),
+    contextError('import * as server from "@huuma/ui/server";\nserver["requestContext"]();'),
+    // From JSR or npm, with a version.
+    contextError(
+      'import { requestContext } from "jsr:@huuma/ui@^0.3.0/server";\nrequestContext();',
+    ),
+    contextError('import { requestContext } from "npm:@huuma/ui/server";\nrequestContext();'),
+  ],
+});

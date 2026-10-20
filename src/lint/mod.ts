@@ -21,7 +21,13 @@ interface AstNode {
   declarations?: AstNode[];
   specifiers?: AstNode[];
   local?: AstNode;
+  imported?: AstNode;
   source?: AstNode | null;
+  value?: unknown;
+  callee?: AstNode;
+  object?: AstNode;
+  property?: AstNode;
+  computed?: boolean;
 }
 
 interface RuleContext {
@@ -240,6 +246,72 @@ const noAsyncClientJsx: Rule = {
   },
 };
 
+// `@huuma/ui/server`, also with a `jsr:`/`npm:` prefix or a version.
+const SERVER_MODULE = /^(?:jsr:|npm:)?@huuma\/ui(?:@[^/]*)?\/server$/;
+const REQUEST_CONTEXT_FUNCTIONS = new Set(["requestContext", "hasRequestContext"]);
+
+/** An identifier's name, or a string literal's value (`import { "a" as b }`). */
+function nameOf(node: AstNode | null | undefined): string | undefined {
+  return node?.type === "Identifier"
+    ? node.name
+    : typeof node?.value === "string"
+      ? node.value
+      : undefined;
+}
+
+const noRequestContextInIslands: Rule = {
+  meta: {
+    type: "problem",
+    docs: {
+      description: "Islands must not read the request context: they run in the browser too.",
+    },
+  },
+  create(context) {
+    const island = context.filename.endsWith(".client.tsx");
+    // Local names of the functions, and of `import * as server`.
+    const functions = new Map<string, string>();
+    const namespaces = new Set<string>();
+    const report = (node: AstNode, name: string) =>
+      context.report({
+        node,
+        message:
+          `${name}() works on the server only, but islands render in the browser too: ` +
+          "read the request in the page and pass the island what it needs as props",
+      });
+    return {
+      ImportDeclaration(node) {
+        if (!island || node.importKind === "type") return;
+        if (!SERVER_MODULE.test(String(node.source?.value))) return;
+        for (const specifier of node.specifiers ?? []) {
+          const local = specifier.local?.name;
+          if (!local || specifier.importKind === "type") continue;
+          if (specifier.type === "ImportNamespaceSpecifier") {
+            namespaces.add(local);
+          } else if (specifier.type === "ImportSpecifier") {
+            const imported = nameOf(specifier.imported);
+            if (imported && REQUEST_CONTEXT_FUNCTIONS.has(imported)) functions.set(local, imported);
+          }
+        }
+      },
+      CallExpression(node) {
+        let callee: AstNode | null | undefined = node.callee;
+        while (callee && TRANSPARENT.has(callee.type)) callee = callee.expression;
+        if (callee?.type === "Identifier") {
+          const name = functions.get(callee.name ?? "");
+          if (name) report(node, name);
+        } else if (
+          callee?.type === "MemberExpression" &&
+          callee.object?.type === "Identifier" &&
+          namespaces.has(callee.object.name ?? "")
+        ) {
+          const name = callee.computed ? nameOf(callee.property) : callee.property?.name;
+          if (name && REQUEST_CONTEXT_FUNCTIONS.has(name)) report(node, name);
+        }
+      },
+    };
+  },
+};
+
 const plugin: LintPlugin = {
   name: "huuma",
   meta: { name: "huuma" },
@@ -247,6 +319,7 @@ const plugin: LintPlugin = {
     "async-remote-functions": asyncRemoteFunctions,
     "no-async-hook-calling": noAsyncHookCalling,
     "no-async-client-jsx": noAsyncClientJsx,
+    "no-request-context-in-islands": noRequestContextInIslands,
   },
   configs: {},
 };
@@ -257,6 +330,7 @@ plugin.configs.recommended = {
     "huuma/async-remote-functions": "error",
     "huuma/no-async-hook-calling": "error",
     "huuma/no-async-client-jsx": "error",
+    "huuma/no-request-context-in-islands": "error",
   },
 };
 
