@@ -1,6 +1,6 @@
 import type { JSX } from "../../../../jsx-runtime/jsx.ts";
 import { setSubscriber } from "../../../../signal/mod.ts";
-import { flushCleanups, VNodeProps, type VText } from "../../../../v-node/mod.ts";
+import { flushCleanups, VNodeProps, type VSignal, type VText } from "../../../../v-node/mod.ts";
 import { type AttachmentRef, AttachmentType, moveAttachmentRef } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import { isSignal } from "../update.ts";
@@ -132,6 +132,7 @@ function attach({ vText, attachmentRef }: AttachTextPayload): void {
 
 function link({ vText, node, attachmentRef }: LinkTextPayload): void {
   vText[VNodeProps.NODE_REF] = node;
+  if (isSignal(vText)) bindSignal(vText, node);
   moveAttachmentRef(attachmentRef, node);
 }
 
@@ -161,25 +162,32 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
   }
 
   if (isSignal(vText)) {
-    const signal = vText[VNodeProps.TEXT];
-    setSubscriber(
-      () => {
-        node.textContent = toText(signal);
-      },
-      {
-        update: (value: JSX.SignalValue) => {
-          node.textContent = String(value);
-        },
-        cleanupCallback: (cleanup) => {
-          vText[VNodeProps.CLEANUP].push(cleanup);
-        },
-      },
-    );
+    bindSignal(vText, node);
   } else {
     node.textContent = toText(vText[VNodeProps.TEXT]);
   }
 
   moveAttachmentRef(attachmentRef, node);
+}
+
+/** Shows the current value of `vText`'s signal in `node`, and every later one. */
+function bindSignal(vText: VText<Node> & { [VNodeProps.TEXT]: VSignal }, node: Node): void {
+  const signal = vText[VNodeProps.TEXT];
+  setSubscriber(
+    () => {
+      const text = toText(signal);
+      // Hydration links nodes that already show the text.
+      if (node.textContent !== text) node.textContent = text;
+    },
+    {
+      update: (value: JSX.SignalValue) => {
+        node.textContent = String(value);
+      },
+      cleanupCallback: (cleanup) => {
+        vText[VNodeProps.CLEANUP].push(cleanup);
+      },
+    },
+  );
 }
 
 function update({ vText }: UpdateTextPayload): void {
