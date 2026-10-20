@@ -229,8 +229,7 @@ describe("a build with a URL base, e.g. a CDN", () => {
         default: { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
       }
     ).default;
-    const env = { ASSETS: { fetch: async () => new Response(null, { status: 404 }) } };
-    const response = await worker.fetch(new Request("http://localhost/shop/about"), env, {});
+    const response = await worker.fetch(new Request("http://localhost/shop/about"), {}, {});
     expect(response.status).toStrictEqual(200);
     expect(await response.text()).toContain("<h1>About</h1>");
   });

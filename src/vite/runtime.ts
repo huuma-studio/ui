@@ -54,40 +54,19 @@ interface FetchHandler {
   fetch(request: Request, env?: unknown, ctx?: unknown): Promise<Response>;
 }
 
-/** The Workers static assets binding, which `worker()` reads from `env`. */
-interface AssetsEnv {
-  ASSETS?: { fetch(request: Request): Promise<Response> };
-}
-
 /**
  * The app as a Cloudflare Worker (`worker.js`). Workers' static assets
- * serve the client build at `/` before the Worker runs. Below another
- * base, e.g. `/shop/`, the Worker strips the base, like `server.js`, and
- * serves the client build's files through the assets binding, which
- * must be named `ASSETS`.
+ * serve the client build before the Worker runs, below the base too: the
+ * build puts the files in `dist/client` at their URLs' paths. Below a
+ * base other than `/`, e.g. `/shop/`, the Worker strips the base for the
+ * app, like `server.js`.
  */
 export function worker(app: FetchHandler, base: string): FetchHandler {
   if (base === "/") return app;
-  let warned = false;
   return {
-    async fetch(request, env, ctx) {
+    fetch(request, env, ctx) {
       const below = belowBase(request, base);
-      if (below instanceof Response) return below;
-      if (request.method === "GET" || request.method === "HEAD") {
-        const assets = (env as AssetsEnv | undefined)?.ASSETS;
-        if (assets) {
-          const asset = await assets.fetch(below);
-          if (asset.status !== 404) return asset;
-        } else if (!warned) {
-          warned = true;
-          console.warn(
-            `[huuma] The app lives below ${base}, so the Worker serves the client ` +
-              'build\'s files. Name the assets binding ASSETS: "assets": { ' +
-              '"directory": "dist/client", "binding": "ASSETS" }.',
-          );
-        }
-      }
-      return app.fetch(below, env, ctx);
+      return below instanceof Response ? Promise.resolve(below) : app.fetch(below, env, ctx);
     },
   };
 }

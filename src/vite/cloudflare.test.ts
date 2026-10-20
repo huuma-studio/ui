@@ -15,7 +15,7 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 // Starting workerd takes a few seconds.
 const STARTUP = 60_000;
 
-function describeWorker(name: string, base: string, assets: Record<string, string>) {
+function describeWorker(name: string, base: string) {
   describe(name, () => {
     let root: string;
     let stop: (() => void) | undefined;
@@ -32,7 +32,7 @@ function describeWorker(name: string, base: string, assets: Record<string, strin
       ) as Manifest;
       ({ origin, stop } = await startWorker(root, {
         main: "dist/server/worker.js",
-        assets: { directory: "dist/client", ...assets },
+        assets: { directory: "dist/client" },
       }));
     }, STARTUP);
     afterAll(async () => {
@@ -57,6 +57,13 @@ function describeWorker(name: string, base: string, assets: Record<string, strin
       expect(await response.text()).toContain("export");
     });
 
+    if (base !== "/") {
+      test("serves the client files only below the base", async () => {
+        const counter = manifest["app/counter.client.tsx"]!;
+        expect((await fetch(`${origin}/${counter.file}`)).status).toStrictEqual(404);
+      });
+    }
+
     test("doesn't serve the client manifest", async () => {
       const response = await fetch(path(".vite/manifest.json"));
       expect(response.status).toStrictEqual(404);
@@ -78,7 +85,7 @@ function describeWorker(name: string, base: string, assets: Record<string, strin
   });
 }
 
-describeWorker("a Cloudflare Worker", "/", {});
+describeWorker("a Cloudflare Worker", "/");
 
-// The Worker strips the base and serves the files through the binding.
-describeWorker("a Cloudflare Worker below a base", "/shop/", { binding: "ASSETS" });
+// Workers serves the files below the base, and the Worker strips the base.
+describeWorker("a Cloudflare Worker below a base", "/shop/");

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
 import type { JSX } from "../jsx-runtime/mod.ts";
 import { createUIApp, type PageLikeProps, type RootPageProps } from "../platform/server/app.ts";
@@ -100,64 +100,25 @@ describe(worker.name, () => {
         }),
       ),
   };
-  // The assets binding, with one file.
-  const assets = {
-    fetch: vi.fn((request: Request) =>
-      Promise.resolve(
-        new URL(request.url).pathname === "/assets/a-1234abcd.js"
-          ? new Response("asset")
-          : new Response("not found", { status: 404 }),
-      ),
-    ),
-  };
-  const env = { ASSETS: assets };
   const get = (handler: ReturnType<typeof worker>, path: string, init?: RequestInit) =>
-    handler.fetch(new Request(`http://localhost${path}`, init), env, {});
+    handler.fetch(new Request(`http://localhost${path}`, init), {}, {});
 
   test("is the app itself at /", () => {
     expect(worker(app, "/")).toBe(app);
   });
 
-  test("serves the client build's files below the base", async () => {
-    const response = await get(worker(app, "/shop/"), "/shop/assets/a-1234abcd.js");
-    expect(await response.text()).toStrictEqual("asset");
-    expect(new URL(assets.fetch.mock.lastCall![0].url).pathname).toStrictEqual(
-      "/assets/a-1234abcd.js",
-    );
-  });
-
-  test("passes other requests to the app without the base, with env", async () => {
-    const response = await get(worker(app, "/shop/"), "/shop/about");
+  test("passes requests to the app without the base, with env", async () => {
+    const handler = worker(app, "/shop/");
+    const response = await get(handler, "/shop/about");
     expect(await response.text()).toStrictEqual("app GET /about");
     expect(response.headers.get("x-env")).toStrictEqual("true");
-  });
-
-  test("doesn't look for files on other methods", async () => {
-    assets.fetch.mockClear();
-    const handler = worker(app, "/shop/");
-    const response = await get(handler, "/shop/_huuma/remote/1/a", { method: "POST", body: "{}" });
-    expect(await response.text()).toStrictEqual("app POST /_huuma/remote/1/a");
-    expect(assets.fetch).not.toHaveBeenCalled();
+    const post = await get(handler, "/shop/_huuma/remote/1/a", { method: "POST", body: "{}" });
+    expect(await post.text()).toStrictEqual("app POST /_huuma/remote/1/a");
   });
 
   test("redirects / to the base and doesn't find the rest", async () => {
     const handler = worker(app, "/shop/");
     expect((await get(handler, "/")).headers.get("location")).toStrictEqual("/shop/");
     expect((await get(handler, "/about")).status).toStrictEqual(404);
-  });
-
-  test("warns once without the assets binding", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const handler = worker(app, "/shop/");
-      for (let i = 0; i < 2; i++) {
-        const response = await handler.fetch(new Request("http://localhost/shop/about"), {}, {});
-        expect(await response.text()).toStrictEqual("app GET /about");
-      }
-      expect(warn).toHaveBeenCalledOnce();
-      expect(warn.mock.lastCall![0]).toContain('"binding": "ASSETS"');
-    } finally {
-      warn.mockRestore();
-    }
   });
 });
