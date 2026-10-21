@@ -6,7 +6,7 @@
 
 Huuma UI is a web framework for interactive websites: components render on the server, and islands come alive in the browser. It builds with [Vite 8](https://vite.dev) and runs on Node.js; Deno works too. Features remote server functions, reactive state management, and automatic code splitting.
 
-> Huuma UI 0.3, the Vite version described here, is a pre-release: `0.3.0-beta.1` on JSR, from the `next` branch. JSR's latest version is still 0.2, the Deno version, which [Huuma CLI](https://jsr.io/@huuma/cli) creates projects for; see [Migrating from the Deno setup](#migrating-from-the-deno-setup).
+> Huuma UI 0.3, the Vite version described here, is a pre-release: `0.3.0-beta.2` on JSR, from the `next` branch. JSR's latest version is still 0.2, the Deno version, which [Huuma CLI](https://jsr.io/@huuma/cli) creates projects for; see [Migrating from the Deno setup](#migrating-from-the-deno-setup).
 
 ## Features
 
@@ -26,14 +26,14 @@ Huuma UI is published on [JSR](https://jsr.io/@huuma/ui). It needs Node.js 24 or
 With pnpm 10.9+ (recommended) or Yarn 4.9+, which install JSR packages natively:
 
 ```sh
-pnpm add jsr:@huuma/ui@0.3.0-beta.1
+pnpm add jsr:@huuma/ui@0.3.0-beta.2
 pnpm add -D vite@^8
 ```
 
 With npm or Bun, through JSR's npm compatibility layer (`jsr add` also writes an `.npmrc` for it):
 
 ```sh
-npx jsr add @huuma/ui@0.3.0-beta.1
+npx jsr add @huuma/ui@0.3.0-beta.2
 npm install -D vite@^8
 ```
 
