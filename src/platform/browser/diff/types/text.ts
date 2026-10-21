@@ -1,10 +1,10 @@
 import type { JSX } from "../../../../jsx-runtime/jsx.ts";
 import { setSubscriber } from "../../../../signal/mod.ts";
-import { flushCleanups, VNodeProps, type VText } from "../../../../v-node/mod.ts";
+import { flushCleanups, VNodeProps, type VSignal, type VText } from "../../../../v-node/mod.ts";
 import { type AttachmentRef, AttachmentType, moveAttachmentRef } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import { isSignal } from "../update.ts";
-import { toText } from "../../../../utils/text.ts";
+import { toText, valueToText } from "../../../../utils/text.ts";
 
 interface BaseTextChangeSet<T> extends ChangeSet<T> {
   [Props.Type]: Type.Text;
@@ -98,7 +98,7 @@ function createBoundNode(vText: VText<Node>): Text {
       },
       {
         update: (value: JSX.SignalValue) => {
-          node.textContent = String(value);
+          node.textContent = valueToText(value);
         },
         cleanupCallback(cleanup) {
           vText[VNodeProps.CLEANUP].push(cleanup);
@@ -161,25 +161,32 @@ function replace({ vText, attachmentRef }: ReplaceTextPayload): void {
   }
 
   if (isSignal(vText)) {
-    const signal = vText[VNodeProps.TEXT];
-    setSubscriber(
-      () => {
-        node.textContent = toText(signal);
-      },
-      {
-        update: (value: JSX.SignalValue) => {
-          node.textContent = String(value);
-        },
-        cleanupCallback: (cleanup) => {
-          vText[VNodeProps.CLEANUP].push(cleanup);
-        },
-      },
-    );
+    bindSignal(vText, node);
   } else {
     node.textContent = toText(vText[VNodeProps.TEXT]);
   }
 
   moveAttachmentRef(attachmentRef, node);
+}
+
+/** Shows the current value of `vText`'s signal in `node`, and every later one. */
+function bindSignal(vText: VText<Node> & { [VNodeProps.TEXT]: VSignal }, node: Node): void {
+  const signal = vText[VNodeProps.TEXT];
+  setSubscriber(
+    () => {
+      const text = toText(signal);
+      // Hydration binds nodes that already show the text.
+      if (node.textContent !== text) node.textContent = text;
+    },
+    {
+      update: (value: JSX.SignalValue) => {
+        node.textContent = valueToText(value);
+      },
+      cleanupCallback: (cleanup) => {
+        vText[VNodeProps.CLEANUP].push(cleanup);
+      },
+    },
+  );
 }
 
 function update({ vText }: UpdateTextPayload): void {

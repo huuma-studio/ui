@@ -129,9 +129,8 @@ function updateText(
    * The committed subscription must match the current binding - the
    * Cleanup entries record which signal they belong to, so compare
    * against those instead of the previous snapshot. A snapshot delta
-   * misses two cases: a pass that aborted after the vNode walk already
-   * recorded the new signal (the retry sees no change), and a text whose
-   * hydration linked it without ever subscribing.
+   * misses a pass that aborted after the vNode walk already recorded the
+   * new signal: the retry sees no change.
    */
   const needsRebind = isSignal(vText)
     ? !vText[VNodeProps.CLEANUP].some((cleanup) => cleanup.signal === vText[VNodeProps.TEXT])

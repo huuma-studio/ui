@@ -457,6 +457,8 @@ function Counter() {
 }
 ```
 
+A signal passed as a child (`<p>{count}</p>`, without `.get()`) binds just that text to it, so it updates without re-rendering the component. Like static values, `null`, `undefined`, `true` and `false` render as nothing: `{error}` with `$signal<string | null>(null)` shows no text until an error is set.
+
 ## Lifecycle Hooks
 
 Control component lifecycle with hooks:
