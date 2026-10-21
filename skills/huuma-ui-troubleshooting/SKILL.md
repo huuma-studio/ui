@@ -60,6 +60,12 @@ Use this skill when the agent (or user) hits a Huuma UI lint violation or runtim
 - **Rule:** `*.server.*` modules (any extension) can't be imported by browser code. The dev server and `vite build` fail and name the importer, e.g. an island.
 - **Fix:** Move shared logic into a non-`.server` file, or call the server-only code from a remote function (`*.remote.ts`) instead.
 
+### "requestContext() was called outside of a request"
+
+- **Rule:** `requestContext()` from `@huuma/ui/server` works only while a request runs, on the server: in remote functions, pages, layouts, the root, `metadata()`, resolvers, middleware, and code they call (including work they start, such as a `waitUntil()` promise).
+- **Cause:** a call at a module's top level (e.g. a client created at import time), or in an island running in the browser (lint `no-request-context-in-islands`).
+- **Fix:** Move the call into the function that handles the request. For islands, read the value in the page and pass it as a prop. In helpers that run in both places, check `hasRequestContext()` first.
+
 ## General debugging steps
 
 1. Run your linter with the `@huuma/ui/lint` plugin and read the exact rule name it reports.

@@ -116,6 +116,7 @@ Deno.test("vite build on Deno, served by server.js on Deno", async () => {
         await renderFixture(over(`http://127.0.0.1:${port}`)),
         await readFile(join(repoRoot, "test/snapshots/basic.txt"), "utf8"),
       );
+      await checkRequestContext(`http://127.0.0.1:${port}`);
     } finally {
       await server.stop();
     }
@@ -161,4 +162,26 @@ async function checkDevServer(origin: string) {
     body: JSON.stringify({ remoteFunction: "add", args: [1, 2] }),
   });
   assert.equal(await sum.json(), 3);
+
+  await checkRequestContext(origin);
+}
+
+/**
+ * Remote functions and pages read the request through `requestContext()`,
+ * with `auth` from the app's middleware. Deno has no bindings.
+ */
+async function checkRequestContext(origin: string) {
+  const whoAmI = await fetch(`${origin}/_huuma/remote/a427b831/context.remote`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-user": "ada" },
+    body: JSON.stringify({ remoteFunction: "whoAmI", args: [] }),
+  });
+  assert.equal(await whoAmI.json(), "ada");
+
+  const page = await (
+    await fetch(`${origin}/context?q=search`, { headers: { "x-user": "ada" } })
+  ).text();
+  assert.ok(page.includes('<dd id="user">ada</dd>'), page);
+  assert.ok(page.includes('<dd id="greeting">none</dd>'), page);
+  assert.ok(page.includes('<dd id="query">search</dd>'), page);
 }

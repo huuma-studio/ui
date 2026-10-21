@@ -143,3 +143,115 @@ tester.run("no-async-client-jsx", rule("no-async-client-jsx"), {
     islandError("const Counter = async () => null; export default Counter;"),
   ],
 });
+const contextError = (code: string, name = "requestContext") => ({
+  ...island(code),
+  errors: [
+    {
+      message: `${name}() works on the server only, but islands render in the browser too: read the request in the page and pass the island what it needs as props`,
+    },
+  ],
+});
+
+// Run with and without the linter's scope analysis, below.
+const requestContextCases = {
+  valid: [
+    // Pages, layouts, remote functions and server modules may.
+    {
+      code: 'import { requestContext } from "@huuma/ui/server";\nexport default function Page() { return requestContext().request.url; }',
+      filename: "app/page.tsx",
+    },
+    {
+      code: 'import { requestContext } from "@huuma/ui/server";\nexport async function save() { requestContext(); }',
+      filename: "app/todos.remote.ts",
+    },
+    // Types only, or other functions of the module.
+    island('import type { RequestContext } from "@huuma/ui/server";\nlet c: RequestContext;'),
+    island('import { type RequestContext, Meta } from "@huuma/ui/server";\nMeta({});'),
+    // A function of the same name from elsewhere.
+    island('import { requestContext } from "./context.ts";\nrequestContext();'),
+    island("function requestContext() {}\nrequestContext();"),
+    // A local name that shadows the import.
+    island(
+      'import { requestContext as ctx } from "@huuma/ui/server";\nfunction run(ctx: () => string) { return ctx(); }',
+    ),
+    island(
+      'import { requestContext } from "@huuma/ui/server";\nconst run = ({ requestContext }: Props) => requestContext();',
+    ),
+    island(
+      'import { requestContext } from "@huuma/ui/server";\nfunction run() { const requestContext = () => 1; return requestContext(); }',
+    ),
+    island(
+      'import { requestContext } from "@huuma/ui/server";\nfor (const requestContext of handlers) requestContext();',
+    ),
+    island(
+      'import { requestContext } from "@huuma/ui/server";\ntry {} catch ([requestContext]) { requestContext(); }',
+    ),
+    island(
+      'import * as server from "@huuma/ui/server";\nfunction run(server: Api) { server.requestContext(); }',
+    ),
+    // A computed property is the variable's value, not its name.
+    island(
+      'import * as server from "@huuma/ui/server";\nconst requestContext = "Meta";\nserver[requestContext]({});',
+    ),
+  ],
+  invalid: [
+    contextError(
+      'import { requestContext } from "@huuma/ui/server";\nexport default function Counter() { const { auth } = requestContext(); return null; }',
+    ),
+    contextError(
+      'import { hasRequestContext } from "@huuma/ui/server";\nif (hasRequestContext()) {}',
+      "hasRequestContext",
+    ),
+    // Renamed imports.
+    contextError('import { requestContext as ctx } from "@huuma/ui/server";\nctx();'),
+    contextError('import { "requestContext" as ctx } from "@huuma/ui/server";\nctx();'),
+    // A namespace import.
+    contextError('import * as server from "@huuma/ui/server";\nserver.requestContext();'),
+    contextError('import * as server from "@huuma/ui/server";\nserver["requestContext"]();'),
+    // Inside functions and blocks that don't shadow the import.
+    contextError(
+      'import { requestContext as ctx } from "@huuma/ui/server";\nfunction run(other: () => string) { if (other) { const x = 1; return ctx(); } }',
+    ),
+    contextError(
+      'import * as server from "@huuma/ui/server";\nconst run = (api: Api) => { server.requestContext(); };',
+    ),
+    // From JSR or npm, with a version.
+    contextError(
+      'import { requestContext } from "jsr:@huuma/ui@^0.3.0/server";\nrequestContext();',
+    ),
+    contextError('import { requestContext } from "npm:@huuma/ui/server";\nrequestContext();'),
+  ],
+};
+
+// A `var` in a nested block belongs to the whole function.
+const nestedVar =
+  'import { requestContext as ctx } from "@huuma/ui/server";\nfunction run(x: boolean) { if (x) { var ctx = () => 1; } return ctx(); }';
+
+tester.run("no-request-context-in-islands", rule("no-request-context-in-islands"), {
+  valid: [...requestContextCases.valid, island(nestedVar)],
+  invalid: requestContextCases.invalid,
+});
+
+// `deno lint` has no scope analysis: the rule walks up the parents instead,
+// which misses a `var` in a nested block.
+const withoutScopeAnalysis = (name: string) => {
+  const original = plugin.rules[name];
+  return {
+    ...original,
+    // The rule reads only these of the context.
+    create: (context: Parameters<typeof original.create>[0]) =>
+      original.create({
+        filename: context.filename,
+        report: (descriptor) => context.report(descriptor),
+      }),
+  } as unknown as TesterRule;
+};
+
+tester.run(
+  "no-request-context-in-islands without scope analysis",
+  withoutScopeAnalysis("no-request-context-in-islands"),
+  {
+    valid: requestContextCases.valid,
+    invalid: [...requestContextCases.invalid, contextError(nestedVar)],
+  },
+);

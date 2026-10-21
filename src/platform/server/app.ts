@@ -15,6 +15,7 @@ import { type ContentSecurityPolicy, generateCSP } from "./content-security-poli
 import { DEFAULT_STYLES_PATH, type Stylesheet } from "./stylesheet.ts";
 import type { Metadata, MetadataGenerator } from "./metadata.ts";
 import { renderToString, vNodeToString } from "./render.ts";
+import { type Env, provideRequestContext } from "./request-context.ts";
 
 export type Resolver<T> = (ctx: RequestContext) => Record<string, T> | Promise<Record<string, T>>;
 
@@ -93,6 +94,10 @@ interface ScriptWithImports {
 
 export type UIAppContext<D = unknown> = {
   State: { data: D; transferState: TransferState };
+  // The app's bindings, typed by augmenting `Env`, also for `ctx.env` in
+  // middleware. With a record, as @huuma/route's `AppContext` wants one
+  // and an interface isn't.
+  Env?: Env & Record<string, unknown>;
 };
 
 interface UIAppOption<T extends UIAppContext> extends AppOptions<T> {
@@ -118,6 +123,8 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
   constructor(root: RootPage<D>, options?: UIAppOption<T>) {
     const { contentSecurityPolicy, ..._options } = options ?? {};
     super(_options);
+    // First, so the app's own middleware runs inside it too.
+    this.use(provideRequestContext);
     this.#contentSecurityPolicy = contentSecurityPolicy;
     this.#root = root;
   }

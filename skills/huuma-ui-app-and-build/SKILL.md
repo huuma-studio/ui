@@ -51,7 +51,7 @@ If `<Launch>` is missing, islands never hydrate. Keep the `nonce` props: the app
 - **Prod:** `node dist/server/server.js`, with `PORT` (default 8000), `HOST` and `HUUMA_ENV=PROD`. It serves `dist/client/` and the app below Vite's `base`.
 - `app.js` alone doesn't serve `dist/client/`: on another server (`deno serve`, Bun), serve those files too, at `/` as they are. Below a `base` other than `/`, e.g. `/shop/`, the build puts them in `dist/client/shop/`, so their paths are their URLs' paths.
 - **Deno:** `deno run -A npm:vite`, `deno run -A npm:vite build`, `deno run -A dist/server/server.js`, with a `package.json` and `node_modules`.
-- **Cloudflare Workers:** `wrangler.jsonc` with `"main": "dist/server/worker.js"` and `"assets": { "directory": "dist/client" }`, for every `base`. Try it with `wrangler dev`, then `wrangler deploy`. The build writes `_headers` (caching) and `.assetsignore` (keeps `.vite/` private) into `dist/client/`. Bindings (KV, D1, R2) reach middleware as `ctx.env`, not pages or remote functions.
+- **Cloudflare Workers:** `wrangler.jsonc` with `"main": "dist/server/worker.js"` and `"assets": { "directory": "dist/client" }`, for every `base`. Try it with `wrangler dev`, then `wrangler deploy`. The build writes `_headers` (caching) and `.assetsignore` (keeps `.vite/` private) into `dist/client/`. Bindings (KV, D1, R2) reach server code as `requestContext().env` and middleware as `ctx.env`; type them once by augmenting `Env` from `@huuma/ui/server` (README "Request context"). `vite` dev runs on Node without bindings (`env` is `{}`): try code that needs them with `vite build` and `wrangler dev`.
 
 ## Environment variables
 

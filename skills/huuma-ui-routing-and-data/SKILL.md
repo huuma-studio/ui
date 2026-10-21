@@ -31,6 +31,8 @@ Server `page.tsx` and `layout.tsx` components receive `PageLikeProps`:
 - `data` — resolved data.
 - `resolved` — resolver outputs.
 
+Code that doesn't get these props, such as a `*.server.ts` helper, a resolver or `metadata()`, reads the request with `requestContext()` from `@huuma/ui/server` (`request`, `params`, `searchParams`, `auth`, `env`, `connection`, `waitUntil()`). Not in islands: they render in the browser too (lint `no-request-context-in-islands`).
+
 See the `PageLikeProps` type exported from `@huuma/ui/server` (inspect with `deno doc jsr:@huuma/ui/server`).
 
 ## Data loading with `resolver()`
@@ -50,6 +52,7 @@ See the `PageLikeProps` type exported from `@huuma/ui/server` (inspect with `den
 - Export `default` (an array of middleware) from `app/middleware.ts`.
 - Middleware runs for all nested routes in that directory.
 - Middleware is defined by `@huuma/route` and receives `ctx`.
+- Page middleware doesn't run for remote functions. App-wide middleware (`app.use()` in `server.ts`) runs for pages and remote functions: put auth there and set `ctx.auth`.
 
 ## Scope hooks
 
