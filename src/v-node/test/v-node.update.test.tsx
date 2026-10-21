@@ -208,9 +208,9 @@ describe(update.name, () => {
     };
 
     const vNode = create(<Old />);
-    // NaN matches no node predicate (isTextNode requires a finite
-    // number) and reaches update()'s fall-through tail.
-    const updated = update(NaN, vNode, {});
+    // A function matches no node predicate and reaches update()'s
+    // fall-through tail.
+    const updated = update((() => {}) as unknown as JSX.Element, vNode, {});
 
     expect(updated).toStrictEqual(undefined);
     expect(destroyed).toStrictEqual(["Old"]);

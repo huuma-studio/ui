@@ -12,8 +12,8 @@ export function toText(text: string | JSX.SignalLike): string {
 
 /**
  * A signal's value as text, by the rule for the same value written
- * statically in JSX: what isn't text (`null`, `undefined`, booleans, `NaN`
- * and `±Infinity`) is empty (spec #132).
+ * statically in JSX: `null`, `undefined` and booleans are empty (spec
+ * #132), numbers show as text, `NaN` and `Infinity` too.
  */
 export function valueToText(value: JSX.SignalValue): string {
   return isTextNode(value) ? String(value) : "";

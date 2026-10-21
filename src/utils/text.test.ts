@@ -22,9 +22,9 @@ test("valueToText leaves out what static JSX leaves out", () => {
   expect(valueToText(true)).toStrictEqual("");
   expect(valueToText(false)).toStrictEqual("");
   expect(valueToText(0)).toStrictEqual("0");
-  expect(valueToText(Number.NaN)).toStrictEqual("");
-  expect(valueToText(Number.POSITIVE_INFINITY)).toStrictEqual("");
-  expect(valueToText(Number.NEGATIVE_INFINITY)).toStrictEqual("");
+  expect(valueToText(Number.NaN)).toStrictEqual("NaN");
+  expect(valueToText(Number.POSITIVE_INFINITY)).toStrictEqual("Infinity");
+  expect(valueToText(Number.NEGATIVE_INFINITY)).toStrictEqual("-Infinity");
   expect(valueToText("")).toStrictEqual("");
   expect(valueToText("x")).toStrictEqual("x");
 });

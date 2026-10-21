@@ -292,6 +292,22 @@ describe("rendering signal text", () => {
       expect(renderToStringSync(<p>{signal(value)}</p>)).toStrictEqual("<p></p>");
     }
   });
+
+  // Like React, Vue and Svelte: NaN shows a calculation that went wrong.
+  test("renders every number as text, NaN and Infinity too", () => {
+    for (const [value, text] of [
+      [0, "0"],
+      [Number.NaN, "NaN"],
+      [Number.POSITIVE_INFINITY, "Infinity"],
+      [Number.NEGATIVE_INFINITY, "-Infinity"],
+    ] as const) {
+      expect(renderToStringSync(<p>{value}</p>)).toStrictEqual(`<p>${text}</p>`);
+      expect(renderToStringSync(<p>{signal(value)}</p>)).toStrictEqual(`<p>${text}</p>`);
+      expect(renderToStringSync(jsxTemplate(["<p>", "</p>"], jsxEscape(value)))).toStrictEqual(
+        `<p>${text}</p>`,
+      );
+    }
+  });
 });
 
 // Templates as the precompile transform builds them: static HTML strings

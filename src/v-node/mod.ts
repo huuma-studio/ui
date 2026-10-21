@@ -144,7 +144,9 @@ export function isEmptyNode(node: JSX.Element): node is boolean | null | undefin
 }
 
 export function isTextNode(value: JSX.Element): value is string | number | JSX.SignalLike {
-  return value != null && (typeof value === "string" || Number.isFinite(value) || isVSignal(value));
+  return (
+    value != null && (typeof value === "string" || typeof value === "number" || isVSignal(value))
+  );
 }
 
 export function isFragmentNode(node: unknown): node is JSX.Element[] | JSX.ComponentNode<0> {
