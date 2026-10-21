@@ -11,7 +11,6 @@ import {
   type VText,
 } from "../../../v-node/mod.ts";
 import { toText } from "../../../utils/text.ts";
-import { alignText } from "./align-text.ts";
 import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 
 import { diff } from "./diff.ts";
@@ -22,6 +21,12 @@ import type { LinkComponentChangeSet, MountComponentChangeSet } from "./types/co
 import type { LinkElementChangeSet, ReplaceElementChangeSet } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
 import type { LinkTextChangeSet, ReplaceTextChangeSet } from "./types/text.ts";
+
+/**
+ * What's left of server text nodes that hydration split for a text vNode
+ * (see `text()`): only the next text vNode takes it.
+ */
+const remainders = new WeakSet<Node>();
 
 export function hydrate(
   vNode: VNode<Node>,
@@ -41,16 +46,15 @@ export function hydrate(
       return fragment(vNode, nodes, attachmentRef);
     }
 
+    if (isVText(vNode)) {
+      return text(vNode, nodes, attachmentRef);
+    }
+
+    dropRemainder(nodes);
     const node = nodes.shift();
 
-    if (node) {
-      if (isVElement(vNode)) {
-        return element(vNode, node, attachmentRef);
-      }
-
-      if (isVText(vNode)) {
-        return text(vNode, node, attachmentRef);
-      }
+    if (node && isVElement(vNode)) {
+      return element(vNode, node, attachmentRef);
     }
   }
 
@@ -135,7 +139,6 @@ function element(
   }
 
   const nodes = skipChildren ? undefined : [...node.childNodes];
-  if (nodes) alignText(vElement[VNodeProps.CHILDREN] ?? [], nodes);
 
   const childrenAttachmentRef: ParentAttachmentRef = {
     type: AttachmentType.Parent,
@@ -151,34 +154,71 @@ function element(
       }),
     );
   });
+  if (nodes) dropRemainder(nodes);
 
   return changes;
 }
 
-function text(vText: VText<Node>, node: Node, attachmentRef: AttachmentRef): ChangeSet<unknown>[] {
-  const changeSet: ChangeSet<unknown>[] = [];
-  if (node instanceof Text && node.textContent === toText(vText[VNodeProps.TEXT])) {
-    changeSet.push(<LinkTextChangeSet>{
-      [Props.Type]: Type.Text,
-      [Props.Action]: Action.Link,
-      [Props.Payload]: {
-        vText,
-        node: node,
-        attachmentRef,
-      },
-    });
+/**
+ * Hydrates `vText` with the first of `nodes`. The browser parses text that
+ * the server wrote next to other text as one text node, and empty text as
+ * no node at all (spec #132). So a text node that starts with the text is
+ * split, its remainder left for the next text vNode, and empty text before
+ * another node gets a new text node, so the next vNode keeps its node.
+ */
+function text(
+  vText: VText<Node>,
+  nodes: Node[],
+  attachmentRef: AttachmentRef,
+): ChangeSet<unknown>[] {
+  const text = toText(vText[VNodeProps.TEXT]);
+  const next = nodes[0];
+  let node: Node;
+  let matches = true;
+
+  if (next instanceof Text && next.data.startsWith(text)) {
+    node = nodes.shift()!;
+    if (next.data.length > text.length) {
+      const remainder = next.splitText(text.length);
+      remainders.add(remainder);
+      nodes.unshift(remainder);
+    }
+  } else if (text === "" && next.parentNode) {
+    node = next.parentNode.insertBefore(new Text(""), next);
   } else {
-    // Attach node without moving the
-    vText[VNodeProps.NODE_REF] = node;
-    changeSet.push(<ReplaceTextChangeSet>{
-      [Props.Type]: Type.Text,
-      [Props.Action]: Action.Replace,
-      [Props.Payload]: {
-        vText,
-        attachmentRef,
-      },
-    });
+    // The server rendered something else here.
+    node = nodes.shift()!;
+    matches = false;
   }
 
-  return changeSet;
+  if (matches) {
+    return [
+      <LinkTextChangeSet>{
+        [Props.Type]: Type.Text,
+        [Props.Action]: Action.Link,
+        [Props.Payload]: { vText, node, attachmentRef },
+      },
+    ];
+  }
+
+  // Binds the node in place to text that differs.
+  vText[VNodeProps.NODE_REF] = node;
+  return [
+    <ReplaceTextChangeSet>{
+      [Props.Type]: Type.Text,
+      [Props.Action]: Action.Replace,
+      [Props.Payload]: { vText, attachmentRef },
+    },
+  ];
+}
+
+/**
+ * Removes the remainder of a split text node from the DOM, if it's the
+ * first of `nodes`: no text vNode took it, as the server rendered other
+ * text than the browser.
+ */
+export function dropRemainder(nodes: Node[]): void {
+  if (!nodes[0] || !remainders.has(nodes[0])) return;
+  const remainder = nodes.shift()!;
+  remainder.parentNode?.removeChild(remainder);
 }

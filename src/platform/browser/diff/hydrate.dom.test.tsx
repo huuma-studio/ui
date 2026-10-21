@@ -3,7 +3,7 @@
 // the browser parses as one text node or as none (spec #132).
 import { describe, expect, test } from "vite-plus/test";
 
-import type { JSX } from "../../../jsx-runtime/mod.ts";
+import { jsxTemplate, type JSX } from "../../../jsx-runtime/mod.ts";
 import { signal } from "../../../signal/mod.ts";
 import { renderToStringSync } from "../../server/render.ts";
 import { launch } from "../mod.ts";
@@ -138,6 +138,60 @@ describe("hydrating text", () => {
     error.set("Failed");
     expect(markup(main)).toStrictEqual("Failed<b>x</b>");
     expect(main.querySelector("b")).toBe(b);
+  });
+
+  test("keeps the next element after empty text, with raw HTML later on", () => {
+    const error = signal("");
+    const fn = () => (
+      <p>
+        {error}
+        <b>x</b>
+        {jsxTemplate(["y"])}
+      </p>
+    );
+    const main = serve(renderToStringSync(fn()));
+    const b = main.querySelector("b");
+    hydrate(fn);
+
+    expect(main.querySelector("b")).toBe(b);
+    error.set("Failed");
+    expect(markup(main)).toStrictEqual("<p>Failed<b>x</b>y</p>");
+  });
+
+  // The server's text starts with the browser's: the rest of its node is
+  // no text's, and goes.
+  test.each([
+    ["before an element", () => <b>x</b>, "<b>x</b>"],
+    ["at the end", () => null, ""],
+  ])("drops server text the browser doesn't render %s", (_, after, html) => {
+    const text = signal("hello");
+    const fn = () => (
+      <p>
+        {text}
+        {after()}
+      </p>
+    );
+    const main = serve(renderToStringSync(fn()));
+    const b = main.querySelector("b");
+    text.set("he");
+    hydrate(fn);
+
+    expect(markup(main)).toStrictEqual(`<p>he${html}</p>`);
+    expect(main.querySelector("b")).toBe(b);
+    text.set("hey");
+    expect(markup(main)).toStrictEqual(`<p>hey${html}</p>`);
+  });
+
+  test("drops server text the browser doesn't render at the island's root", () => {
+    const text = signal("hello");
+    const fn = () => <>{text}</>;
+    const main = serve(renderToStringSync(fn()));
+    text.set("");
+    hydrate(fn);
+
+    expect(markup(main)).toStrictEqual("");
+    text.set("hey");
+    expect(markup(main)).toStrictEqual("hey");
   });
 
   test("shows the browser's text when it differs from the server's", () => {
