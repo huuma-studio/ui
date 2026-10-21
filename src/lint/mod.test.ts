@@ -169,6 +169,25 @@ tester.run("no-request-context-in-islands", rule("no-request-context-in-islands"
     // A function of the same name from elsewhere.
     island('import { requestContext } from "./context.ts";\nrequestContext();'),
     island("function requestContext() {}\nrequestContext();"),
+    // A local name that shadows the import.
+    island(
+      'import { requestContext as ctx } from "@huuma/ui/server";\nfunction run(ctx: () => string) { return ctx(); }',
+    ),
+    island(
+      'import { requestContext } from "@huuma/ui/server";\nconst run = ({ requestContext }: Props) => requestContext();',
+    ),
+    island(
+      'import { requestContext } from "@huuma/ui/server";\nfunction run() { const requestContext = () => 1; return requestContext(); }',
+    ),
+    island(
+      'import { requestContext } from "@huuma/ui/server";\nfor (const requestContext of handlers) requestContext();',
+    ),
+    island(
+      'import { requestContext } from "@huuma/ui/server";\ntry {} catch ([requestContext]) { requestContext(); }',
+    ),
+    island(
+      'import * as server from "@huuma/ui/server";\nfunction run(server: Api) { server.requestContext(); }',
+    ),
   ],
   invalid: [
     contextError(
@@ -184,6 +203,13 @@ tester.run("no-request-context-in-islands", rule("no-request-context-in-islands"
     // A namespace import.
     contextError('import * as server from "@huuma/ui/server";\nserver.requestContext();'),
     contextError('import * as server from "@huuma/ui/server";\nserver["requestContext"]();'),
+    // Inside functions and blocks that don't shadow the import.
+    contextError(
+      'import { requestContext as ctx } from "@huuma/ui/server";\nfunction run(other: () => string) { if (other) { const x = 1; return ctx(); } }',
+    ),
+    contextError(
+      'import * as server from "@huuma/ui/server";\nconst run = (api: Api) => { server.requestContext(); };',
+    ),
     // From JSR or npm, with a version.
     contextError(
       'import { requestContext } from "jsr:@huuma/ui@^0.3.0/server";\nrequestContext();',
