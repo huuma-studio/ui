@@ -162,7 +162,17 @@ describe("hydrating text", () => {
 
 // The values of the probe in spec #132: in the browser too, a signal shows
 // its value like the same value written statically on the server.
-const TEXT_VALUES: JSX.SignalValue[] = [null, undefined, false, true, 0, "", "x"];
+const TEXT_VALUES: JSX.SignalValue[] = [
+  null,
+  undefined,
+  false,
+  true,
+  0,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  "",
+  "x",
+];
 
 describe("signal text in the browser", () => {
   test.each(TEXT_VALUES)("creates text for %o like the server renders it", (value) => {

@@ -16,13 +16,15 @@ test("toText returns a signal's current value as text", () => {
   expect(toText(value)).toStrictEqual("");
 });
 
-test("valueToText leaves out null, undefined and booleans, like static JSX", () => {
+test("valueToText leaves out what static JSX leaves out", () => {
   expect(valueToText(null)).toStrictEqual("");
   expect(valueToText(undefined)).toStrictEqual("");
   expect(valueToText(true)).toStrictEqual("");
   expect(valueToText(false)).toStrictEqual("");
   expect(valueToText(0)).toStrictEqual("0");
-  expect(valueToText(Number.NaN)).toStrictEqual("NaN");
+  expect(valueToText(Number.NaN)).toStrictEqual("");
+  expect(valueToText(Number.POSITIVE_INFINITY)).toStrictEqual("");
+  expect(valueToText(Number.NEGATIVE_INFINITY)).toStrictEqual("");
   expect(valueToText("")).toStrictEqual("");
   expect(valueToText("x")).toStrictEqual("x");
 });

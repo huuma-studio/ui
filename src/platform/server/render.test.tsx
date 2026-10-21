@@ -268,7 +268,17 @@ describe("rendering untrusted values", () => {
 
 // The values of the probe in spec #132: a signal renders its value like
 // the same value written statically.
-const TEXT_VALUES: JSX.SignalValue[] = [null, undefined, false, true, 0, "", "x"];
+const TEXT_VALUES: JSX.SignalValue[] = [
+  null,
+  undefined,
+  false,
+  true,
+  0,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  "",
+  "x",
+];
 
 describe("rendering signal text", () => {
   test.each(TEXT_VALUES)("renders a signal holding %o like the static value", (value) => {

@@ -1,4 +1,5 @@
 import type { JSX } from "../jsx-runtime/jsx.ts";
+import { isTextNode } from "../v-node/mod.ts";
 
 /**
  * The content of a text node: the text itself, or a signal's current value
@@ -10,9 +11,10 @@ export function toText(text: string | JSX.SignalLike): string {
 }
 
 /**
- * A signal's value as text. `null`, `undefined`, `true` and `false` are
- * empty, like the same values written statically in JSX (spec #132).
+ * A signal's value as text, by the rule for the same value written
+ * statically in JSX: what isn't text (`null`, `undefined`, booleans, `NaN`
+ * and `±Infinity`) is empty (spec #132).
  */
 export function valueToText(value: JSX.SignalValue): string {
-  return value == null || typeof value === "boolean" ? "" : String(value);
+  return isTextNode(value) ? String(value) : "";
 }
