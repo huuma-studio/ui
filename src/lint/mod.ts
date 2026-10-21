@@ -393,7 +393,14 @@ const noRequestContextInIslands: Rule = {
           namespaces.has(callee.object.name ?? "") &&
           !shadowed(node, callee.object.name ?? "")
         ) {
-          const name = callee.computed ? nameOf(callee.property) : callee.property?.name;
+          // `server["requestContext"]()`, but not `server[name]()`: only a
+          // string literal says which function it calls.
+          const property = callee.property;
+          const name = !callee.computed
+            ? property?.name
+            : property?.type === "Literal" && typeof property.value === "string"
+              ? property.value
+              : undefined;
           if (name && REQUEST_CONTEXT_FUNCTIONS.has(name)) report(node, name);
         }
       },

@@ -188,6 +188,10 @@ tester.run("no-request-context-in-islands", rule("no-request-context-in-islands"
     island(
       'import * as server from "@huuma/ui/server";\nfunction run(server: Api) { server.requestContext(); }',
     ),
+    // A computed property is the variable's value, not its name.
+    island(
+      'import * as server from "@huuma/ui/server";\nconst requestContext = "Meta";\nserver[requestContext]({});',
+    ),
   ],
   invalid: [
     contextError(
