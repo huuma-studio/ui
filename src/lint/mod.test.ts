@@ -152,7 +152,8 @@ const contextError = (code: string, name = "requestContext") => ({
   ],
 });
 
-tester.run("no-request-context-in-islands", rule("no-request-context-in-islands"), {
+// Run with and without the linter's scope analysis, below.
+const requestContextCases = {
   valid: [
     // Pages, layouts, remote functions and server modules may.
     {
@@ -220,4 +221,37 @@ tester.run("no-request-context-in-islands", rule("no-request-context-in-islands"
     ),
     contextError('import { requestContext } from "npm:@huuma/ui/server";\nrequestContext();'),
   ],
+};
+
+// A `var` in a nested block belongs to the whole function.
+const nestedVar =
+  'import { requestContext as ctx } from "@huuma/ui/server";\nfunction run(x: boolean) { if (x) { var ctx = () => 1; } return ctx(); }';
+
+tester.run("no-request-context-in-islands", rule("no-request-context-in-islands"), {
+  valid: [...requestContextCases.valid, island(nestedVar)],
+  invalid: requestContextCases.invalid,
 });
+
+// `deno lint` has no scope analysis: the rule walks up the parents instead,
+// which misses a `var` in a nested block.
+const withoutScopeAnalysis = (name: string) => {
+  const original = plugin.rules[name];
+  return {
+    ...original,
+    // The rule reads only these of the context.
+    create: (context: Parameters<typeof original.create>[0]) =>
+      original.create({
+        filename: context.filename,
+        report: (descriptor) => context.report(descriptor),
+      }),
+  } as unknown as TesterRule;
+};
+
+tester.run(
+  "no-request-context-in-islands without scope analysis",
+  withoutScopeAnalysis("no-request-context-in-islands"),
+  {
+    valid: requestContextCases.valid,
+    invalid: [...requestContextCases.invalid, contextError(nestedVar)],
+  },
+);

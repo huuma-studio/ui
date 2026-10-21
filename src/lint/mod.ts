@@ -40,8 +40,17 @@ interface AstNode {
   consequent?: AstNode[] | AstNode | null;
 }
 
+// The scope analysis of Oxlint and ESLint. `deno lint` has none.
+interface Scope {
+  references: {
+    identifier: AstNode;
+    resolved: { defs: { type: string }[] } | null;
+  }[];
+}
+
 interface RuleContext {
   filename: string;
+  sourceCode?: { getScope?(node: AstNode): Scope };
   report(descriptor: { node: AstNode; message: string }): void;
 }
 
@@ -347,6 +356,19 @@ function shadowed(node: AstNode, name: string): boolean {
   return false;
 }
 
+/**
+ * Whether `identifier` refers to the module's import of its name, not to a
+ * local declaration that shadows it. Resolved through the linter's scope
+ * analysis where there is one (Oxlint, ESLint), else by `shadowed()`
+ * (`deno lint`).
+ */
+function usesImport(context: RuleContext, identifier: AstNode): boolean {
+  const scope = context.sourceCode?.getScope?.(identifier);
+  const reference = scope?.references.find((reference) => reference.identifier === identifier);
+  if (!reference) return !shadowed(identifier, identifier.name ?? "");
+  return !!reference.resolved?.defs.some((def) => def.type === "ImportBinding");
+}
+
 const noRequestContextInIslands: Rule = {
   meta: {
     type: "problem",
@@ -386,12 +408,12 @@ const noRequestContextInIslands: Rule = {
         while (callee && TRANSPARENT.has(callee.type)) callee = callee.expression;
         if (callee?.type === "Identifier") {
           const name = functions.get(callee.name ?? "");
-          if (name && !shadowed(node, callee.name ?? "")) report(node, name);
+          if (name && usesImport(context, callee)) report(node, name);
         } else if (
           callee?.type === "MemberExpression" &&
           callee.object?.type === "Identifier" &&
           namespaces.has(callee.object.name ?? "") &&
-          !shadowed(node, callee.object.name ?? "")
+          usesImport(context, callee.object)
         ) {
           // `server["requestContext"]()`, but not `server[name]()`: only a
           // string literal says which function it calls.
