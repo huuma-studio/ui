@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { belowBase, clientFiles, start } from "./node.ts";
+import { clientFiles, start } from "./node.ts";
 
 describe(clientFiles.name, () => {
   let client: string;
@@ -25,6 +25,8 @@ describe(clientFiles.name, () => {
     await writeFile(join(client, "robots.txt"), "User-agent: *");
     await writeFile(join(client, ".vite/manifest.json"), "{}");
     await writeFile(join(client, ".env"), "SECRET=1");
+    // Cloudflare Workers' configuration, which the build writes.
+    await writeFile(join(client, "_headers"), "/assets/*\n  Cache-Control: immutable\n");
     files = clientFiles({ client, hashed: ["assets/app-3f2a.js", "assets/app-9c1d.css"] });
   });
   afterAll(async () => {
@@ -73,6 +75,7 @@ describe(clientFiles.name, () => {
       "/missing.js",
       "/.vite/manifest.json",
       "/.env",
+      "/_headers",
       "/assets/../.env",
       "/assets/%2e%2e/.env",
       "/..%2f..%2fetc%2fpasswd",
@@ -92,44 +95,6 @@ describe(clientFiles.name, () => {
     expect(await below(new Request("http://localhost/assets/app-3f2a.js"))).toStrictEqual(
       undefined,
     );
-  });
-});
-
-describe(belowBase.name, () => {
-  test("strips the base", async () => {
-    const request = belowBase(new Request("http://localhost/shop/about?x=1"), "/shop/");
-    expect(request instanceof Request && request.url).toStrictEqual("http://localhost/about?x=1");
-    const root = belowBase(new Request("http://localhost/shop/"), "/shop/");
-    expect(root instanceof Request && root.url).toStrictEqual("http://localhost/");
-  });
-
-  test("keeps the method, headers and body", async () => {
-    const request = belowBase(
-      new Request("http://localhost/shop/_huuma/remote/1/a", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: '{"args":[]}',
-      }),
-      "/shop/",
-    ) as Request;
-    expect(request.method).toStrictEqual("POST");
-    expect(request.headers.get("content-type")).toStrictEqual("application/json");
-    expect(await request.text()).toStrictEqual('{"args":[]}');
-  });
-
-  test("redirects / to the base and doesn't find the rest", async () => {
-    const root = belowBase(new Request("http://localhost/?x=1"), "/shop/") as Response;
-    expect(root.status).toStrictEqual(302);
-    expect(root.headers.get("location")).toStrictEqual("/shop/?x=1");
-    for (const path of ["/about", "/shop", "/shopping/"]) {
-      const response = belowBase(new Request(`http://localhost${path}`), "/shop/");
-      expect(response instanceof Response && response.status, path).toStrictEqual(404);
-    }
-  });
-
-  test("leaves requests alone with the base /", () => {
-    const request = new Request("http://localhost/about");
-    expect(belowBase(request, "/")).toBe(request);
   });
 });
 

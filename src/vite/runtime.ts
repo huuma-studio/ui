@@ -7,6 +7,7 @@ import type { JSX } from "../jsx-runtime/mod.ts";
 import type { UIApp, UIAppContext } from "../platform/server/app.ts";
 import type { List } from "../platform/server/pack/mod.ts";
 import { packPages, serveRemoteFunctions } from "../platform/server/pack/pack.ts";
+import { belowBase } from "./base.ts";
 
 /** What the plugin's virtual modules provide. */
 export interface Manifest {
@@ -46,4 +47,26 @@ export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest)
 
   packPages(manifest.pages, app);
   return app;
+}
+
+/** A handler with a Worker's `fetch`, like the app. */
+interface FetchHandler {
+  fetch(request: Request, env?: unknown, ctx?: unknown): Promise<Response>;
+}
+
+/**
+ * The app as a Cloudflare Worker (`worker.js`). Workers' static assets
+ * serve the client build before the Worker runs, below the base too: the
+ * build puts the files in `dist/client` at their URLs' paths. Below a
+ * base other than `/`, e.g. `/shop/`, the Worker strips the base for the
+ * app, like `server.js`.
+ */
+export function worker(app: FetchHandler, base: string): FetchHandler {
+  if (base === "/") return app;
+  return {
+    fetch(request, env, ctx) {
+      const below = belowBase(request, base);
+      return below instanceof Response ? Promise.resolve(below) : app.fetch(below, env, ctx);
+    },
+  };
 }
