@@ -3,7 +3,7 @@ import { setSubscriber } from "../../../../signal/mod.ts";
 import { flushCleanups, VNodeProps, type VSignal, type VText } from "../../../../v-node/mod.ts";
 import { type AttachmentRef, AttachmentType, moveAttachmentRef } from "../attachment-ref.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
-import { isBound, isSignal } from "../update.ts";
+import { isSignal } from "../update.ts";
 import { toText, valueToText } from "../../../../utils/text.ts";
 
 interface BaseTextChangeSet<T> extends ChangeSet<T> {
@@ -132,9 +132,6 @@ function attach({ vText, attachmentRef }: AttachTextPayload): void {
 
 function link({ vText, node, attachmentRef }: LinkTextPayload): void {
   vText[VNodeProps.NODE_REF] = node;
-  // Hydration links text without a subscription; an update links text
-  // that keeps its signal, and its subscription.
-  if (isSignal(vText) && !isBound(vText)) bindSignal(vText, node);
   moveAttachmentRef(attachmentRef, node);
 }
 
@@ -178,7 +175,7 @@ function bindSignal(vText: VText<Node> & { [VNodeProps.TEXT]: VSignal }, node: N
   setSubscriber(
     () => {
       const text = toText(signal);
-      // Hydration links nodes that already show the text.
+      // Hydration binds nodes that already show the text.
       if (node.textContent !== text) node.textContent = text;
     },
     {

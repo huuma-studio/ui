@@ -2,6 +2,7 @@ import {
   isVComponent,
   isVElement,
   isVFragment,
+  isVSignal,
   isVText,
   type VComponent,
   type VElement,
@@ -191,7 +192,7 @@ function text(
     matches = false;
   }
 
-  if (matches) {
+  if (matches && !isVSignal(vText[VNodeProps.TEXT])) {
     return [
       <LinkTextChangeSet>{
         [Props.Type]: Type.Text,
@@ -201,7 +202,7 @@ function text(
     ];
   }
 
-  // Binds the node in place to text that differs.
+  // Binds the node in place: to the text's signal, or to text that differs.
   vText[VNodeProps.NODE_REF] = node;
   return [
     <ReplaceTextChangeSet>{
