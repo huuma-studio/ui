@@ -66,6 +66,16 @@ Use this skill when the agent (or user) hits a Huuma UI lint violation or runtim
 - **Cause:** a call at a module's top level (e.g. a client created at import time), or in an island running in the browser (lint `no-request-context-in-islands`).
 - **Fix:** Move the call into the function that handles the request. For islands, read the value in the page and pass it as a prop. In helpers that run in both places, check `hasRequestContext()` first.
 
+### `requestContext().env` is `{}` in dev
+
+- **Cause:** `vite` runs the server code on Node, which has no Worker bindings. With `@cloudflare/vite-plugin` but without `viteEnvironment: { name: "ssr" }`, the plugin runs a Worker environment of its own, and Huuma still serves the app from Node.
+- **Fix:** Use `cloudflare({ viteEnvironment: { name: "ssr" } })` after `huuma()`, with `"main": "virtual:huuma/worker"` in `wrangler.jsonc` (README "Dev in workerd"). Or try the code with `vite build` and `wrangler dev`.
+
+### "The entry-point file at "virtual:huuma/worker" was not found"
+
+- **Cause:** Wrangler read `wrangler.jsonc` itself: `wrangler dev` or `wrangler deploy` before `vite build`, or with `--config wrangler.jsonc`. Only Vite resolves `virtual:huuma/worker`.
+- **Fix:** Run `vite build` first, then `wrangler dev` or `wrangler deploy` without `--config`: they use `dist/server/wrangler.json`, which the build writes (or pass `--config dist/server/wrangler.json`).
+
 ## General debugging steps
 
 1. Run your linter with the `@huuma/ui/lint` plugin and read the exact rule name it reports.

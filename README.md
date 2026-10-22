@@ -142,6 +142,8 @@ Pages, layouts and middlewares go in `app/`, islands anywhere in the project as 
 
 The dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page.
 
+The app's server code runs on Node, in Vite's process. With [`@cloudflare/vite-plugin`](#dev-in-workerd-with-cloudflarevite-plugin), it runs in Cloudflare's workerd instead, with the Worker's bindings: Huuma then leaves the requests to that plugin.
+
 - **Remote functions:** browser code gets a stub that calls the server, never the module's code or imports. Every value export of a remote module is a remote function: `export async function`, `export const f = async () => {}` (also with several declarators or a type annotation), `export { f }`, `export { f } from "./f.ts"` and the default export. `export *`, destructuring, classes and enums fail with an error at the export.
 - **Server-only code:** importing a `*.server.*` module (any extension) from browser code fails, naming the importer. Use it from server code, e.g. a remote function.
 - **Environment variables:** `PUBLIC_*` variables (from the environment and `.env` files) are available as `import.meta.env.PUBLIC_*`, in the browser and on the server. Other variables stay on the server. `Deno.env.get()` still works for one more minor version, with a deprecation warning. Declare your variables' types yourself, e.g. with `/// <reference types="vite/client" />` and an `ImportMetaEnv` interface.
@@ -244,7 +246,35 @@ Wrangler bundles `worker.js` with the packages it imports from `node_modules`.
 
 - **Bindings:** KV, D1, R2 and the Worker's other bindings reach server code as `requestContext().env`, and middleware as `ctx.env` (see [Request context](#request-context)).
 
-Not there yet: `vite` runs the dev server on Node, without bindings, so try the build with `wrangler dev` before you deploy.
+Without `@cloudflare/vite-plugin`, `vite` runs the dev server on Node, without bindings, so try the build with `wrangler dev` before you deploy.
+
+### Dev in workerd, with `@cloudflare/vite-plugin`
+
+With [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/) (tested with 1.64), `vite` runs the app's server code in workerd too, so dev has the Worker's runtime and bindings. Install it (`pnpm add -D @cloudflare/vite-plugin`), add it after `huuma()` for Vite's `ssr` environment, and name Huuma's Worker entry as `main`:
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import { cloudflare } from "@cloudflare/vite-plugin";
+import { huuma } from "@huuma/ui/vite";
+
+export default defineConfig({
+  plugins: [huuma(), cloudflare({ viteEnvironment: { name: "ssr" } })],
+});
+```
+
+```jsonc
+// wrangler.jsonc
+{
+  "name": "my-app",
+  "main": "virtual:huuma/worker",
+  "compatibility_date": "2026-10-01",
+}
+```
+
+- **Dev:** `vite` renders pages and runs middleware and remote functions in workerd. `requestContext().env` holds the bindings from `wrangler.jsonc`, local to the dev server. Islands update in place, as on Node; after an edit to server code, the page reloads once the app runs again in workerd.
+- **Build and deploy:** `vite build` builds the client and the server once each. Next to Huuma's files, the plugin writes `dist/server/index.js`, the Worker, and `dist/server/wrangler.json`, with `dist/client/` as the static assets, also below a base. `npx wrangler dev` (the build, locally) and `npx wrangler deploy` use that file without further options.
+- **Plugin order:** list `huuma()` first. With `cloudflare()` first, the server build goes to `dist/ssr/` instead of `dist/server/`.
 
 ## Migrating from the Deno Setup
 
@@ -423,7 +453,7 @@ It's a read-only view of the request with `request`, `params`, `searchParams`, `
   }
   ```
 
-  Or list them yourself: `interface Env { DB: D1Database }`. `ctx.env` in middleware gets the same type. On Node and Deno, `env` is `{}`, also in `vite` dev; read vars with `process.env` everywhere.
+  Or list them yourself: `interface Env { DB: D1Database }`. `ctx.env` in middleware gets the same type. On Node and Deno, `env` is `{}`, also in `vite` dev on Node; with [`@cloudflare/vite-plugin`](#dev-in-workerd-with-cloudflarevite-plugin), `vite` dev has the bindings. Read vars with `process.env` everywhere.
 - **`waitUntil(promise)`** keeps work running after the response is sent (`ctx.waitUntil()` on Workers). Work a request starts keeps its context, so that work can still call `requestContext()`.
 - **Outside a request**, e.g. at a module's top level, `requestContext()` throws. `hasRequestContext()` tells whether a request is running, for helpers that run in both places.
 - **Not in islands:** islands render in the browser too, where there's no request. Read what an island needs in its page and pass it as props. The lint rule `huuma/no-request-context-in-islands` catches calls in `*.client.tsx`.
