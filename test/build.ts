@@ -24,10 +24,18 @@ export function freePort(): Promise<number> {
   });
 }
 
-/** Builds a copy of the basic fixture with `vite build`'s builder. */
-export async function buildFixture(prefix: string, config: InlineConfig = {}): Promise<string> {
+/**
+ * Builds a copy of the basic fixture with `vite build`'s builder, with
+ * `files` added to it first (contents by path).
+ */
+export async function buildFixture(
+  prefix: string,
+  config: InlineConfig = {},
+  files: Record<string, string> = {},
+): Promise<string> {
   const root = await mkdtemp(join(fixtures, prefix));
   await cp(join(fixtures, "basic"), root, { recursive: true });
+  for (const [path, contents] of Object.entries(files)) await writeFile(join(root, path), contents);
   const builder = await createBuilder({
     root,
     configFile: false,
@@ -54,16 +62,20 @@ export async function startServer(root: string): Promise<{ origin: string; serve
 /**
  * Runs the build in Cloudflare's workerd with `wrangler dev`, from a
  * `wrangler.jsonc` with `config` that serves `dist/client` as static
- * assets. Resolves with its origin and a function that stops it.
+ * assets, or from the config the build wrote at the path `config`, e.g.
+ * `dist/server/wrangler.json` with @cloudflare/vite-plugin. Resolves with
+ * its origin and a function that stops it.
  */
 export async function startWorker(
   root: string,
-  config: Record<string, unknown>,
+  config: Record<string, unknown> | string,
 ): Promise<{ origin: string; stop: () => void }> {
-  await writeFile(
-    join(root, "wrangler.jsonc"),
-    JSON.stringify({ name: "huuma-fixture", compatibility_date: "2026-10-01", ...config }),
-  );
+  if (typeof config !== "string") {
+    await writeFile(
+      join(root, "wrangler.jsonc"),
+      JSON.stringify({ name: "huuma-fixture", compatibility_date: "2026-10-01", ...config }),
+    );
+  }
   const [port, inspectorPort] = [await freePort(), await freePort()];
   // The CLI, which wrangler's package exports don't include.
   const wrangler = join(
@@ -71,6 +83,7 @@ export async function startWorker(
     "bin/wrangler.js",
   );
   const args = ["dev", "--ip", "127.0.0.1", "--port", String(port)];
+  if (typeof config === "string") args.push("--config", config);
   const server = spawn(
     process.execPath,
     [wrangler, ...args, "--inspector-port", String(inspectorPort)],

@@ -1,13 +1,17 @@
 // The build in Cloudflare's workerd, through `wrangler dev`: `worker.js`
 // with `dist/client` as Workers' static assets, at the base / and below
-// another base.
+// another base; and the build with @cloudflare/vite-plugin, which deploys
+// from the `wrangler.json` it writes.
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
+import { cloudflare } from "@cloudflare/vite-plugin";
+import type { Plugin } from "vite";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import { buildFixture, startWorker } from "../../test/build.ts";
 import { remoteEndpoint } from "../platform/server/remote.ts";
 import { baseDirectory } from "./base.ts";
+import { huuma } from "./mod.ts";
 
 type Manifest = Record<string, { file: string }>;
 
@@ -16,35 +20,76 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 // Starting workerd takes a few seconds.
 const STARTUP = 60_000;
 
-function describeWorker(name: string, base: string) {
+// Local to wrangler dev, empty at the start.
+const KV = [{ binding: "KV", id: "huuma-fixture" }];
+
+function describeWorker(name: string, base: string, { plugin = false } = {}) {
   describe(name, () => {
     let root: string;
     let stop: (() => void) | undefined;
     let origin: string;
     let manifest: Manifest;
+    // The environments the build built, in order.
+    const builds: string[] = [];
     const nodeEnv = process.env.NODE_ENV;
     const path = (to: string) => `${origin}${base}${to}`;
 
     beforeAll(async () => {
       process.env.NODE_ENV = "production";
-      root = await buildFixture(".tmp-build-worker-", { base });
+      const count: Plugin = {
+        name: "count",
+        buildStart() {
+          builds.push(this.environment.name);
+        },
+      };
+      if (plugin) {
+        root = await buildFixture(
+          ".tmp-build-cloudflare-",
+          {
+            base,
+            plugins: [
+              huuma(),
+              cloudflare({ viteEnvironment: { name: "ssr" }, inspectorPort: false }),
+              count,
+            ],
+          },
+          {
+            "wrangler.jsonc": JSON.stringify({
+              name: "huuma-fixture",
+              compatibility_date: "2026-10-01",
+              main: "virtual:huuma/worker",
+              kv_namespaces: KV,
+            }),
+          },
+        );
+      } else {
+        root = await buildFixture(".tmp-build-worker-", { base, plugins: [huuma(), count] });
+      }
       manifest = JSON.parse(
         await readFile(
           join(root, "dist/client", baseDirectory(base), ".vite/manifest.json"),
           "utf8",
         ),
       ) as Manifest;
-      ({ origin, stop } = await startWorker(root, {
-        main: "dist/server/worker.js",
-        assets: { directory: "dist/client" },
-        // Local to wrangler dev, empty at the start.
-        kv_namespaces: [{ binding: "KV", id: "huuma-fixture" }],
-      }));
+      ({ origin, stop } = await startWorker(
+        root,
+        plugin
+          ? "dist/server/wrangler.json"
+          : {
+              main: "dist/server/worker.js",
+              assets: { directory: "dist/client" },
+              kv_namespaces: KV,
+            },
+      ));
     }, STARTUP);
     afterAll(async () => {
       process.env.NODE_ENV = nodeEnv;
       stop?.();
       await rm(root, { recursive: true, force: true });
+    });
+
+    test("builds the client, then the server, once each", () => {
+      expect(builds).toStrictEqual(["client", "ssr"]);
     });
 
     test("renders pages, through the app's middleware", async () => {
@@ -126,3 +171,6 @@ describeWorker("a Cloudflare Worker below a base", "/shop/");
 
 // In the directory `sale%`, which the rules in `_headers` name encoded.
 describeWorker("a Cloudflare Worker below an encoded base", "/sale%25/");
+
+// One build: Huuma's, which Cloudflare's plugin shapes into its Worker.
+describeWorker("a Cloudflare Worker built with @cloudflare/vite-plugin", "/", { plugin: true });

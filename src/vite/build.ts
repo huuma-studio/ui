@@ -1,4 +1,4 @@
-import type { Plugin, Rolldown, UserConfig } from "vite";
+import type { Plugin, Rolldown, UserConfig, ViteBuilder } from "vite";
 import { readdir, rm } from "node:fs/promises";
 import { join, parse, relative, resolve, sep } from "node:path";
 
@@ -51,8 +51,11 @@ export function buildPlugin(root: () => string): Plugin {
     config(config) {
       const outDir = config.build?.outDir ?? "dist";
       return {
-        // `vite build` builds every environment, through `buildApp`.
-        builder: {},
+        // `vite build` builds every environment, through `buildApp`: the
+        // config's, not a plugin hook, so it replaces another plugin's
+        // default, e.g. @cloudflare/vite-plugin's, which would build them
+        // all again, the server first.
+        builder: { buildApp },
         environments: {
           client: {
             build: {
@@ -78,30 +81,6 @@ export function buildPlugin(root: () => string): Plugin {
           },
         },
       } satisfies UserConfig;
-    },
-    // The server reads the client's manifest, so the client builds first.
-    async buildApp(builder) {
-      const client = builder.environments.client;
-      const outDir = resolve(client.config.root, client.config.build.outDir);
-      const assetsDir = assetsDirectory(outDir, client.config.base);
-      // Only in `dist/client`, which this plugin chose, not in a directory of the app's.
-      const ours =
-        assetsDir === resolve(builder.config.root, builder.config.build.outDir, "client");
-      const { emptyOutDir, write } = client.config.build;
-      if (ours && write && emptiesOutDir(client.config.root, outDir, emptyOutDir)) {
-        await removeOtherBuilds(assetsDir, outDir);
-      }
-      await builder.build(client);
-      if (write) {
-        await writeWorkersFiles({
-          assetsDir,
-          outDir,
-          publicDir: client.config.publicDir,
-          hashed: new Set((await readClientBuild(builder.config)).hashed),
-          warn: (message) => client.logger.warn(message),
-        });
-      }
-      await builder.build(builder.environments.ssr);
     },
     resolveId: {
       filter: { id: ENTRIES },
@@ -176,6 +155,35 @@ export function buildPlugin(root: () => string): Plugin {
       });
     },
   };
+}
+
+/**
+ * Builds the app: the client first, since the server reads its manifest,
+ * then the ssr environment. With @cloudflare/vite-plugin, its plugin
+ * shapes the ssr build: `index.js` (the Worker that wraps
+ * `virtual:huuma/worker`) and the `wrangler.json` to deploy it with.
+ */
+async function buildApp(builder: ViteBuilder): Promise<void> {
+  const client = builder.environments.client;
+  const outDir = resolve(client.config.root, client.config.build.outDir);
+  const assetsDir = assetsDirectory(outDir, client.config.base);
+  // Only in `dist/client`, which this plugin chose, not in a directory of the app's.
+  const ours = assetsDir === resolve(builder.config.root, builder.config.build.outDir, "client");
+  const { emptyOutDir, write } = client.config.build;
+  if (ours && write && emptiesOutDir(client.config.root, outDir, emptyOutDir)) {
+    await removeOtherBuilds(assetsDir, outDir);
+  }
+  await builder.build(client);
+  if (write) {
+    await writeWorkersFiles({
+      assetsDir,
+      outDir,
+      publicDir: client.config.publicDir,
+      hashed: new Set((await readClientBuild(builder.config)).hashed),
+      warn: (message) => client.logger.warn(message),
+    });
+  }
+  await builder.build(builder.environments.ssr);
 }
 
 /**
