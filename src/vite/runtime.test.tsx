@@ -77,6 +77,16 @@ describe(mount.name, () => {
     expect(await response.json()).toStrictEqual(3);
   });
 
+  test("mounts an app only once", async () => {
+    const app = createUIApp(Root);
+    expect(mount(mount(app, manifest), manifest)).toBe(app);
+
+    const home = await app.deliver()(new Request("http://localhost/"), connection);
+    expect(home.status).toStrictEqual(200);
+    // The runtime script once, not twice.
+    expect((await home.text()).match(/virtual:huuma\/runtime/g)).toHaveLength(1);
+  });
+
   test("rejects a server entry without an app", () => {
     expect(() => mount(undefined as never, manifest)).toThrow(
       "The server entry must export the app as default",

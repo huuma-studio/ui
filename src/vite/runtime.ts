@@ -21,9 +21,16 @@ export interface Manifest {
   runtime: string;
 }
 
+// Marks an app `mount()` registered the modules on. A key from the global
+// symbol registry, not a set here: this module can be evaluated again too.
+const MOUNTED = Symbol.for("huuma.mounted");
+
 /**
  * Registers the plugin's modules on `app`: the browser runtime, the
  * islands, the remote functions and the pages. Vite serves the scripts, so the app only references them.
+ * Mounting the same app again does nothing: a dev server's module runner
+ * can evaluate the server entry a second time against the cached app,
+ * whose router would reject the routes it already has.
  */
 export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest): UIApp<T> {
   // The server entry's default export, which nothing type-checks.
@@ -32,6 +39,9 @@ export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest)
       "The server entry must export the app as default: `export default createUIApp(Root);`",
     );
   }
+  const marked = app as UIApp<T> & { [MOUNTED]?: true };
+  if (marked[MOUNTED]) return app;
+  marked[MOUNTED] = true;
   app.addScript(manifest.runtime, undefined, { isRuntime: true });
 
   for (const [path, island] of Object.entries(manifest.islands)) {
