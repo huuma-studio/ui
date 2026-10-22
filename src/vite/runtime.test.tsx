@@ -3,7 +3,7 @@ import { describe, expect, test } from "vite-plus/test";
 import type { JSX } from "../jsx-runtime/mod.ts";
 import { createUIApp, type PageLikeProps, type RootPageProps } from "../platform/server/app.ts";
 import { Launch } from "../platform/server/scripts.ts";
-import { type Manifest, mount, worker } from "./runtime.ts";
+import { type Manifest, mount, withDevClient, worker } from "./runtime.ts";
 
 function Root({ children, scripts, islands, transferState }: RootPageProps<unknown>) {
   return (
@@ -130,5 +130,30 @@ describe(worker.name, () => {
     const handler = worker(app, "/shop/");
     expect((await get(handler, "/")).headers.get("location")).toStrictEqual("/shop/");
     expect((await get(handler, "/about")).status).toStrictEqual(404);
+  });
+});
+
+describe(withDevClient.name, () => {
+  const app = {
+    fetch: (request: Request) =>
+      Promise.resolve(
+        new URL(request.url).pathname === "/data"
+          ? Response.json({ ok: true })
+          : new Response("<html><head></head></html>", {
+              headers: { "content-type": "text/html; charset=utf-8" },
+            }),
+      ),
+  };
+
+  test("adds Vite's client to HTML responses", async () => {
+    const response = await withDevClient(app, "/shop/").fetch(new Request("http://localhost/"));
+    expect(await response.text()).toStrictEqual(
+      '<html><head><script type="module" src="/shop/@vite/client"></script></head></html>',
+    );
+  });
+
+  test("leaves other responses alone", async () => {
+    const response = await withDevClient(app, "/").fetch(new Request("http://localhost/data"));
+    expect(await response.json()).toStrictEqual({ ok: true });
   });
 });

@@ -8,6 +8,7 @@ import type { UIApp, UIAppContext } from "../platform/server/app.ts";
 import type { List } from "../platform/server/pack/mod.ts";
 import { packPages, serveRemoteFunctions } from "../platform/server/pack/pack.ts";
 import { belowBase } from "./base.ts";
+import { withViteClient } from "./vite-client.ts";
 
 /** What the plugin's virtual modules provide. */
 export interface Manifest {
@@ -77,6 +78,22 @@ export function worker(app: FetchHandler, base: string): FetchHandler {
     fetch(request, env, ctx) {
       const below = belowBase(request, base);
       return below instanceof Response ? Promise.resolve(below) : app.fetch(below, env, ctx);
+    },
+  };
+}
+
+/**
+ * Adds Vite's client to the app's HTML responses: the Worker entry in dev,
+ * where the app runs in a platform's runtime and Huuma's Node middleware
+ * never sees the response. `base` is Vite's `base`.
+ */
+export function withDevClient(app: FetchHandler, base: string): FetchHandler {
+  return {
+    async fetch(request, env, ctx) {
+      const response = await app.fetch(request, env, ctx);
+      return response.headers.get("content-type")?.startsWith("text/html")
+        ? withViteClient(response, base)
+        : response;
     },
   };
 }

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
-import { createLogger, createServer, type ViteDevServer } from "vite";
+import { createLogger, createServer, type RunnableDevEnvironment, type ViteDevServer } from "vite";
 import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 
@@ -216,5 +216,22 @@ describe("dev server with a base", () => {
     });
     expect(response.status).toStrictEqual(200);
     expect(await response.json()).toStrictEqual(3);
+  });
+
+  test("runs the Worker entry, as a platform's plugin does", async () => {
+    // What `"main": "virtual:huuma/worker"` runs, e.g. in workerd: the
+    // platform passes the full URL, base included.
+    const ssr = server.environments.ssr as RunnableDevEnvironment;
+    const { default: worker } = (await ssr.runner.import("virtual:huuma/worker")) as {
+      default: { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
+    };
+    const response = await worker.fetch(new Request("http://localhost/shop/about"), {}, {});
+    expect(response.status).toStrictEqual(200);
+    const html = await response.text();
+    expect(html).toContain("<h1>About</h1>");
+    // With Vite's client, which Huuma's Node middleware adds otherwise.
+    expect(html).toMatch(
+      /<script type="module" src="\/shop\/@vite\/client" nonce="[^"]+"><\/script>/,
+    );
   });
 });

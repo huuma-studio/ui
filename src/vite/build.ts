@@ -16,8 +16,9 @@ import { assetsDirectory, writeWorkersFiles } from "./workers.ts";
 export const NODE_ID = "virtual:huuma/node";
 
 /**
- * The app as a Cloudflare Worker: `dist/server/worker.js`. Server only, in
- * the production build.
+ * The app as a Cloudflare Worker: `dist/server/worker.js`. Server only. In
+ * dev too, for a platform's plugin that runs the app itself, e.g.
+ * `"main": "virtual:huuma/worker"` with `@cloudflare/vite-plugin`.
  */
 export const WORKER_ID = "virtual:huuma/worker";
 
@@ -106,12 +107,19 @@ export function buildPlugin(root: () => string): Plugin {
       filter: { id: RESOLVED_ENTRIES },
       async handler(id) {
         const entry = id.slice(1);
-        if (this.environment.config.consumer !== "server" || this.environment.mode !== "build") {
+        if (
+          this.environment.config.consumer !== "server" ||
+          (this.environment.mode !== "build" && entry !== WORKER_ID)
+        ) {
           this.error(`${entry} starts the built app and is only part of the server build.`);
         }
         const config = this.environment.getTopLevelConfig();
         if (entry === WORKER_ID) {
-          return { code: workerModule(appBase(config.base)), moduleType: "js" };
+          const dev = this.environment.mode === "dev";
+          return {
+            code: workerModule(appBase(config.base), dev ? config.base : undefined),
+            moduleType: "js",
+          };
         }
         const client = resolve(config.root, config.environments.client.build.outDir);
         const server = resolve(config.root, this.environment.config.build.outDir);
@@ -279,13 +287,25 @@ async function removeOtherBuilds(assetsDir: string, outDir: string): Promise<voi
   }
 }
 
-/** Generates the source of `virtual:huuma/worker`. */
-export function workerModule(base: string): string {
+/**
+ * Generates the source of `virtual:huuma/worker`. In dev, `viteBase` is
+ * Vite's `base`, and the app's HTML gets Vite's client.
+ */
+export function workerModule(base: string, viteBase?: string): string {
+  if (viteBase === undefined) {
+    return [
+      `import app from ${JSON.stringify(SERVER_ID)};`,
+      'import { worker } from "@huuma/ui/vite/runtime";',
+      "",
+      `export default worker(app, ${JSON.stringify(base)});`,
+      "",
+    ].join("\n");
+  }
   return [
     `import app from ${JSON.stringify(SERVER_ID)};`,
-    'import { worker } from "@huuma/ui/vite/runtime";',
+    'import { withDevClient, worker } from "@huuma/ui/vite/runtime";',
     "",
-    `export default worker(app, ${JSON.stringify(base)});`,
+    `export default worker(withDevClient(app, ${JSON.stringify(viteBase)}), ${JSON.stringify(base)});`,
     "",
   ].join("\n");
 }
