@@ -174,3 +174,14 @@ describeWorker("a Cloudflare Worker below an encoded base", "/sale%25/");
 
 // One build: Huuma's, which Cloudflare's plugin shapes into its Worker.
 describeWorker("a Cloudflare Worker built with @cloudflare/vite-plugin", "/", { plugin: true });
+
+// The plugin's wrangler.json names `dist/client`, not the client build's
+// `outDir` below it.
+describeWorker("a Cloudflare Worker built with @cloudflare/vite-plugin below a base", "/shop/", {
+  plugin: true,
+});
+describeWorker(
+  "a Cloudflare Worker built with @cloudflare/vite-plugin below an encoded base",
+  "/sale%25/",
+  { plugin: true },
+);

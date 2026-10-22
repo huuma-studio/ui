@@ -19,6 +19,7 @@ import { islandsPlugin } from "./islands.ts";
 import { remotePlugin } from "./remote.ts";
 import { routesPlugin } from "./routes.ts";
 import { serverOnlyPlugin } from "./server-only.ts";
+import { wranglerAssetsPlugin } from "./workers.ts";
 
 /** Options of the Huuma UI plugin. */
 export interface HuumaOptions {
@@ -76,6 +77,7 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     entryPlugin(() => ({ server: serverEntry(), base: app.base })),
     devPlugin(serverEntry),
     buildPlugin(() => app.root),
+    wranglerAssetsPlugin(),
   ];
 }
 

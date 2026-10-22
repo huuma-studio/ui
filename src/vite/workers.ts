@@ -4,8 +4,9 @@
  * both and uploads neither. They do for Workers what `server.js` does on
  * Node: keep `.vite/` private and cache the hashed files for good.
  */
+import type { Plugin } from "vite";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 import { baseDirectory } from "./base.ts";
 
@@ -127,4 +128,35 @@ export async function writeWorkersFiles(options: {
 // pattern, followed by indented headers. `#` starts a comment.
 function ruleCount(headers: string): number {
   return headers.split(/\r?\n/).filter((line) => /^[^\s#]/.test(line)).length;
+}
+
+/**
+ * Points the `wrangler.json` that @cloudflare/vite-plugin writes with the
+ * server build at the directory Workers serves at `/` (`assetsDirectory()`).
+ * The plugin names the client build's `outDir`, which is below that
+ * directory with a base: `dist/client/shop` at the base `/shop/`, where
+ * the files are at their URLs' paths. A directory the app chose stays.
+ */
+export function wranglerAssetsPlugin(): Plugin {
+  return {
+    name: "huuma:wrangler-assets",
+    apply: "build",
+    generateBundle: {
+      // After the Cloudflare plugin emitted the file.
+      order: "post",
+      handler(_, bundle) {
+        const file = bundle["wrangler.json"];
+        if (this.environment.config.consumer !== "server" || file?.type !== "asset") return;
+        const config = JSON.parse(String(file.source)) as { assets?: { directory?: string } };
+        if (config.assets?.directory === undefined) return;
+        const top = this.environment.getTopLevelConfig();
+        const outDir = resolve(top.root, this.environment.config.build.outDir);
+        const client = resolve(top.root, top.environments.client.build.outDir);
+        const assetsDir = assetsDirectory(client, top.base);
+        if (resolve(outDir, config.assets.directory) !== client || assetsDir === client) return;
+        config.assets.directory = relative(outDir, assetsDir).replaceAll("\\", "/");
+        file.source = JSON.stringify(config);
+      },
+    },
+  };
 }
