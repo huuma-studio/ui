@@ -22,6 +22,12 @@ export const NODE_ID = "virtual:huuma/node";
  */
 export const WORKER_ID = "virtual:huuma/worker";
 
+/**
+ * What the Worker entry sends Vite in dev once it's evaluated, e.g. again
+ * after a server change: the dev server reloads the browser then.
+ */
+export const SERVER_READY = "huuma:server-ready";
+
 // The modules this plugin generates for the server build.
 const ENTRIES = new RegExp(`^(${NODE_ID}|${WORKER_ID})$`);
 const RESOLVED_ENTRIES = new RegExp(`^\0(${NODE_ID}|${WORKER_ID})$`);
@@ -289,7 +295,8 @@ async function removeOtherBuilds(assetsDir: string, outDir: string): Promise<voi
 
 /**
  * Generates the source of `virtual:huuma/worker`. In dev, `viteBase` is
- * Vite's `base`, and the app's HTML gets Vite's client.
+ * Vite's `base`: the app's HTML gets Vite's client, and the module tells
+ * the dev server once it's evaluated (`SERVER_READY`).
  */
 export function workerModule(base: string, viteBase?: string): string {
   if (viteBase === undefined) {
@@ -306,6 +313,8 @@ export function workerModule(base: string, viteBase?: string): string {
     'import { withDevClient, worker } from "@huuma/ui/vite/runtime";',
     "",
     `export default worker(withDevClient(app, ${JSON.stringify(viteBase)}), ${JSON.stringify(base)});`,
+    "",
+    `import.meta.hot?.send(${JSON.stringify(SERVER_READY)});`,
     "",
   ].join("\n");
 }

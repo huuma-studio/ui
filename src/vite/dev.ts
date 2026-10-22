@@ -5,6 +5,7 @@
 import type { Connect, DevEnvironment, Plugin, RunnableDevEnvironment, ViteDevServer } from "vite";
 import { toRequest, writeResponse } from "@huuma/route/node";
 
+import { SERVER_READY } from "./build.ts";
 import { SERVER_ID } from "./entry.ts";
 import { ISLANDS_ID } from "./islands.ts";
 import { REMOTE_ID } from "./remote.ts";
@@ -32,13 +33,24 @@ interface App {
  * that plugin serves the requests instead.
  */
 export function devPlugin(serverEntry: () => string): Plugin {
-  // Whether the app must be rebuilt before the next request.
-  const app = { stale: false };
+  // Whether the app must be rebuilt before the next request, and whether
+  // the browser reloads once a platform's runtime evaluated it again.
+  const app = { stale: false, reload: false };
   return {
     name: "huuma:dev",
     apply: "serve",
     configureServer(server) {
-      if (isPlatformOwned(server.environments.ssr)) return;
+      const ssr = server.environments.ssr;
+      if (isPlatformOwned(ssr)) {
+        // The Worker entry was evaluated again: reloading the browser
+        // earlier, its request could reach the app while it's evaluated.
+        ssr.hot.on(SERVER_READY, () => {
+          if (!app.reload) return;
+          app.reload = false;
+          server.environments.client.hot.send({ type: "full-reload" });
+        });
+        return;
+      }
       // Returned: runs after Vite's own middlewares, so Vite serves
       // modules and assets first and the app gets every other request.
       return () => {
@@ -58,14 +70,22 @@ export function devPlugin(serverEntry: () => string): Plugin {
           if (module) graph.invalidateModule(module);
         }
       }
-      app.stale = true;
       // An island the browser loaded updates itself (see `islandsPlugin`);
       // everything else reloads the page.
       const island =
         type === "update" &&
         ISLAND.test(file) &&
         !!server.environments.client.moduleGraph.getModulesByFile(file)?.size;
-      if (!island) server.environments.client.hot.send({ type: "full-reload" });
+      if (isPlatformOwned(this.environment)) {
+        // The module runner in the platform's runtime clears its whole
+        // cache and imports the Worker entry again, which then sends
+        // `SERVER_READY`: the in-runtime `runner.clearCache()`.
+        if (!island) app.reload = true;
+        this.environment.hot.send({ type: "full-reload" });
+      } else {
+        app.stale = true;
+        if (!island) server.environments.client.hot.send({ type: "full-reload" });
+      }
       // Handled: the ModuleRunner gets no HMR update of its own.
       return [];
     },
