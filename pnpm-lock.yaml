@@ -183,6 +183,9 @@ importers:
       '@babel/plugin-proposal-decorators':
         specifier: ^8.0.2
         version: 8.0.2(@babel/core@8.0.7)
+      '@cloudflare/vite-plugin':
+        specifier: ^1.64.0
+        version: 1.64.0(@types/node@24.19.2)(@voidzero-dev/vite-plus-core@1.1.0(@types/node@24.19.2)(esbuild@0.28.2))(wrangler@4.151.0(@types/node@24.19.2))
       '@huuma/inject':
         specifier: npm:@jsr/huuma__inject@^0.0.1
         version: '@jsr/huuma__inject@0.0.1'
@@ -343,6 +346,13 @@ packages:
     peerDependenciesMeta:
       workerd:
         optional: true
+
+  '@cloudflare/vite-plugin@1.64.0':
+    resolution: {integrity: sha512-h7Tunx9Ou5fUoao8O9jYTH0ParfrtNZzZVPA0IS19O7AoWA1SpYjwzDA6pZC78qzuV8sQSEOpYCN/yTShmd+gg==}
+    hasBin: true
+    peerDependencies:
+      vite: ^6.1.0 || ^7.0.0 || ^8.0.0
+      wrangler: ^4.151.0
 
   '@cloudflare/workerd-darwin-64@1.20261012.1':
     resolution: {integrity: sha512-dkTL9aY3V4D40b+jBpGPCistWUPFQ/M61wlWi6i1o8MvHFFgEw7EQkcaYEv6Yd3bkPDD/3TFT4hRsMb2xVZSwQ==}
@@ -2215,6 +2225,20 @@ snapshots:
       unenv: 2.0.0-rc.24
     optionalDependencies:
       workerd: 1.20261012.1
+
+  '@cloudflare/vite-plugin@1.64.0(@types/node@24.19.2)(@voidzero-dev/vite-plus-core@1.1.0(@types/node@24.19.2)(esbuild@0.28.2))(wrangler@4.151.0(@types/node@24.19.2))':
+    dependencies:
+      '@cloudflare/unenv-preset': 2.16.2(unenv@2.0.0-rc.24)(workerd@1.20261012.1)
+      miniflare: 5.20261012.0-beta(@types/node@24.19.2)
+      unenv: 2.0.0-rc.24
+      vite: '@voidzero-dev/vite-plus-core@1.1.0(@types/node@24.19.2)(esbuild@0.28.2)'
+      workerd: 1.20261012.1
+      wrangler: 4.151.0(@types/node@24.19.2)
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - '@types/node'
+      - bufferutil
+      - utf-8-validate
 
   '@cloudflare/workerd-darwin-64@1.20261012.1':
     optional: true
