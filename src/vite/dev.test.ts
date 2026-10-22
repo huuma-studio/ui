@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
-import { createLogger, createServer, type RunnableDevEnvironment, type ViteDevServer } from "vite";
+import {
+  createLogger,
+  createServer,
+  DevEnvironment,
+  type RunnableDevEnvironment,
+  type ViteDevServer,
+} from "vite";
 import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 
@@ -234,4 +240,42 @@ describe("dev server with a base", () => {
       /<script type="module" src="\/shop\/@vite\/client" nonce="[^"]+"><\/script>/,
     );
   });
+});
+
+test("leaves requests to a platform's plugin that runs the app itself", async () => {
+  // Like @cloudflare/vite-plugin's environment in workerd: neither
+  // runnable in this process nor fetchable.
+  const server = await createServer({
+    root: fixture,
+    configFile: false,
+    logLevel: "silent",
+    server: { host: "127.0.0.1", port: 0 },
+    environments: {
+      ssr: {
+        dev: {
+          createEnvironment: (name, config) => new DevEnvironment(name, config, { hot: true }),
+        },
+      },
+    },
+    plugins: [
+      huuma(),
+      {
+        name: "platform",
+        configureServer(server) {
+          return () => {
+            server.middlewares.use((_req, res) => {
+              res.end("platform");
+            });
+          };
+        },
+      },
+    ],
+  });
+  try {
+    await server.listen();
+    const response = await fetch(new URL("/about", server.resolvedUrls!.local[0]));
+    expect(await response.text()).toStrictEqual("platform");
+  } finally {
+    await server.close();
+  }
 });

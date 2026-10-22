@@ -28,6 +28,8 @@ interface App {
 /**
  * Serves the app from Vite's dev server, and rebuilds it when its server
  * code changes. `serverEntry()` is the absolute path of the app's module.
+ * When a platform's plugin runs the app itself (see `isPlatformOwned()`),
+ * that plugin serves the requests instead.
  */
 export function devPlugin(serverEntry: () => string): Plugin {
   // Whether the app must be rebuilt before the next request.
@@ -36,6 +38,7 @@ export function devPlugin(serverEntry: () => string): Plugin {
     name: "huuma:dev",
     apply: "serve",
     configureServer(server) {
+      if (isPlatformOwned(server.environments.ssr)) return;
       // Returned: runs after Vite's own middlewares, so Vite serves
       // modules and assets first and the app gets every other request.
       return () => {
@@ -143,4 +146,15 @@ async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<
 // `isRunnableDevEnvironment()` from `vite` would be a runtime import.
 function isRunnable(environment: DevEnvironment): environment is RunnableDevEnvironment {
   return "runner" in environment;
+}
+
+/**
+ * Whether a platform's plugin runs the app in its own runtime: an
+ * environment Huuma can neither run in this process (`runner`) nor send
+ * requests to (`dispatchFetch`), like `@cloudflare/vite-plugin`'s in
+ * workerd. That plugin serves the requests, and runs the app through the
+ * entry it's given, e.g. `"main": "virtual:huuma/worker"`.
+ */
+function isPlatformOwned(environment: DevEnvironment): boolean {
+  return !isRunnable(environment) && !("dispatchFetch" in environment);
 }
