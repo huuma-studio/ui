@@ -68,12 +68,12 @@ Use this skill when the agent (or user) hits a Huuma UI lint violation or runtim
 
 ### `requestContext().env` is `{}` in dev
 
-- **Cause:** `vite` runs the server code on Node, which has no Worker bindings. With `@cloudflare/vite-plugin` but without `viteEnvironment: { name: "ssr" }`, the plugin runs a Worker environment of its own, and Huuma still serves the app from Node.
-- **Fix:** Use `cloudflare({ viteEnvironment: { name: "ssr" } })` after `huuma()`, with `"main": "virtual:huuma/worker"` in `wrangler.jsonc` (README "Dev in workerd"). Or try the code with `vite build` and `wrangler dev`.
+- **Cause:** `vite` runs the server code on Node, which has no Worker bindings: `huuma()` without the Cloudflare adapter, or with `cloudflare()` from `@cloudflare/vite-plugin` in `plugins` instead of the adapter, which runs a Worker environment of its own while Huuma still serves the app from Node.
+- **Fix:** Use `huuma({ adapter: cloudflare() })` with `cloudflare` from `@huuma/ui-cloudflare`, and remove `@cloudflare/vite-plugin` from `plugins` (README "Cloudflare Workers"). Or try the code with `vite build` and `wrangler dev`.
 
-### "The entry-point file at "virtual:huuma/worker" was not found"
+### "Missing entry-point to Worker script or to assets directory"
 
-- **Cause:** Wrangler read `wrangler.jsonc` itself: `wrangler dev` or `wrangler deploy` before `vite build`, or with `--config wrangler.jsonc`. Only Vite resolves `virtual:huuma/worker`.
+- **Cause:** Wrangler read `wrangler.jsonc` itself: `wrangler dev` or `wrangler deploy` before `vite build`, or with `--config wrangler.jsonc`. It has no `main`: the adapter gives Vite its Worker, `virtual:huuma/worker`, and only Vite resolves it.
 - **Fix:** Run `vite build` first, then `wrangler dev` or `wrangler deploy` without `--config`: they use `dist/server/wrangler.json`, which the build writes (or pass `--config dist/server/wrangler.json`).
 
 ## General debugging steps

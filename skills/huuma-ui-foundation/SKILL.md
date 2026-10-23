@@ -50,10 +50,10 @@ Clients consume it as `@huuma/ui` from JSR (`jsr:@huuma/ui` with pnpm/Yarn, `@js
 ## Dev workflow
 
 - `vite` (or `pnpm dev`) — dev server with hot updates; edited islands keep their state.
-- `vite build` — builds `dist/client/` and `dist/server/` (`app.js`, `server.js`, `worker.js`).
+- `vite build` — builds `dist/client/` and `dist/server/` (`app.js`, and `server.js` for Node).
 - `node dist/server/server.js` — production server (`PORT`, `HOST`).
 - On Deno: `deno run -A npm:vite`, `deno run -A npm:vite build`, `deno run -A dist/server/server.js`.
-- On Cloudflare Workers: `wrangler deploy` with `"main": "dist/server/worker.js"` (see `huuma-ui-app-and-build`).
+- On Cloudflare Workers: `huuma({ adapter: cloudflare() })` from `@huuma/ui-cloudflare`, then `vite build` and `wrangler deploy` (see `huuma-ui-app-and-build`).
 
 ## Cross-links
 

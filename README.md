@@ -142,7 +142,7 @@ Pages, layouts and middlewares go in `app/`, islands anywhere in the project as 
 
 The dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page.
 
-The app's server code runs on Node, in Vite's process. With [`@cloudflare/vite-plugin`](#dev-in-workerd-with-cloudflarevite-plugin), it runs in Cloudflare's workerd instead, with the Worker's bindings: Huuma then leaves the requests to that plugin.
+The app's server code runs on Node, in Vite's process. With the [Cloudflare adapter](#cloudflare-workers), it runs in Cloudflare's workerd instead, with the Worker's bindings.
 
 - **Remote functions:** browser code gets a stub that calls the server, never the module's code or imports. Every value export of a remote module is a remote function: `export async function`, `export const f = async () => {}` (also with several declarators or a type annotation), `export { f }`, `export { f } from "./f.ts"` and the default export. `export *`, destructuring, classes and enums fail with an error at the export.
 - **Server-only code:** importing a `*.server.*` module (any extension) from browser code fails, naming the importer. Use it from server code, e.g. a remote function.
@@ -152,18 +152,18 @@ The app's server code runs on Node, in Vite's process. With [`@cloudflare/vite-p
 
 Options of `huuma()`:
 
+- `adapter`: the platform the app runs on. Defaults to `node()` from `@huuma/ui/vite`; for Cloudflare Workers, `cloudflare()` from `@huuma/ui-cloudflare` (see [Cloudflare Workers](#cloudflare-workers)).
 - `routes`: the directory with `page.tsx`, `layout.tsx` and `middleware.ts` files. Defaults to `"app"`.
 - `server`: the module that exports the app. Defaults to `"server.ts"`.
 - `decorators`: `"auto"` (default) compiles standard decorators unless Oxc's legacy decorators (`oxc.decorator.legacy`) are on; `true` or `false` to force it. Huuma supports standard decorators. If your app uses legacy (TypeScript `experimentalDecorators`) decorators, set `oxc: { decorator: { legacy: true } }` in your Vite config: `experimentalDecorators` in `tsconfig.json` alone isn't picked up, and Babel would compile them as standard decorators.
 
 ## Production Build
 
-`vite build` (or `vp build`) builds the browser scripts and the app:
+`vite build` (or `vp build`) builds the browser scripts and the app, for Node with the default adapter:
 
-- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, the files the server code imports, e.g. an image a page shows, plus Vite's `public/` directory, and two files for [Cloudflare Workers](#cloudflare-workers). Each file's path in it is its URL's path: with a `base` other than `/` (see below), e.g. `/shop/`, the files are in `dist/client/shop/`.
+- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, the files the server code imports, e.g. an image a page shows, plus Vite's `public/` directory. Each file's path in it is its URL's path: with a `base` other than `/` (see below), e.g. `/shop/`, the files are in `dist/client/shop/`.
 - `dist/server/app.js`: the app, as the default export, with a standard `fetch(request)` handler: it renders pages and runs remote functions. It doesn't serve `dist/client/` and doesn't strip the `base` (see below); `server.js` does both. To run `app.js` on another runtime's server, e.g. `deno serve` or Bun, serve the files in `dist/client/` there too, at `/` as they are, and strip a base other than `/` before the app gets a request.
 - `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: files named with their content hash (Vite names them so by default) are cached for good; other files, like those from `public/`, for an hour. For now, the files the server code imports get an hour too, although their names have a hash.
-- `dist/server/worker.js`: the app as a Cloudflare Worker (see [Cloudflare Workers](#cloudflare-workers)).
 
 ```sh
 HUUMA_ENV=PROD PORT=3000 node dist/server/server.js
@@ -219,62 +219,46 @@ With a `package.json`, Deno takes the packages from `node_modules`, like Node.js
 
 ## Cloudflare Workers
 
-`dist/server/worker.js` runs the app as a [Cloudflare Worker](https://developers.cloudflare.com/workers/), with `dist/client/` as the Worker's [static assets](https://developers.cloudflare.com/workers/static-assets/). Add a `wrangler.jsonc` next to `vite.config.ts`:
-
-```jsonc
-{
-  "name": "my-app",
-  "main": "dist/server/worker.js",
-  "compatibility_date": "2026-10-01",
-  "assets": { "directory": "dist/client" },
-}
-```
-
-Then build and deploy, or try the build locally in Cloudflare's runtime first:
+`@huuma/ui-cloudflare` runs the app as a [Cloudflare Worker](https://developers.cloudflare.com/workers/), with `dist/client/` as the Worker's [static assets](https://developers.cloudflare.com/workers/static-assets/). Its adapter brings [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/) (tested with 1.64), so `vite` runs the app's server code in workerd too, with the Worker's runtime and bindings. It's a package of its own, so apps on Node don't install workerd:
 
 ```sh
-vite build
-npx wrangler dev      # local, in workerd
-npx wrangler deploy
+pnpm add -D jsr:@huuma/ui-cloudflare@0.3.0-beta.2
 ```
-
-Wrangler bundles `worker.js` with the packages it imports from `node_modules`.
-
-- **Caching:** the build writes `dist/client/_headers`, which caches files named with their content hash for good, like `server.js`. It also writes `dist/client/.assetsignore`, which keeps Vite's manifest (`.vite/`) out of the upload. If `public/` has its own `_headers` or `.assetsignore`, the build keeps it and adds its rules to it.
-- **Base:** with a `base` other than `/`, e.g. `/shop/`, the configuration stays the same. The files are in `dist/client/shop/`, so Workers serves them at `/shop/` before the Worker runs, and the Worker strips the base for the app, like `server.js`. `_headers` and `.assetsignore` stay at the top of `dist/client/`, where Workers reads them.
-- **Environment:** vars and secrets reach `process.env`. `wrangler deploy` builds the Worker with `NODE_ENV` set to `production`. Set `HUUMA_ENV` to `PROD` in `vars` for `@huuma/route`'s production mode.
-
-- **Bindings:** KV, D1, R2 and the Worker's other bindings reach server code as `requestContext().env`, and middleware as `ctx.env` (see [Request context](#request-context)).
-
-Without `@cloudflare/vite-plugin`, `vite` runs the dev server on Node, without bindings, so try the build with `wrangler dev` before you deploy.
-
-### Dev in workerd, with `@cloudflare/vite-plugin`
-
-With [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/) (tested with 1.64), `vite` runs the app's server code in workerd too, so dev has the Worker's runtime and bindings. Install it (`pnpm add -D @cloudflare/vite-plugin`), add it after `huuma()` for Vite's `ssr` environment, and name Huuma's Worker entry as `main`:
 
 ```ts
 // vite.config.ts
 import { defineConfig } from "vite";
-import { cloudflare } from "@cloudflare/vite-plugin";
 import { huuma } from "@huuma/ui/vite";
+import { cloudflare } from "@huuma/ui-cloudflare";
 
-export default defineConfig({
-  plugins: [huuma(), cloudflare({ viteEnvironment: { name: "ssr" } })],
-});
+export default defineConfig({ plugins: [huuma({ adapter: cloudflare() })] });
 ```
 
+Add a `wrangler.jsonc` next to `vite.config.ts`. It needs no `main` or `assets`: the Worker is the app, and the build names the static assets.
+
 ```jsonc
-// wrangler.jsonc
 {
   "name": "my-app",
-  "main": "virtual:huuma/worker",
   "compatibility_date": "2026-10-01",
 }
 ```
 
+```sh
+vite                  # dev, in workerd
+vite build
+npx wrangler dev      # the build, locally in workerd
+npx wrangler deploy
+```
+
 - **Dev:** `vite` renders pages and runs middleware and remote functions in workerd. `requestContext().env` holds the bindings from `wrangler.jsonc`, local to the dev server. Islands update in place, as on Node; after an edit to server code, the page reloads once the app runs again in workerd.
-- **Build and deploy:** `vite build` builds the client and the server once each. Next to Huuma's files, the plugin writes `dist/server/index.js`, the Worker, and `dist/server/wrangler.json`, with `dist/client/` as the static assets, also below a base. `npx wrangler dev` (the build, locally) and `npx wrangler deploy` use that file without further options.
-- **Plugin order:** list `huuma()` first. With `cloudflare()` first, the server build goes to `dist/ssr/` instead of `dist/server/`.
+- **Build and deploy:** `vite build` builds the client and the server once each: `dist/server/index.js`, the Worker, and `dist/server/wrangler.json`, with `dist/client/` as the static assets. `npx wrangler dev` and `npx wrangler deploy` use that file without further options. There's no `server.js` for Node.
+- **Options:** `cloudflare()` takes the options of `@cloudflare/vite-plugin`, e.g. `configPath`, `remoteBindings` or `inspectorPort`, except `viteEnvironment`: the adapter runs the plugin in Vite's `ssr` environment, where Huuma builds the app. A `main` in `wrangler.jsonc` or from the `config` option replaces Huuma's Worker.
+- **Caching:** the build writes `dist/client/_headers`, which caches files named with their content hash for good, like `server.js`. It also writes `dist/client/.assetsignore`, which keeps Vite's manifest (`.vite/`) out of the upload. If `public/` has its own `_headers` or `.assetsignore`, the build keeps it and adds its rules to it.
+- **Base:** with a `base` other than `/`, e.g. `/shop/`, the configuration stays the same. The files are in `dist/client/shop/`, so Workers serves them at `/shop/` before the Worker runs, and the Worker strips the base for the app, like `server.js`. `_headers` and `.assetsignore` stay at the top of `dist/client/`, where Workers reads them.
+- **Environment:** vars and secrets reach `process.env`. Set `HUUMA_ENV` to `PROD` in `vars` for `@huuma/route`'s production mode.
+- **Bindings:** KV, D1, R2 and the Worker's other bindings reach server code as `requestContext().env`, and middleware as `ctx.env` (see [Request context](#request-context)).
+
+Coming from 0.3.0-beta.2, where every build wrote `dist/server/worker.js`: replace `cloudflare({ viteEnvironment: { name: "ssr" } })` from `@cloudflare/vite-plugin` with `huuma({ adapter: cloudflare() })`, remove `main` and `assets` from `wrangler.jsonc`, and deploy after `vite build`, which writes `dist/server/wrangler.json`.
 
 ## Migrating from the Deno Setup
 
@@ -453,7 +437,7 @@ It's a read-only view of the request with `request`, `params`, `searchParams`, `
   }
   ```
 
-  Or list them yourself: `interface Env { DB: D1Database }`. `ctx.env` in middleware gets the same type. On Node and Deno, `env` is `{}`, also in `vite` dev on Node; with [`@cloudflare/vite-plugin`](#dev-in-workerd-with-cloudflarevite-plugin), `vite` dev has the bindings. Read vars with `process.env` everywhere.
+  Or list them yourself: `interface Env { DB: D1Database }`. `ctx.env` in middleware gets the same type. On Node and Deno, `env` is `{}`, also in `vite` dev on Node; with the [Cloudflare adapter](#cloudflare-workers), `vite` dev has the bindings. Read vars with `process.env` everywhere.
 - **`waitUntil(promise)`** keeps work running after the response is sent (`ctx.waitUntil()` on Workers). Work a request starts keeps its context, so that work can still call `requestContext()`.
 - **Outside a request**, e.g. at a module's top level, `requestContext()` throws. `hasRequestContext()` tells whether a request is running, for helpers that run in both places.
 - **Not in islands:** islands render in the browser too, where there's no request. Read what an island needs in its page and pass it as props. The lint rule `huuma/no-request-context-in-islands` catches calls in `*.client.tsx`.
