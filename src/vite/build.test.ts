@@ -542,7 +542,7 @@ describe(moveServerAssets.name, () => {
     await writeFile(join(server, "assets/logo-a1.svg"), "server");
     // An island imports this one too.
     await writeFile(join(server, "assets/icon-b2.svg"), "server");
-    await writeFile(join(client, "assets/icon-b2.svg"), "client");
+    await writeFile(join(client, "assets/icon-b2.svg"), "server");
 
     expect(
       await moveServerAssets(server, client, [
@@ -556,6 +556,22 @@ describe(moveServerAssets.name, () => {
       "icon-b2.svg",
       "logo-a1.svg",
     ]);
-    expect(await readFile(join(client, "assets/icon-b2.svg"), "utf8")).toStrictEqual("client");
+    expect(await readFile(join(client, "assets/icon-b2.svg"), "utf8")).toStrictEqual("server");
+  });
+
+  test("fails for a different file at the same path", async () => {
+    const server = join(root, "other-server");
+    const client = join(root, "other-client");
+    await mkdir(join(server, "assets"), { recursive: true });
+    await mkdir(join(client, "assets"), { recursive: true });
+    await writeFile(join(server, "assets/logo.svg"), "server");
+    // E.g. from `public/`, with unhashed `assetFileNames`.
+    await writeFile(join(client, "assets/logo.svg"), "public");
+
+    await expect(moveServerAssets(server, client, ["assets/logo.svg"])).rejects.toThrow(
+      "The server code imports assets/logo.svg, but the client build has a different file",
+    );
+    expect(await readFile(join(server, "assets/logo.svg"), "utf8")).toStrictEqual("server");
+    expect(await readFile(join(client, "assets/logo.svg"), "utf8")).toStrictEqual("public");
   });
 });

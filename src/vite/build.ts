@@ -1,5 +1,5 @@
 import type { Plugin, Rolldown, UserConfig, ViteBuilder } from "vite";
-import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname, join, parse, relative, resolve, sep } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
@@ -220,7 +220,8 @@ function importedAssets(output: Awaited<ReturnType<ViteBuilder["build"]>>): Set<
  * client build in `clientDir`, at the same path: their URLs are the client
  * build's (Vite's `base` plus the path). A file the client build has
  * already, e.g. one an island imports too, is removed from the server
- * build. Returns the paths moved.
+ * build. A different file at that path, e.g. from `public/` with unhashed
+ * `assetFileNames`, is an error. Returns the paths moved.
  */
 export async function moveServerAssets(
   serverDir: string,
@@ -233,6 +234,13 @@ export async function moveServerAssets(
     const to = join(clientDir, file);
     if (!(await exists(from))) continue;
     if (await exists(to)) {
+      if (!(await readFile(from)).equals(await readFile(to))) {
+        throw new Error(
+          `The server code imports ${file}, but the client build has a different file ` +
+            "at that path. Name the server build's assets with a hash, e.g. Vite's " +
+            "default `assets/[name]-[hash][extname]`, or rename one of the files.",
+        );
+      }
       await rm(from, { force: true });
       continue;
     }
