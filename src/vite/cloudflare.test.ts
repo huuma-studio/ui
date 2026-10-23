@@ -5,10 +5,10 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import type { Plugin } from "vite";
-import { readFile, rm } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
-import { buildFixture, startWorker } from "../../test/build.ts";
+import { buildFixture, IMAGE_PAGE, startWorker } from "../../test/build.ts";
 import { remoteEndpoint } from "../platform/server/remote.ts";
 import { baseDirectory } from "./base.ts";
 import { huuma } from "./mod.ts";
@@ -54,6 +54,7 @@ function describeWorker(name: string, base: string, { plugin = false } = {}) {
             ],
           },
           {
+            ...IMAGE_PAGE,
             "wrangler.jsonc": JSON.stringify({
               name: "huuma-fixture",
               compatibility_date: "2026-10-01",
@@ -63,7 +64,11 @@ function describeWorker(name: string, base: string, { plugin = false } = {}) {
           },
         );
       } else {
-        root = await buildFixture(".tmp-build-worker-", { base, plugins: [huuma(), count] });
+        root = await buildFixture(
+          ".tmp-build-worker-",
+          { base, plugins: [huuma(), count] },
+          IMAGE_PAGE,
+        );
       }
       manifest = JSON.parse(
         await readFile(
@@ -114,6 +119,18 @@ function describeWorker(name: string, base: string, { plugin = false } = {}) {
         expect((await fetch(`${origin}/${counter.file}`)).status).toStrictEqual(404);
       });
     }
+
+    test("serves the files the server imports, from the client build", async () => {
+      const page = await (await fetch(path("image"))).text();
+      const src = /src="([^"]+\.svg)"/.exec(page)?.[1];
+      expect(src).toStrictEqual(expect.stringMatching(/\/assets\/logo-[\w-]+\.svg$/));
+      expect(src!.startsWith(`${base}assets/`)).toStrictEqual(true);
+      const response = await fetch(`${origin}${src}`);
+      expect(response.status).toStrictEqual(200);
+      expect(response.headers.get("cache-control")).toStrictEqual(IMMUTABLE);
+      const server = await readdir(join(root, "dist/server"), { recursive: true });
+      expect(server).not.toContainEqual(expect.stringMatching(/\.svg$/));
+    });
 
     test("doesn't serve the client manifest", async () => {
       const response = await fetch(path(".vite/manifest.json"));

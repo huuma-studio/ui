@@ -1,15 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { createBuilder } from "vite";
 import type { ChildProcess } from "node:child_process";
-import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { buildFixture, fixtures, startServer } from "../../test/build.ts";
+import { buildFixture, fixtures, IMAGE_PAGE, startServer } from "../../test/build.ts";
 import { renderFixture } from "../../test/rendered.ts";
 import { remoteEndpoint } from "../platform/server/remote.ts";
 import { builtPath } from "./client-build.ts";
-import { hasHash } from "./build.ts";
+import { hasHash, moveServerAssets } from "./build.ts";
 import { huuma } from "./mod.ts";
 
 type Manifest = Record<string, { file: string; name?: string; imports?: string[] }>;
@@ -138,7 +138,7 @@ describe("node dist/server/server.js", () => {
 
   beforeAll(async () => {
     process.env.NODE_ENV = "production";
-    root = await buildFixture(".tmp-build-server-");
+    root = await buildFixture(".tmp-build-server-", {}, IMAGE_PAGE);
     manifest = JSON.parse(
       await readFile(join(root, "dist/client/.vite/manifest.json"), "utf8"),
     ) as Manifest;
@@ -165,6 +165,17 @@ describe("node dist/server/server.js", () => {
       "public, max-age=31536000, immutable",
     );
     expect(await response.text()).toContain("export");
+  });
+
+  test("serves the files the server imports, from the client build", async () => {
+    const page = await (await fetch(`${origin}/image`)).text();
+    const src = /src="([^"]+\.svg)"/.exec(page)?.[1];
+    expect(src).toMatch(/^\/assets\/logo-[\w-]+\.svg$/);
+    const response = await fetch(`${origin}${src}`);
+    expect(response.status).toStrictEqual(200);
+    expect(response.headers.get("content-type")).toStrictEqual("image/svg+xml");
+    const server = await readdir(join(root, "dist/server"), { recursive: true });
+    expect(server).not.toContainEqual(expect.stringMatching(/\.svg$/));
   });
 
   test("doesn't serve the client manifest or Workers' files", async () => {
@@ -513,5 +524,38 @@ describe(builtPath.name, () => {
       "//cdn.example/assets/a-1.js",
     );
     expect(builtPath("./", "assets/a-1.js")).toStrictEqual("assets/a-1.js");
+  });
+});
+
+describe(moveServerAssets.name, () => {
+  let root: string;
+  beforeAll(async () => {
+    root = await mkdtemp(join(fixtures, ".tmp-move-assets-"));
+  });
+  afterAll(() => rm(root, { recursive: true, force: true }));
+
+  test("moves the files to the client build, unless it has them", async () => {
+    const server = join(root, "server");
+    const client = join(root, "client");
+    await mkdir(join(server, "assets"), { recursive: true });
+    await mkdir(join(client, "assets"), { recursive: true });
+    await writeFile(join(server, "assets/logo-a1.svg"), "server");
+    // An island imports this one too.
+    await writeFile(join(server, "assets/icon-b2.svg"), "server");
+    await writeFile(join(client, "assets/icon-b2.svg"), "client");
+
+    expect(
+      await moveServerAssets(server, client, [
+        "assets/logo-a1.svg",
+        "assets/icon-b2.svg",
+        "assets/gone-c3.svg",
+      ]),
+    ).toStrictEqual(["assets/logo-a1.svg"]);
+    expect(await readdir(join(server, "assets"))).toStrictEqual([]);
+    expect((await readdir(join(client, "assets"))).sort()).toStrictEqual([
+      "icon-b2.svg",
+      "logo-a1.svg",
+    ]);
+    expect(await readFile(join(client, "assets/icon-b2.svg"), "utf8")).toStrictEqual("client");
   });
 });

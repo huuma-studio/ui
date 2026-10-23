@@ -1,6 +1,6 @@
 import type { Plugin, Rolldown, UserConfig, ViteBuilder } from "vite";
-import { readdir, rm } from "node:fs/promises";
-import { join, parse, relative, resolve, sep } from "node:path";
+import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { dirname, join, parse, relative, resolve, sep } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
 import { appBase, baseDirectory } from "./base.ts";
@@ -76,6 +76,9 @@ export function buildPlugin(root: () => string): Plugin {
           ssr: {
             build: {
               outDir: config.environments?.ssr?.build?.outDir ?? join(outDir, "server"),
+              // Files the server code imports, e.g. an image a page shows:
+              // `buildApp` moves them to the client build, which serves them.
+              emitAssets: true,
               rolldownOptions: { input: { app: SERVER_ID, server: NODE_ID, worker: WORKER_ID } },
             },
           },
@@ -159,9 +162,10 @@ export function buildPlugin(root: () => string): Plugin {
 
 /**
  * Builds the app: the client first, since the server reads its manifest,
- * then the ssr environment. With @cloudflare/vite-plugin, its plugin
- * shapes the ssr build: `index.js` (the Worker that wraps
- * `virtual:huuma/worker`) and the `wrangler.json` to deploy it with.
+ * then the ssr environment, whose imported files then move to the client
+ * build. With @cloudflare/vite-plugin, its plugin shapes the ssr build:
+ * `index.js` (the Worker that wraps `virtual:huuma/worker`) and the
+ * `wrangler.json` to deploy it with.
  */
 async function buildApp(builder: ViteBuilder): Promise<void> {
   const client = builder.environments.client;
@@ -183,7 +187,69 @@ async function buildApp(builder: ViteBuilder): Promise<void> {
       warn: (message) => client.logger.warn(message),
     });
   }
-  await builder.build(builder.environments.ssr);
+  const ssr = builder.environments.ssr;
+  const output = await builder.build(ssr);
+  if (ssr.config.build.write) {
+    const moved = await moveServerAssets(
+      resolve(ssr.config.root, ssr.config.build.outDir),
+      outDir,
+      importedAssets(output),
+    );
+    if (moved.length) {
+      ssr.logger.info(`Moved ${moved.length} file(s) the server imports to the client build.`);
+    }
+  }
+}
+
+/** The files the chunks of a build import, e.g. `assets/logo-a1b2c3d4.svg`. */
+function importedAssets(output: Awaited<ReturnType<ViteBuilder["build"]>>): Set<string> {
+  const files = new Set<string>();
+  for (const result of Array.isArray(output) ? output : [output]) {
+    // A watcher (`build.watch`) has no output yet.
+    if (!("output" in result)) continue;
+    for (const chunk of result.output) {
+      if (chunk.type === "chunk")
+        for (const file of chunk.viteMetadata?.importedAssets ?? []) files.add(file);
+    }
+  }
+  return files;
+}
+
+/**
+ * Moves `files`, which the server build emitted, from `serverDir` to the
+ * client build in `clientDir`, at the same path: their URLs are the client
+ * build's (Vite's `base` plus the path). A file the client build has
+ * already, e.g. one an island imports too, is removed from the server
+ * build. Returns the paths moved.
+ */
+export async function moveServerAssets(
+  serverDir: string,
+  clientDir: string,
+  files: Iterable<string>,
+): Promise<string[]> {
+  const moved: string[] = [];
+  for (const file of files) {
+    const from = join(serverDir, file);
+    const to = join(clientDir, file);
+    if (!(await exists(from))) continue;
+    if (await exists(to)) {
+      await rm(from, { force: true });
+      continue;
+    }
+    await mkdir(dirname(to), { recursive: true });
+    await rename(from, to);
+    moved.push(file);
+  }
+  return moved;
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

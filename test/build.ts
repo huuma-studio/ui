@@ -2,7 +2,7 @@
 // the build tests and the browser tests.
 import { createBuilder, type InlineConfig } from "vite";
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { cp, mkdtemp, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
@@ -25,6 +25,23 @@ export function freePort(): Promise<number> {
 }
 
 /**
+ * A page at `/image` that imports an image, too large for Vite to inline
+ * (4 kB), so the server build emits it as a file: for `buildFixture()`'s
+ * `files`.
+ */
+export const IMAGE_PAGE: Record<string, string> = {
+  "app/image/logo.svg": `<svg xmlns="http://www.w3.org/2000/svg"><!-- ${"x".repeat(5_000)} --></svg>\n`,
+  "app/image/page.tsx": [
+    'import logo from "./logo.svg";',
+    "",
+    "export default function Image() {",
+    '  return <img src={logo} alt="" />;',
+    "}",
+    "",
+  ].join("\n"),
+};
+
+/**
  * Builds a copy of the basic fixture with `vite build`'s builder, with
  * `files` added to it first (contents by path).
  */
@@ -35,7 +52,10 @@ export async function buildFixture(
 ): Promise<string> {
   const root = await mkdtemp(join(fixtures, prefix));
   await cp(join(fixtures, "basic"), root, { recursive: true });
-  for (const [path, contents] of Object.entries(files)) await writeFile(join(root, path), contents);
+  for (const [path, contents] of Object.entries(files)) {
+    await mkdir(dirname(join(root, path)), { recursive: true });
+    await writeFile(join(root, path), contents);
+  }
   const builder = await createBuilder({
     root,
     configFile: false,

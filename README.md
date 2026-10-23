@@ -160,9 +160,9 @@ Options of `huuma()`:
 
 `vite build` (or `vp build`) builds the browser scripts and the app:
 
-- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, plus Vite's `public/` directory, and two files for [Cloudflare Workers](#cloudflare-workers). Each file's path in it is its URL's path: with a `base` other than `/` (see below), e.g. `/shop/`, the files are in `dist/client/shop/`.
+- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, the files the server code imports, e.g. an image a page shows, plus Vite's `public/` directory, and two files for [Cloudflare Workers](#cloudflare-workers). Each file's path in it is its URL's path: with a `base` other than `/` (see below), e.g. `/shop/`, the files are in `dist/client/shop/`.
 - `dist/server/app.js`: the app, as the default export, with a standard `fetch(request)` handler: it renders pages and runs remote functions. It doesn't serve `dist/client/` and doesn't strip the `base` (see below); `server.js` does both. To run `app.js` on another runtime's server, e.g. `deno serve` or Bun, serve the files in `dist/client/` there too, at `/` as they are, and strip a base other than `/` before the app gets a request.
-- `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: files named with their content hash (Vite names them so by default) are cached for good; other files, like those from `public/`, for an hour.
+- `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: files named with their content hash (Vite names them so by default) are cached for good; other files, like those from `public/`, for an hour. For now, the files the server code imports get an hour too, although their names have a hash.
 - `dist/server/worker.js`: the app as a Cloudflare Worker (see [Cloudflare Workers](#cloudflare-workers)).
 
 ```sh
