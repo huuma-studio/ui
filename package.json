@@ -1,0 +1,45 @@
+{
+  "name": "@huuma/ui",
+  "private": true,
+  "description": "Development tooling only. @huuma/ui is published to JSR from jsr.json.",
+  "type": "module",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./v-node": "./src/v-node/mod.ts",
+    "./v-node/sync": "./src/v-node/sync.ts",
+    "./browser": "./src/platform/browser/mod.ts",
+    "./server": "./src/platform/server/mod.ts",
+    "./ref": "./src/ref/mod.ts",
+    "./signal": "./src/signal/mod.ts",
+    "./hooks/lifecycle": "./src/hooks/lifecycle.ts",
+    "./hooks/signal": "./src/hooks/signal.ts",
+    "./hooks/ref": "./src/hooks/ref/mod.ts",
+    "./hooks/scope": "./src/hooks/scope.ts",
+    "./jsx-runtime": "./src/jsx-runtime/mod.ts",
+    "./jsx-dev-runtime": "./src/jsx-runtime/dev.ts",
+    "./i18n": "./src/i18n/mod.ts",
+    "./i18n/middleware": "./src/i18n/middleware/mod.ts",
+    "./lint": "./src/lint/mod.ts",
+    "./vite": "./src/vite/mod.ts",
+    "./vite/runtime": "./src/vite/runtime.ts",
+    "./vite/node": "./src/vite/node.ts"
+  },
+  "dependencies": {
+    "@huuma/route": "npm:@jsr/huuma__route@^0.3.1",
+    "@huuma/validate": "npm:@jsr/huuma__validate@^0.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^8.0.7",
+    "@babel/plugin-proposal-decorators": "^8.0.2",
+    "@huuma/inject": "npm:@jsr/huuma__inject@^0.0.1",
+    "@types/node": "^24",
+    "happy-dom": "^20.14.6",
+    "jsr": "0.14.3",
+    "playwright-core": "^1.64.0",
+    "vite": "^8",
+    "vite-plus": "1.1.0",
+    "vite-upstream": "npm:vite@^8",
+    "wrangler": "^4.151.0"
+  },
+  "packageManager": "pnpm@12.11.2"
+}

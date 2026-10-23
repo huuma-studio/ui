@@ -45,18 +45,15 @@ export interface VBase {
   type: VType;
 }
 
-export type VNodeBeforeCreateVisitor = (
-  jsx: JSX.Element,
-) => JSX.Element;
+export type VNodeBeforeCreateVisitor = (jsx: JSX.Element) => JSX.Element;
 
 export interface VNodeVisitor {
   beforeCreate?: VNodeBeforeCreateVisitor;
 }
 
-export type VGlobalOptions =
-  & VNodeVisitor
+export type VGlobalOptions = VNodeVisitor &
   // deno-lint-ignore no-explicit-any
-  & Record<string | number | symbol, any>;
+  Record<string | number | symbol, any>;
 
 type VOptions = {
   _GLOBAL: VGlobalOptions;
@@ -106,8 +103,7 @@ export interface VText<T> extends VBase, HasVNodeRef<T>, HasVCleanup {
   [VNodeProps.SKIP_ESCAPING]?: boolean;
 }
 
-export interface VElement<T>
-  extends VBase, HasVNodeRef<T>, HasVChildren<T>, HasVOptions, HasVKey {
+export interface VElement<T> extends VBase, HasVNodeRef<T>, HasVChildren<T>, HasVOptions, HasVKey {
   type: VType.ELEMENT;
   [VNodeProps.TAG]: string;
   [VNodeProps.PROPS]: JSX.ComponentProps;
@@ -116,32 +112,18 @@ export interface VElement<T>
 }
 
 export interface VComponent<T>
-  extends
-    VBase,
-    HasVOptions,
-    HasVHooks,
-    HasVMode,
-    HasVCleanup,
-    HasVKey,
-    HasVNodeRef<T> {
+  extends VBase, HasVOptions, HasVHooks, HasVMode, HasVCleanup, HasVKey, HasVNodeRef<T> {
   type: VType.COMPONENT;
   [VNodeProps.FN]: JSX.Component;
   [VNodeProps.PROPS]: JSX.ComponentProps;
   [VNodeProps.AST]: VNode<T>;
 }
 
-export interface VFragment<T>
-  extends VBase, HasVChildren<T>, HasVOptions, HasVKey {
+export interface VFragment<T> extends VBase, HasVChildren<T>, HasVOptions, HasVKey {
   type: VType.FRAGMENT;
 }
 
-export type VNode<T> =
-  | VComponent<T>
-  | VElement<T>
-  | VText<T>
-  | VFragment<T>
-  | undefined
-  | null;
+export type VNode<T> = VComponent<T> | VElement<T> | VText<T> | VFragment<T> | undefined | null;
 
 export function vText<T>(
   node: string | number | JSX.SignalLike,
@@ -157,79 +139,45 @@ export function vText<T>(
   };
 }
 
-export function isEmptyNode(
-  node: JSX.Element,
-): node is boolean | null | undefined {
+export function isEmptyNode(node: JSX.Element): node is boolean | null | undefined {
   return typeof node === "boolean" || node == null;
 }
 
-export function isTextNode(
-  value: JSX.Element,
-): value is string | number | JSX.SignalLike {
+export function isTextNode(value: JSX.Element): value is string | number | JSX.SignalLike {
   return (
-    value != null &&
-    (typeof value === "string" || Number.isFinite(value) || isVSignal(value))
+    value != null && (typeof value === "string" || typeof value === "number" || isVSignal(value))
   );
 }
 
-export function isFragmentNode(
-  node: unknown,
-): node is JSX.Element[] | JSX.ComponentNode<0> {
+export function isFragmentNode(node: unknown): node is JSX.Element[] | JSX.ComponentNode<0> {
+  return (typeof node === "object" && node && "type" in node && node.type === 0) || isArray(node);
+}
+
+export function isElementNode(node: unknown): node is JSX.ComponentNode<string> {
   return (
-    (typeof node === "object" && node && "type" in node && node.type === 0) ||
-    isArray(node)
+    (typeof node === "object" && node && "type" in node && typeof node.type === "string") || false
   );
 }
 
-export function isElementNode(
-  node: unknown,
-): node is JSX.ComponentNode<string> {
+export function isComponentNode(node: unknown): node is JSX.ComponentNode<JSX.Component> {
   return (
-    (
-      typeof node === "object" &&
-      node &&
-      "type" in node &&
-      typeof node.type === "string"
-    ) ||
-    false
+    (typeof node === "object" && node && "type" in node && typeof node.type === "function") || false
   );
 }
 
-export function isComponentNode(
-  node: unknown,
-): node is JSX.ComponentNode<JSX.Component> {
-  return (
-    (
-      typeof node === "object" &&
-      node &&
-      "type" in node &&
-      typeof node.type === "function"
-    ) ||
-    false
-  );
-}
-
-export function isTemplateNode(
-  node: unknown,
-): node is JSX.TemplateNode {
+export function isTemplateNode(node: unknown): node is JSX.TemplateNode {
   return (typeof node === "object" && node && "templates" in node) || false;
 }
 
-export function isVComponent<T>(
-  vNode: undefined | null | VBase,
-): vNode is VComponent<T> {
+export function isVComponent<T>(vNode: undefined | null | VBase): vNode is VComponent<T> {
   return vNode?.type === VType.COMPONENT;
 }
 
-export function isVElement<T>(
-  vNode: undefined | null | VBase,
-): vNode is VElement<T> {
+export function isVElement<T>(vNode: undefined | null | VBase): vNode is VElement<T> {
   return vNode?.type === VType.ELEMENT;
 }
 
-export function isVFragment<T>(
-  vNode: undefined | null | VBase,
-): vNode is VFragment<T> {
+export function isVFragment<T>(vNode: undefined | null | VBase): vNode is VFragment<T> {
   return vNode?.type === VType.FRAGMENT;
 }
 
@@ -241,7 +189,7 @@ export function isVSignal(node: JSX.Element): node is VSignal {
   return node instanceof Signal;
 }
 
-export function flushCleanups(vNode: HasVCleanup) {
+export function flushCleanups(vNode: HasVCleanup): void {
   for (const cleanup of vNode[VNodeProps.CLEANUP]) {
     cleanup.cleanup();
   }
@@ -255,7 +203,7 @@ export function flushCleanups(vNode: HasVCleanup) {
  * component re-render subscriptions are drained per update pass by
  * cleanup().
  */
-export function flushSubtreeCleanups(vNode: VNode<unknown>) {
+export function flushSubtreeCleanups(vNode: VNode<unknown>): void {
   if (isVText(vNode)) {
     flushCleanups(vNode);
   }
@@ -267,7 +215,7 @@ export function flushSubtreeCleanups(vNode: VNode<unknown>) {
   }
 }
 
-export function cleanup(vNode: VNode<unknown>) {
+export function cleanup(vNode: VNode<unknown>): void {
   if (isVComponent(vNode)) {
     flushCleanups(vNode);
     cleanup(vNode[VNodeProps.AST]);
@@ -287,9 +235,7 @@ export function snapshot<T>(vNode: VNode<T>): VNode<T> {
     };
   }
   if (isVElement(vNode)) {
-    const copyChildren = vNode[VNodeProps.CHILDREN]?.map((child) =>
-      snapshot(child)
-    );
+    const copyChildren = vNode[VNodeProps.CHILDREN]?.map((child) => snapshot(child));
     return { ...vNode, [VNodeProps.CHILDREN]: copyChildren };
   }
   if (isVComponent(vNode)) {
@@ -297,9 +243,7 @@ export function snapshot<T>(vNode: VNode<T>): VNode<T> {
     return { ...vNode, [VNodeProps.AST]: copyAst };
   }
   if (isVFragment(vNode)) {
-    const copyChildren = vNode[VNodeProps.CHILDREN]?.map((child) =>
-      snapshot(child)
-    );
+    const copyChildren = vNode[VNodeProps.CHILDREN]?.map((child) => snapshot(child));
     return {
       ...vNode,
       [VNodeProps.CHILDREN]: copyChildren,
@@ -308,9 +252,7 @@ export function snapshot<T>(vNode: VNode<T>): VNode<T> {
   return vNode;
 }
 
-export function childrenFrom(
-  fragment: JSX.ComponentNode<0> | JSX.Element[],
-): JSX.Element {
+export function childrenFrom(fragment: JSX.ComponentNode<0> | JSX.Element[]): JSX.Element {
   // Array based fragment
   if (isArray(fragment)) return fragment;
 
@@ -318,11 +260,7 @@ export function childrenFrom(
   return fragment.props.children ?? [];
 }
 
-export function keyFromNode(
-  node:
-    | JSX.Element[]
-    | JSX.Element,
-): string | number | undefined {
+export function keyFromNode(node: JSX.Element[] | JSX.Element): string | number | undefined {
   if (isArray(node) || isTemplateNode(node)) return undefined;
 
   if (isFragmentNode(node) || isComponentNode(node) || isElementNode(node)) {

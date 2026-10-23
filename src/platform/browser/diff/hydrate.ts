@@ -11,26 +11,23 @@ import {
   VNodeProps,
   type VText,
 } from "../../../v-node/mod.ts";
-import {
-  type AttachmentRef,
-  AttachmentType,
-  type ParentAttachmentRef,
-} from "./attachment-ref.ts";
+import { toText } from "../../../utils/text.ts";
+import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { render } from "./render.ts";
 import { setAttribute } from "./types/attribute.ts";
-import type {
-  LinkComponentChangeSet,
-  MountComponentChangeSet,
-} from "./types/component.ts";
-import type {
-  LinkElementChangeSet,
-  ReplaceElementChangeSet,
-} from "./types/element.ts";
+import type { LinkComponentChangeSet, MountComponentChangeSet } from "./types/component.ts";
+import type { LinkElementChangeSet, ReplaceElementChangeSet } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
 import type { LinkTextChangeSet, ReplaceTextChangeSet } from "./types/text.ts";
+
+/**
+ * What's left of server text nodes that hydration split for a text vNode
+ * (see `text()`): only the next text vNode takes it.
+ */
+const remainders = new WeakSet<Node>();
 
 export function hydrate(
   vNode: VNode<Node>,
@@ -50,16 +47,15 @@ export function hydrate(
       return fragment(vNode, nodes, attachmentRef);
     }
 
+    if (isVText(vNode)) {
+      return text(vNode, nodes, attachmentRef);
+    }
+
+    dropRemainder(nodes);
     const node = nodes.shift();
 
-    if (node) {
-      if (isVElement(vNode)) {
-        return element(vNode, node, attachmentRef);
-      }
-
-      if (isVText(vNode)) {
-        return text(vNode, node, attachmentRef);
-      }
+    if (node && isVElement(vNode)) {
+      return element(vNode, node, attachmentRef);
     }
   }
 
@@ -72,7 +68,7 @@ function component(
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   return [
-    <LinkComponentChangeSet> {
+    <LinkComponentChangeSet>{
       [Props.Type]: Type.Component,
       [Props.Action]: Action.Link,
       [Props.Payload]: {
@@ -81,7 +77,7 @@ function component(
       },
     },
     ...hydrate(vComponent[VNodeProps.AST], nodes, attachmentRef),
-    <MountComponentChangeSet> {
+    <MountComponentChangeSet>{
       [Props.Type]: Type.Component,
       [Props.Action]: Action.Mount,
       [Props.Payload]: {
@@ -115,40 +111,32 @@ function element(
 
   // Replace dom node with effective vnode type
   if (node.nodeName.toLowerCase() !== vElement[VNodeProps.TAG].toLowerCase()) {
-    changes.push(
-      <ReplaceElementChangeSet> {
-        [Props.Type]: Type.Element,
-        [Props.Action]: Action.Replace,
-        [Props.Payload]: { vElement, node, attachmentRef },
-      },
-    );
+    changes.push(<ReplaceElementChangeSet>{
+      [Props.Type]: Type.Element,
+      [Props.Action]: Action.Replace,
+      [Props.Payload]: { vElement, node, attachmentRef },
+    });
     skipChildren = true;
   } else {
-    changes.push(
-      <LinkElementChangeSet> {
-        [Props.Type]: Type.Element,
-        [Props.Action]: Action.Link,
-        [Props.Payload]: { vElement, node, attachmentRef },
-      },
-    );
+    changes.push(<LinkElementChangeSet>{
+      [Props.Type]: Type.Element,
+      [Props.Action]: Action.Link,
+      [Props.Payload]: { vElement, node, attachmentRef },
+    });
   }
 
   // Attach events to the dom node
   vElement[VNodeProps.EVENT_REFS]?.forEach((eventRef) => {
-    changes.push(
-      <CreateEventChangeSet> {
-        [Props.Type]: Type.Event,
-        [Props.Action]: Action.Create,
-        [Props.Payload]: { vNode: vElement, ...eventRef },
-      },
-    );
+    changes.push(<CreateEventChangeSet>{
+      [Props.Type]: Type.Event,
+      [Props.Action]: Action.Create,
+      [Props.Payload]: { vNode: vElement, ...eventRef },
+    });
   });
 
   for (const prop in vElement[VNodeProps.PROPS]) {
     if (prop === "children") continue;
-    changes.push(
-      ...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement),
-    );
+    changes.push(...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement));
   }
 
   const nodes = skipChildren ? undefined : [...node.childNodes];
@@ -167,48 +155,71 @@ function element(
       }),
     );
   });
+  if (nodes) dropRemainder(nodes);
 
   return changes;
 }
 
+/**
+ * Hydrates `vText` with the first of `nodes`. The browser parses text that
+ * the server wrote next to other text as one text node, and empty text as
+ * no node at all (spec #132). So a text node that starts with the text is
+ * split, its remainder left for the next text vNode, and empty text before
+ * another node gets a new text node, so the next vNode keeps its node.
+ */
 function text(
   vText: VText<Node>,
-  node: Node,
+  nodes: Node[],
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
-  const changeSet: ChangeSet<unknown>[] = [];
-  const text = vText[VNodeProps.TEXT];
+  const text = toText(vText[VNodeProps.TEXT]);
+  const next = nodes[0];
+  let node: Node;
+  let matches = true;
 
-  if (
-    node instanceof Text &&
-    (node.textContent === text ||
-      (isVSignal(text) && node.textContent === text.get()))
-  ) {
-    changeSet.push(
-      <LinkTextChangeSet> {
-        [Props.Type]: Type.Text,
-        [Props.Action]: Action.Link,
-        [Props.Payload]: {
-          vText,
-          node: node,
-          attachmentRef,
-        },
-      },
-    );
+  if (next instanceof Text && next.data.startsWith(text)) {
+    node = nodes.shift()!;
+    if (next.data.length > text.length) {
+      const remainder = next.splitText(text.length);
+      remainders.add(remainder);
+      nodes.unshift(remainder);
+    }
+  } else if (text === "" && next.parentNode) {
+    node = next.parentNode.insertBefore(new Text(""), next);
   } else {
-    // Attach node without moving the
-    vText[VNodeProps.NODE_REF] = node;
-    changeSet.push(
-      <ReplaceTextChangeSet> {
-        [Props.Type]: Type.Text,
-        [Props.Action]: Action.Replace,
-        [Props.Payload]: {
-          vText,
-          attachmentRef,
-        },
-      },
-    );
+    // The server rendered something else here.
+    node = nodes.shift()!;
+    matches = false;
   }
 
-  return changeSet;
+  if (matches && !isVSignal(vText[VNodeProps.TEXT])) {
+    return [
+      <LinkTextChangeSet>{
+        [Props.Type]: Type.Text,
+        [Props.Action]: Action.Link,
+        [Props.Payload]: { vText, node, attachmentRef },
+      },
+    ];
+  }
+
+  // Binds the node in place: to the text's signal, or to text that differs.
+  vText[VNodeProps.NODE_REF] = node;
+  return [
+    <ReplaceTextChangeSet>{
+      [Props.Type]: Type.Text,
+      [Props.Action]: Action.Replace,
+      [Props.Payload]: { vText, attachmentRef },
+    },
+  ];
+}
+
+/**
+ * Removes the remainder of a split text node from the DOM, if it's the
+ * first of `nodes`: no text vNode took it, as the server rendered other
+ * text than the browser.
+ */
+export function dropRemainder(nodes: Node[]): void {
+  if (!nodes[0] || !remainders.has(nodes[0])) return;
+  const remainder = nodes.shift()!;
+  remainder.parentNode?.removeChild(remainder);
 }

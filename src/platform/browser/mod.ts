@@ -5,16 +5,18 @@ import { create, setVNodeUpdater, update } from "../../v-node/sync.ts";
 import type { TransferState } from "../server/transfer-state.ts";
 // TODO: Move TransferState type to general location
 
-import {
-  attachmentRefFrom,
-  createRootAttachmentRef,
-} from "./diff/attachment-ref.ts";
+import { attachmentRefFrom, createRootAttachmentRef } from "./diff/attachment-ref.ts";
 import { diff } from "./diff/diff.ts";
 import { dispatch } from "./diff/dispatch.ts";
-import { hydrate } from "./diff/hydrate.ts";
+import { dropRemainder, hydrate } from "./diff/hydrate.ts";
+import { registerIslandModule, registerMountedIsland } from "./hot.ts";
+
+export { hotReplaceIsland } from "./hot.ts";
 
 type Island = {
   fn: JSX.Component;
+  /** The browser path of the island's module (`Launch` adds it). */
+  path?: string;
   // TODO: Define types of the props after Signals values are handled.
   props: Record<string, unknown>;
   islandId: string;
@@ -22,7 +24,7 @@ type Island = {
 
 export const IS_BROWSER: boolean = !!globalThis.window;
 
-export function launch(islands: Island[], transferState: TransferState) {
+export function launch(islands: Island[], transferState: TransferState): void {
   let hydrationDone = false;
   const queuedUpdates: (() => void)[] = [];
   setVNodeUpdater<Node>((component, vComponent, globalOptions) => {
@@ -49,9 +51,7 @@ export function launch(islands: Island[], transferState: TransferState) {
           runUpdate();
         } else {
           // TODO: Remove after validation.
-          console.warn(
-            "Dom update requested before hydration has finished. Queue it!",
-          );
+          console.warn("Dom update requested before hydration has finished. Queue it!");
           queuedUpdates.push(runUpdate);
         }
       },
@@ -62,20 +62,17 @@ export function launch(islands: Island[], transferState: TransferState) {
   });
 
   if (islands?.length) {
-    const iterator = document.createNodeIterator(
-      document.body,
-      NodeFilter.SHOW_COMMENT,
-      (node) => {
-        return isIslandStart(node)
-          ? NodeFilter.FILTER_ACCEPT
-          : NodeFilter.FILTER_REJECT;
-      },
-    );
+    for (const island of islands) {
+      if (island.path) registerIslandModule(island.path, island.fn);
+    }
+    const iterator = document.createNodeIterator(document.body, NodeFilter.SHOW_COMMENT, (node) => {
+      return isIslandStart(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    });
 
     let node: Node | null;
 
     // deno-lint-ignore no-cond-assign
-    while (node = iterator.nextNode()) {
+    while ((node = iterator.nextNode())) {
       const attachmentRef = createRootAttachmentRef(node);
 
       if (isIslandStart(node)) {
@@ -88,13 +85,13 @@ export function launch(islands: Island[], transferState: TransferState) {
               // Todo re-construct Signals
               ...island.props,
               children: findIslandChildren({ nodes, islandId, islands }),
-            });
-            const vNode = create<Node>(element, {
-              url: new URL(globalThis.window.location.href),
-              transferState,
-            });
+            }) as JSX.ComponentNode<JSX.Component>;
+            const options = { url: new URL(globalThis.window.location.href), transferState };
+            const vNode = create<Node>(element, options);
             if (isVComponent(vNode)) {
               dispatch(hydrate(vNode, nodes, attachmentRef));
+              dropRemainder(nodes);
+              registerMountedIsland({ element, vNode, options });
             }
           }
         }
@@ -108,21 +105,15 @@ export function launch(islands: Island[], transferState: TransferState) {
   }
 }
 
-function collectIslandNodes(
-  node: Comment,
-  islandId: string,
-): Node[] {
+function collectIslandNodes(node: Comment, islandId: string): Node[] {
   let nextNode: Node | null = node;
   const nodes: Node[] = [];
 
   while (
     // deno-lint-ignore no-cond-assign
-    nextNode = nextNode.nextSibling
+    (nextNode = nextNode.nextSibling)
   ) {
-    if (
-      isComment(nextNode) &&
-      isIslandEnd(nextNode, islandId)
-    ) {
+    if (isComment(nextNode) && isIslandEnd(nextNode, islandId)) {
       break;
     }
     nodes.push(nextNode);
@@ -131,9 +122,11 @@ function collectIslandNodes(
   return nodes;
 }
 
-function findIslandChildren(
-  props: { islandId: string; nodes: Node[]; islands: Island[] },
-): JSX.Element[] {
+function findIslandChildren(props: {
+  islandId: string;
+  nodes: Node[];
+  islands: Island[];
+}): JSX.Element[] {
   const children: JSX.Element = [];
   let isChild = false;
 
@@ -159,17 +152,13 @@ function findIslandChildren(
 
     if (!childrenFound) {
       if (isComment(node)) {
-        if (
-          isChildrenStartNode(props.islandId, node.textContent)
-        ) {
+        if (isChildrenStartNode(props.islandId, node.textContent)) {
           isChild = true;
           removeNode(node);
           continue;
         }
 
-        if (
-          isChildrenEndNode(props.islandId, node.textContent)
-        ) {
+        if (isChildrenEndNode(props.islandId, node.textContent)) {
           isChild = false;
           removeNode(node);
           continue;
@@ -181,11 +170,7 @@ function findIslandChildren(
           continue;
         }
 
-        if (
-          childIslandId &&
-          isIslandEnd(node, childIslandId) &&
-          isChild
-        ) {
+        if (childIslandId && isIslandEnd(node, childIslandId) && isChild) {
           const island = removeIslandFrom(props.islands, childIslandId);
           children.push(
             jsx(island.fn, {
@@ -230,11 +215,13 @@ function findIslandChildren(
 function createChild(node: Node, islands: Island[]): JSX.Element {
   if (isElement(node)) {
     // Convert element attributes to props
-    const props: JSX.ComponentProps = node.getAttributeNames()
-      .reduce((prev, current) => {
+    const props: JSX.ComponentProps = node.getAttributeNames().reduce(
+      (prev, current) => {
         prev[current] = node.getAttribute(current);
         return prev;
-      }, {} as Record<string, string | null>);
+      },
+      {} as Record<string, string | null>,
+    );
 
     const children: JSX.Element[] = [];
     let islandId: string | undefined = undefined;
@@ -288,44 +275,33 @@ function getIslandId(textContent: string | null): string | undefined {
   return textContent?.trim()?.split("_")[2];
 }
 function isIslandStart(node: Node): node is Comment {
-  return isComment(node) &&
-    (trim(node.textContent)?.startsWith("start_island") ?? false);
+  return isComment(node) && (trim(node.textContent)?.startsWith("start_island") ?? false);
 }
 function isIslandEnd(node: Node, islandId?: string): node is Comment {
   if (typeof islandId === "string") {
-    return isComment(node) &&
-      trim(node.textContent) === `end_island_${islandId}`;
+    return isComment(node) && trim(node.textContent) === `end_island_${islandId}`;
   }
-  return isComment(node) &&
-    (trim(node.textContent)?.startsWith("end_island") ?? false);
+  return isComment(node) && (trim(node.textContent)?.startsWith("end_island") ?? false);
 }
-function isChildrenStartNode(
-  islandId: string,
-  textContent: string | null,
-): boolean {
+function isChildrenStartNode(islandId: string, textContent: string | null): boolean {
   return trim(textContent) === `start_children_${islandId}`;
 }
-function isChildrenEndNode(
-  islandId: string,
-  textContent: string | null,
-): boolean {
+function isChildrenEndNode(islandId: string, textContent: string | null): boolean {
   return trim(textContent) === `end_children_${islandId}`;
 }
 
 function isComment(node: Node | null): node is Comment {
-  return (node?.nodeType === Node.COMMENT_NODE);
+  return node?.nodeType === Node.COMMENT_NODE;
 }
 function isElement(node: Node | null): node is Element {
-  return (node?.nodeType === Node.ELEMENT_NODE);
+  return node?.nodeType === Node.ELEMENT_NODE;
 }
 function isText(node: Node | null): node is Text {
   return node?.nodeType === Node.TEXT_NODE;
 }
 
 function removeIslandFrom(islands: Island[], islandId: string): Island {
-  const islandIndex = islands.findIndex((island) =>
-    island.islandId === islandId
-  );
+  const islandIndex = islands.findIndex((island) => island.islandId === islandId);
   const island = islands[islandIndex];
   islands.splice(islandIndex, 1);
   return island;
@@ -339,20 +315,16 @@ function removeNode(node?: Node) {
 }
 
 function removeIslandComments() {
-  const iterator = document.createNodeIterator(
-    document.body,
-    NodeFilter.SHOW_COMMENT,
-    (node) => {
-      return isIslandStart(node) || isIslandEnd(node)
-        ? NodeFilter.FILTER_ACCEPT
-        : NodeFilter.FILTER_REJECT;
-    },
-  );
+  const iterator = document.createNodeIterator(document.body, NodeFilter.SHOW_COMMENT, (node) => {
+    return isIslandStart(node) || isIslandEnd(node)
+      ? NodeFilter.FILTER_ACCEPT
+      : NodeFilter.FILTER_REJECT;
+  });
 
   let node: Node | null;
 
   // deno-lint-ignore no-cond-assign
-  while (node = iterator.nextNode()) {
+  while ((node = iterator.nextNode())) {
     const comment = node;
     queueMicrotask(() => {
       comment?.parentNode?.removeChild(comment);

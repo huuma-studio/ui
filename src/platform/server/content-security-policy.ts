@@ -20,20 +20,16 @@ export type ContentSecurityPolicyType =
   | "form-action"
   | "frame-ancestors";
 
-export type ContentSecurityPolicy =
-  & {
-    [Key in ContentSecurityPolicyType]?: string[];
-  }
-  & { nonce?: boolean };
+export type ContentSecurityPolicy = {
+  [Key in ContentSecurityPolicyType]?: string[];
+} & { nonce?: boolean };
 
 type ContentSecurityPolicyResult = {
   nonce: string | undefined;
   contentSecurityPolicy: string;
 };
 
-export function generateCSP(
-  policy?: ContentSecurityPolicy,
-): ContentSecurityPolicyResult {
+export function generateCSP(policy?: ContentSecurityPolicy): ContentSecurityPolicyResult {
   // Default to nonce=true if not provided
   const { nonce = true, ..._policy } = policy ?? {};
 
@@ -58,9 +54,9 @@ export function generateCSP(
     result.nonce = _nonce;
   }
 
-  result.contentSecurityPolicy = Object.entries(_policy).map(([key, value]) =>
-    `${key} ${value.join(" ")}`
-  ).join("; ");
+  result.contentSecurityPolicy = Object.entries(_policy)
+    .map(([key, value]) => `${key} ${value.join(" ")}`)
+    .join("; ");
 
   return result;
 }

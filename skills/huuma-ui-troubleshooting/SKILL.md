@@ -11,21 +11,21 @@ Use this skill when the agent (or user) hits a Huuma UI lint violation or runtim
 
 ### "remote function MUST be an async function export"
 
-- **Rule:** `.remote.ts` exports must be `export async function name(...)` (lint `async-remote-functions`, enforced by `jsr:@huuma/ui/lint`).
-- **Fix:** Convert `export const foo = async () => {}` or `export function foo()` to `export async function foo(...)`.
-- **How to verify:** run `deno lint` in your project (with the `jsr:@huuma/ui/lint` plugin configured in `deno.json`).
+- **Rule:** every value export of a `.remote.ts` module must be an async function (lint `async-remote-functions`, enforced by `@huuma/ui/lint`).
+- **Fix:** Make it async: `export async function foo(...)` or `export const foo = async (...) => {}`. Move non-function values (constants, classes) to another module.
+- **How to verify:** run your linter with `@huuma/ui/lint` (Oxlint, ESLint or `deno lint`); the dev server and `vite build` also fail on exports they can't turn into remote functions (`export *`, destructuring, classes, enums).
 
 ### "hooks not allowed in async components" / "No sync vnode scope found"
 
 - **Rule:** `$`-hooks (`$signal`, `$effect`, `$mount`, `$ref`, `$url`, `$route`, `$t`, etc.) run only in sync island scope.
 - **Fix:** Move the hook call out of the `async` function or before any `await`. Use a wrapper sync component and call the hook at the top level. For async data, use `resolver()` (from `@huuma/ui/hooks/scope`) in the server component and pass the result down as props.
-- **How to verify:** `deno lint` (lint `no-async-hook-calling`, via `jsr:@huuma/ui/lint`); the hook scope is provided by `@huuma/ui/hooks/scope`.
+- **How to verify:** your linter (lint `no-async-hook-calling`, via `@huuma/ui/lint`); the hook scope is provided by `@huuma/ui/hooks/scope`.
 
 ### "client-side does not support async jsx"
 
-- **Rule:** `.client.tsx` default export must not be `async` (lint `no-async-client-jsx`, enforced by `jsr:@huuma/ui/lint`).
+- **Rule:** `.client.tsx` default export must not be `async` (lint `no-async-client-jsx`, enforced by `@huuma/ui/lint`).
 - **Fix:** Make the island default export a sync component. Fetch/await data elsewhere (e.g. in a parent server component or via remote function).
-- **How to verify:** `deno lint`.
+- **How to verify:** your linter with `@huuma/ui/lint`.
 
 ### Event handler not firing in an island
 
@@ -55,14 +55,20 @@ Use this skill when the agent (or user) hits a Huuma UI lint violation or runtim
 - **Rule:** Signals use `.get()` methods; refs use `.get` property accessors. Signals come from `@huuma/ui/hooks/signal` / `@huuma/ui/signal`; refs from `@huuma/ui/hooks/ref` / `@huuma/ui/ref`.
 - **Fix:** Use `signal.get()` and `ref.get` consistently.
 
-### "No server code is allowed to be imported on the client side"
+### "… is server-only code and can't be imported in the browser"
 
-- **Rule:** `.server.ts`/`.server.tsx` files cannot be imported into client bundles.
-- **Fix:** Move shared logic into a non-`.server` file, or keep the import server-only.
+- **Rule:** `*.server.*` modules (any extension) can't be imported by browser code. The dev server and `vite build` fail and name the importer, e.g. an island.
+- **Fix:** Move shared logic into a non-`.server` file, or call the server-only code from a remote function (`*.remote.ts`) instead.
+
+### "requestContext() was called outside of a request"
+
+- **Rule:** `requestContext()` from `@huuma/ui/server` works only while a request runs, on the server: in remote functions, pages, layouts, the root, `metadata()`, resolvers, middleware, and code they call (including work they start, such as a `waitUntil()` promise).
+- **Cause:** a call at a module's top level (e.g. a client created at import time), or in an island running in the browser (lint `no-request-context-in-islands`).
+- **Fix:** Move the call into the function that handles the request. For islands, read the value in the page and pass it as a prop. In helpers that run in both places, check `hasRequestContext()` first.
 
 ## General debugging steps
 
-1. Run `deno lint` in your project and read the exact rule name reported by the `jsr:@huuma/ui/lint` plugin.
-2. Inspect the relevant public API with `deno doc jsr:@huuma/ui/<subpath>` (e.g. `deno doc jsr:@huuma/ui/hooks/scope`) or "Go to Definition" in your editor.
+1. Run your linter with the `@huuma/ui/lint` plugin and read the exact rule name it reports.
+2. Inspect the relevant public API with "Go to Definition" in your editor, `https://jsr.io/@huuma/ui/doc/<subpath>`, or `deno doc jsr:@huuma/ui/<subpath>` (e.g. `deno doc jsr:@huuma/ui/hooks/scope`).
 3. Verify which of the four boundary rules is violated (see `huuma-ui-foundation`).
 4. Apply the minimal fix that moves the code to the correct boundary (server component, island, or remote function).
