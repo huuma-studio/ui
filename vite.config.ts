@@ -48,8 +48,15 @@ export default defineConfig({
   },
   run: {
     tasks: {
-      // Runs every check JSR publish runs, including slow types.
-      "jsr:dry-run": { command: "jsr publish --dry-run", cache: false },
+      // Runs every check JSR publish runs, including slow types, for each
+      // package: @huuma/ui, then @huuma/ui-cloudflare.
+      "jsr:dry-run": {
+        command: [
+          "jsr publish --dry-run",
+          "jsr publish --dry-run --config packages/ui-cloudflare/deno.json",
+        ],
+        cache: false,
+      },
       pack: { command: ["vp pack", "node scripts/check-pack.ts"], cache: false },
     },
   },

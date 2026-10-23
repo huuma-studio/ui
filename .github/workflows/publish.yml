@@ -21,5 +21,9 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Publish package
+      - name: Publish @huuma/ui
         run: vp exec jsr publish
+
+      # After the core, which it imports at the same version.
+      - name: Publish @huuma/ui-cloudflare
+        run: vp exec jsr publish --config packages/ui-cloudflare/deno.json
