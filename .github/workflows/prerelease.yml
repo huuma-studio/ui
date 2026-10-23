@@ -1,5 +1,5 @@
 name: Publish pre-release to JSR
-# Publishes jsr.json's version from `next` on every push (every merged PR)
+# Publishes deno.json's version from `next` on every push (every merged PR)
 # when it's a pre-release (e.g. 0.3.0-beta.1). JSR skips a version that's
 # already published, so only a version bump publishes. JSR doesn't mark
 # pre-releases as latest, so apps only get one when they ask for it.
@@ -22,7 +22,7 @@ jobs:
       - name: Read the version
         id: version
         run: |
-          version=$(jq -r .version jsr.json)
+          version=$(jq -r .version deno.json)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           case "$version" in
             *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT"; echo "Publishing @huuma/ui@$version, unless it's already on JSR" ;;

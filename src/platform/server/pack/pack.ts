@@ -104,7 +104,7 @@ export function serveRemoteFunctions<T extends UIAppContext>(
 /**
  * @internal Not part of the public `@huuma/ui` API. Exported only so it can
  * be unit-tested directly; `mod.ts` does not re-export it and `pack.ts` is
- * not an entry point in `jsr.json`'s exports map.
+ * not an entry point in `deno.json`'s exports map.
  *
  * Invokes a single remote function and produces the HTTP response. Extracted
  * from the route handler so the return-value normalization and serialization

@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 
 // File-system discovery of pages, layouts, middlewares, islands and remote
 // functions, for the Vite plugin (`src/vite`); not an entry point in
-// `jsr.json`'s exports map.
+// `deno.json`'s exports map.
 
 export interface FileImport {
   name: string;
