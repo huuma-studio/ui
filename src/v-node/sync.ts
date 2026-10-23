@@ -138,7 +138,7 @@ export function update<T>(
     return nextVNode;
   }
 
-  // A node matching no branch (e.g. NaN, a function, a foreign object)
+  // A node matching no branch (e.g. a function, a foreign object)
   // still replaces the previous subtree - tear it down like every other
   // replacement branch.
   destroy(vNode);
