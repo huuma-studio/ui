@@ -9,12 +9,6 @@ import { SERVER_ID } from "./entry.ts";
 import { RUNTIME_ID } from "./islands.ts";
 import { assetsDirectory, writeWorkersFiles } from "./workers.ts";
 
-/**
- * Starts the built app on Node, serving the client build's files too:
- * `dist/server/server.js`. Server only, in the production build.
- */
-export const NODE_ID = "virtual:huuma/node";
-
 // The files with a content hash in their name that a server build
 // emitted, for `buildApp`, which builds that environment and moves the
 // files to the client build.
@@ -33,9 +27,7 @@ export const WORKER_ID = "virtual:huuma/worker";
  */
 export const SERVER_READY = "huuma:server-ready";
 
-// The modules this plugin generates for the server build.
-const ENTRIES = new RegExp(`^(${NODE_ID}|${WORKER_ID})$`);
-const RESOLVED_ENTRIES = new RegExp(`^\0(${NODE_ID}|${WORKER_ID})$`);
+const RESOLVED_WORKER_ID = `\0${WORKER_ID}`;
 
 /**
  * The production build (`vite build`): the client environment builds the
@@ -44,9 +36,9 @@ const RESOLVED_ENTRIES = new RegExp(`^\0(${NODE_ID}|${WORKER_ID})$`);
  * files' paths are their URLs' paths;
  * then the ssr environment builds the app into `dist/server`, reading the
  * client's manifest for the islands' browser paths: `app.js` exports the
- * app, `server.js` starts it on Node, `worker.js` is it as a Cloudflare
- * Worker. The client build also gets the files Workers reads
- * (`workers.ts`).
+ * app, `worker.js` is it as a Cloudflare Worker, and the adapter adds its
+ * entries, e.g. `server.js` for Node. The client build also gets the files
+ * Workers reads (`workers.ts`).
  */
 export function buildPlugin(root: () => string): Plugin {
   // The islands' files, which the client build emits as chunks.
@@ -84,47 +76,28 @@ export function buildPlugin(root: () => string): Plugin {
               // Files the server code imports, e.g. an image a page shows:
               // `buildApp` moves them to the client build, which serves them.
               emitAssets: true,
-              rolldownOptions: { input: { app: SERVER_ID, server: NODE_ID, worker: WORKER_ID } },
+              rolldownOptions: { input: { app: SERVER_ID, worker: WORKER_ID } },
             },
           },
         },
       } satisfies UserConfig;
     },
     resolveId: {
-      filter: { id: ENTRIES },
-      handler(id) {
-        return `\0${id}`;
+      filter: { id: new RegExp(`^${WORKER_ID}$`) },
+      handler() {
+        return RESOLVED_WORKER_ID;
       },
     },
     load: {
-      filter: { id: RESOLVED_ENTRIES },
-      async handler(id) {
-        const entry = id.slice(1);
-        if (
-          this.environment.config.consumer !== "server" ||
-          (this.environment.mode !== "build" && entry !== WORKER_ID)
-        ) {
-          this.error(`${entry} starts the built app and is only part of the server build.`);
+      filter: { id: new RegExp(`^\0${WORKER_ID}$`) },
+      handler() {
+        if (this.environment.config.consumer !== "server") {
+          this.error(`${WORKER_ID} is the app as a Worker and is server only.`);
         }
         const config = this.environment.getTopLevelConfig();
-        if (entry === WORKER_ID) {
-          const dev = this.environment.mode === "dev";
-          return {
-            code: workerModule(appBase(config.base), dev ? config.base : undefined),
-            moduleType: "js",
-          };
-        }
-        const client = resolve(config.root, config.environments.client.build.outDir);
-        const server = resolve(config.root, this.environment.config.build.outDir);
-        // A URL relative to `server.js`: each directory's name encoded,
-        // as it can come from the base, e.g. `sale%` from `/sale%25/`.
-        const url = relative(server, client).split(sep).map(encodeURIComponent).join("/");
+        const dev = this.environment.mode === "dev";
         return {
-          code: nodeModule({
-            client: `${url}/`,
-            base: appBase(config.base),
-            hashed: (await readClientBuild(config)).hashed,
-          }),
+          code: workerModule(appBase(config.base), dev ? config.base : undefined),
           moduleType: "js",
         };
       },
@@ -342,24 +315,6 @@ function fileNamePattern(pattern: string): RegExp | undefined {
     })
     .join("");
   return new RegExp(`^${source}$`);
-}
-
-/**
- * Generates the source of `virtual:huuma/node`. `client` is the client
- * build's directory relative to the server build's.
- */
-export function nodeModule(options: { client: string; base: string; hashed: string[] }): string {
-  return [
-    `import app from ${JSON.stringify(SERVER_ID)};`,
-    'import { start } from "@huuma/ui/vite/node";',
-    "",
-    "await start(app, {",
-    `  client: new URL(${JSON.stringify(options.client)}, import.meta.url),`,
-    `  base: ${JSON.stringify(options.base)},`,
-    `  hashed: ${JSON.stringify(options.hashed)},`,
-    "});",
-    "",
-  ].join("\n");
 }
 
 // Whether Vite empties the client build's `outDir` before it builds:

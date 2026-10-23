@@ -7,19 +7,24 @@
  * runtime import could install a second copy of Vite next to the app's.
  * Runtime APIs come through the hook arguments instead.
  */
-import type { Plugin } from "vite";
+import type { Plugin, PluginOption } from "vite";
 import { resolve } from "node:path";
 
+import type { HuumaAdapter } from "./adapter.ts";
 import { buildPlugin } from "./build.ts";
 import { devPlugin } from "./dev.ts";
 import { type DecoratorsOption, decoratorsPlugin } from "./decorators.ts";
 import { entryPlugin } from "./entry.ts";
 import { denoEnvPlugin } from "./env.ts";
 import { islandsPlugin } from "./islands.ts";
+import { node } from "./node-adapter.ts";
 import { remotePlugin } from "./remote.ts";
 import { routesPlugin } from "./routes.ts";
 import { serverOnlyPlugin } from "./server-only.ts";
 import { wranglerAssetsPlugin } from "./workers.ts";
+
+export type { HuumaAdapter } from "./adapter.ts";
+export { node } from "./node-adapter.ts";
 
 /** Options of the Huuma UI plugin. */
 export interface HuumaOptions {
@@ -43,6 +48,11 @@ export interface HuumaOptions {
    * it off: set `oxc.decorator.legacy: true` for legacy decorators.
    */
   decorators?: DecoratorsOption;
+  /**
+   * The platform the app runs on. Defaults to `node()`: `vite build` adds
+   * `dist/server/server.js`, which starts the app on Node.
+   */
+  adapter?: HuumaAdapter;
 }
 
 /**
@@ -56,7 +66,7 @@ export interface HuumaOptions {
  * export default defineConfig({ plugins: [huuma()] });
  * ```
  */
-export function huuma(options: HuumaOptions = {}): Plugin[] {
+export function huuma(options: HuumaOptions = {}): PluginOption[] {
   // Vite's resolved config, known once Vite resolved it.
   const app = { root: "", base: "/" };
   const serverEntry = () => resolve(app.root, options.server ?? "server.ts");
@@ -78,6 +88,8 @@ export function huuma(options: HuumaOptions = {}): Plugin[] {
     devPlugin(serverEntry),
     buildPlugin(() => app.root),
     wranglerAssetsPlugin(),
+    // After Huuma's own: see `HuumaAdapter.plugins`.
+    ...((options.adapter ?? node()).plugins ?? []),
   ];
 }
 

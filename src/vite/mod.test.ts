@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "vite-plus/test";
-import { createServer, type PluginOption, type ViteDevServer } from "vite";
+import { createServer, type Plugin, type PluginOption, type ViteDevServer } from "vite";
 
-import { huuma } from "./mod.ts";
+import { huuma, node } from "./mod.ts";
 
 describe(huuma.name, () => {
   let server: ViteDevServer | undefined;
@@ -14,6 +14,22 @@ describe(huuma.name, () => {
     // Type-level: fails `vp check` if the plugins stop matching Vite's types.
     const option: PluginOption = huuma();
     expect(Array.isArray(option)).toStrictEqual(true);
+  });
+
+  test("adds node() by default, after Huuma's own plugins", () => {
+    const names = (huuma() as Plugin[]).map((plugin) => plugin.name);
+    expect(names[names.length - 1]).toStrictEqual("huuma:node");
+    expect(node().plugins!.map((plugin) => (plugin as Plugin).name)).toStrictEqual(["huuma:node"]);
+  });
+
+  test("adds an adapter's plugins after Huuma's own, instead of node()", () => {
+    const own: Plugin = { name: "own" };
+    const plugins = huuma({ adapter: { name: "test", plugins: [own] } }) as Plugin[];
+    expect(plugins[plugins.length - 1]).toBe(own);
+    expect(plugins.slice(0, -1).every((plugin) => plugin.name.startsWith("huuma:"))).toStrictEqual(
+      true,
+    );
+    expect(plugins.map((plugin) => plugin.name)).not.toContain("huuma:node");
   });
 
   test("configures a custom app with Huuma's JSX runtime", async () => {
