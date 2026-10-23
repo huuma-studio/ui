@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
-import { createLogger, createServer, DevEnvironment, type ViteDevServer } from "vite";
+import { createLogger, createServer, type Plugin, type ViteDevServer } from "vite";
 import { connect } from "node:net";
 import { fileURLToPath } from "node:url";
 
@@ -219,34 +219,23 @@ describe("dev server with a base", () => {
   });
 });
 
-test("leaves requests to a platform's plugin that runs the app itself", async () => {
-  // Like @cloudflare/vite-plugin's environment in workerd: neither
-  // runnable in this process nor fetchable.
+test("leaves requests to an adapter that runs the app in the platform's runtime", async () => {
+  const platform: Plugin = {
+    name: "platform",
+    configureServer(server) {
+      return () => {
+        server.middlewares.use((_req, res) => {
+          res.end("platform");
+        });
+      };
+    },
+  };
   const server = await createServer({
     root: fixture,
     configFile: false,
     logLevel: "silent",
     server: { host: "127.0.0.1", port: 0 },
-    environments: {
-      ssr: {
-        dev: {
-          createEnvironment: (name, config) => new DevEnvironment(name, config, { hot: true }),
-        },
-      },
-    },
-    plugins: [
-      huuma(),
-      {
-        name: "platform",
-        configureServer(server) {
-          return () => {
-            server.middlewares.use((_req, res) => {
-              res.end("platform");
-            });
-          };
-        },
-      },
-    ],
+    plugins: [huuma({ adapter: { name: "test", dev: "platform", plugins: [platform] } })],
   });
   try {
     await server.listen();

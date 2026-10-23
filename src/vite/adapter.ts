@@ -23,6 +23,15 @@ export interface HuumaAdapter {
   /** The adapter's name, e.g. `"node"`, for messages. */
   name: string;
   /**
+   * Who runs the app's server code in dev: Huuma, in Vite's process with
+   * the ssr environment's module runner (`"runner"`, the default), or the
+   * adapter's plugins in the platform's runtime (`"platform"`), e.g.
+   * @cloudflare/vite-plugin in workerd. With `"platform"`, those plugins
+   * serve the requests, and the platform's entry sends `SERVER_READY`
+   * each time it's evaluated.
+   */
+  dev?: "runner" | "platform";
+  /**
    * The adapter's Vite plugins. `huuma()` puts them after its own, so
    * their `config` hooks see Huuma's config, e.g. its `builder.buildApp`
    * and the environments' `outDir`.

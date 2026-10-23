@@ -37,6 +37,7 @@ export interface CloudflareOptions extends Omit<PluginConfig, "viteEnvironment">
 export function cloudflare(options: CloudflareOptions = {}): HuumaAdapter {
   return {
     name: "cloudflare",
+    dev: "platform",
     plugins: [
       cloudflarePlugin({
         ...options,

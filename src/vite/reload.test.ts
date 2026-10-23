@@ -81,13 +81,13 @@ function platform(): Plugin {
 }
 
 describe.each([
-  { mode: "Node", adapter: () => undefined, platformOwned: false },
+  { mode: "Node", adapter: () => undefined, inPlatform: false },
   {
     mode: "a platform's runtime",
-    adapter: () => ({ name: "test", plugins: [platform()] }),
-    platformOwned: true,
+    adapter: () => ({ name: "test", dev: "platform" as const, plugins: [platform()] }),
+    inPlatform: true,
   },
-])("dev server after changes, in $mode", ({ adapter, platformOwned }) => {
+])("dev server after changes, in $mode", ({ adapter, inPlatform }) => {
   // A copy of the basic fixture, inside test/fixtures so `@huuma/ui` still
   // resolves to this repo.
   let root: string;
@@ -151,7 +151,7 @@ describe.each([
     expect((await page("/about")).html).toContain("<h1>About us</h1>");
   });
 
-  test.runIf(platformOwned)("the browser reloads once the app was evaluated again", async () => {
+  test.runIf(inPlatform)("the browser reloads once the app was evaluated again", async () => {
     await page("/about");
     events.length = 0;
 

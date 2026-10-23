@@ -85,7 +85,7 @@ export function huuma(options: HuumaOptions = {}): PluginOption[] {
       () => app.root,
     ),
     entryPlugin(() => ({ server: serverEntry(), base: app.base })),
-    devPlugin(serverEntry),
+    devPlugin(serverEntry, adapter),
     buildPlugin(() => app.root, adapter),
     // After Huuma's own: see `HuumaAdapter.plugins`.
     ...(adapter.plugins ?? []),
