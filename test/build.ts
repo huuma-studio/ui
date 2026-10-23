@@ -80,33 +80,31 @@ export async function startServer(root: string): Promise<{ origin: string; serve
 }
 
 /**
- * Runs the build in Cloudflare's workerd with `wrangler dev`, from a
- * `wrangler.jsonc` with `config` that serves `dist/client` as static
- * assets, or from the config the build wrote at the path `config`, e.g.
- * `dist/server/wrangler.json` with @cloudflare/vite-plugin. Resolves with
- * its origin and a function that stops it.
+ * Runs the build in Cloudflare's workerd with `wrangler dev`, from the
+ * `wrangler.json` the build wrote with @cloudflare/vite-plugin. Resolves
+ * with its origin and a function that stops it.
  */
-export async function startWorker(
-  root: string,
-  config: Record<string, unknown> | string,
-): Promise<{ origin: string; stop: () => void }> {
-  if (typeof config !== "string") {
-    await writeFile(
-      join(root, "wrangler.jsonc"),
-      JSON.stringify({ name: "huuma-fixture", compatibility_date: "2026-10-01", ...config }),
-    );
-  }
+export async function startWorker(root: string): Promise<{ origin: string; stop: () => void }> {
   const [port, inspectorPort] = [await freePort(), await freePort()];
   // The CLI, which wrangler's package exports don't include.
   const wrangler = join(
     dirname(createRequire(import.meta.url).resolve("wrangler/package.json")),
     "bin/wrangler.js",
   );
-  const args = ["dev", "--ip", "127.0.0.1", "--port", String(port)];
-  if (typeof config === "string") args.push("--config", config);
   const server = spawn(
     process.execPath,
-    [wrangler, ...args, "--inspector-port", String(inspectorPort)],
+    [
+      wrangler,
+      "dev",
+      "--config",
+      "dist/server/wrangler.json",
+      "--ip",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      "--inspector-port",
+      String(inspectorPort),
+    ],
     {
       cwd: root,
       env: { ...process.env, WRANGLER_SEND_METRICS: "false", WRANGLER_LOG_PATH: root },

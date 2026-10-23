@@ -10,7 +10,7 @@ import { renderFixture } from "../../test/rendered.ts";
 import { remoteEndpoint } from "../platform/server/remote.ts";
 import { builtPath } from "./client-build.ts";
 import { hasHash, moveServerAssets } from "./build.ts";
-import { huuma } from "./mod.ts";
+import { huuma, node } from "./mod.ts";
 
 type Manifest = Record<string, { file: string; name?: string; imports?: string[] }>;
 
@@ -105,21 +105,13 @@ describe("vite build", () => {
     expect(html).not.toContain("@id/");
   });
 
-  test("keeps the manifest out of Cloudflare Workers' assets, and caches hashed files", async () => {
-    const ignore = await readFile(join(root, "dist/client/.assetsignore"), "utf8");
-    expect(ignore.split("\n")).toContain(".vite");
-    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
-    expect(headers).toContain("/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n");
-  });
-
-  test("builds the app as a Cloudflare Worker", async () => {
-    const worker = (
-      (await import(pathToFileURL(join(root, "dist/server/worker.js")).href)) as {
-        default: unknown;
-      }
-    ).default;
-    // At the base /, the Worker is the app.
-    expect(worker).toBe(app);
+  test("builds the app and Node's server, and no other platform's files", async () => {
+    const server = await readdir(join(root, "dist/server"));
+    expect(server).toStrictEqual(expect.arrayContaining(["app.js", "server.js"]));
+    expect(server).not.toContain("worker.js");
+    const client = await readdir(join(root, "dist/client"));
+    expect(client).not.toContain("_headers");
+    expect(client).not.toContain(".assetsignore");
   });
 
   test("renders the pages like the Deno pipeline", async () => {
@@ -178,10 +170,8 @@ describe("node dist/server/server.js", () => {
     expect(server).not.toContainEqual(expect.stringMatching(/\.svg$/));
   });
 
-  test("doesn't serve the client manifest or Workers' files", async () => {
-    for (const path of [".vite/manifest.json", "_headers", ".assetsignore"]) {
-      expect((await fetch(`${origin}/${path}`)).status, path).toStrictEqual(404);
-    }
+  test("doesn't serve the client manifest", async () => {
+    expect((await fetch(`${origin}/.vite/manifest.json`)).status).toStrictEqual(404);
   });
 });
 
@@ -215,14 +205,8 @@ describe("a build with a URL base, e.g. a CDN", () => {
 
   test("builds the client files below the base's path, as their URLs", async () => {
     const counter = manifest["app/counter.client.tsx"]!;
-    expect(await readdir(join(root, "dist/client"))).toStrictEqual(
-      [".assetsignore", "_headers", "shop"].sort(),
-    );
+    expect(await readdir(join(root, "dist/client"))).toStrictEqual(["shop"]);
     await expect(readFile(join(root, "dist/client/shop", counter.file))).resolves.toBeDefined();
-    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
-    expect(headers).toContain(
-      "/shop/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n",
-    );
   });
 
   test("serves the app and the client files below the base's path", async () => {
@@ -233,17 +217,6 @@ describe("a build with a URL base, e.g. a CDN", () => {
     expect(file.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
     const root = await fetch(`${origin}/`, { redirect: "manual" });
     expect(root.headers.get("location")).toStrictEqual("/shop/");
-  });
-
-  test("builds a Worker that strips the base's path", async () => {
-    const worker = (
-      (await import(pathToFileURL(join(root, "dist/server/worker.js")).href)) as {
-        default: { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
-      }
-    ).default;
-    const response = await worker.fetch(new Request("http://localhost/shop/about"), {}, {});
-    expect(response.status).toStrictEqual(200);
-    expect(await response.text()).toContain("<h1>About</h1>");
   });
 
   test("calls remote functions on the app's server, not on the CDN", async () => {
@@ -278,49 +251,9 @@ test("takes a base without a trailing slash like one with it", async () => {
     expect(file.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
     const home = await fetch(`${origin}/`, { redirect: "manual" });
     expect(home.headers.get("location")).toStrictEqual("/shop/");
-    expect(await readFile(join(root, "dist/client/_headers"), "utf8")).toContain("/shop/assets/*");
-
-    const worker = (
-      (await import(pathToFileURL(join(root, "dist/server/worker.js")).href)) as {
-        default: { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
-      }
-    ).default;
-    const page = await worker.fetch(new Request("http://localhost/shop/about"), {}, {});
-    expect(await page.text()).toContain("<h1>About</h1>");
   } finally {
     process.env.NODE_ENV = nodeEnv;
     server?.kill();
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("removes the files of an earlier build with another base", async () => {
-  // Built at the base /, as before the app moved below /shop/.
-  const root = await buildFixture(".tmp-build-rebase-");
-  const build = async (base: string) => {
-    const builder = await createBuilder({
-      root,
-      configFile: false,
-      logLevel: "silent",
-      plugins: [huuma()],
-      base,
-    });
-    await builder.buildApp();
-  };
-  try {
-    await build("/shop/");
-    // No `assets/` from the base /, which Workers would serve at /assets/.
-    expect(await readdir(join(root, "dist/client"))).toStrictEqual(
-      [".assetsignore", "_headers", "shop"].sort(),
-    );
-
-    // Deeper: no `shop/assets/` from the base /shop/ either.
-    await build("/shop/admin/");
-    expect(await readdir(join(root, "dist/client"))).toStrictEqual(
-      [".assetsignore", "_headers", "shop"].sort(),
-    );
-    expect(await readdir(join(root, "dist/client/shop"))).toStrictEqual(["admin"]);
-  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -405,11 +338,9 @@ describe("a build from vite.config.ts, like `vite build`", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  test("tells server.js and Workers which files have a hash", async () => {
+  test("tells server.js which files have a hash", async () => {
     const server = await readFile(join(root, "dist/server/server.js"), "utf8");
     expect(server).toMatch(/hashed: \[\s*"assets\/[^"]+-[\w-]{8}\.js"/);
-    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
-    expect(headers).toContain("/assets/*\n");
   });
 });
 
@@ -450,11 +381,6 @@ describe("a build with unhashed file names", () => {
     expect(runtime.file).toMatch(/^assets\/runtime-.+\.js$/);
     const entry = await fetch(`${origin}/${runtime.file}`);
     expect(entry.headers.get("cache-control")).toStrictEqual("public, max-age=31536000, immutable");
-
-    // The same for Cloudflare Workers.
-    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
-    expect(headers).toContain("/assets/*\n");
-    expect(headers).not.toContain("counter.client");
   });
 });
 
@@ -462,13 +388,20 @@ describe("a build whose server files have no hash", () => {
   let root: string;
   let server: ChildProcess;
   let origin: string;
+  // What the adapter's afterBuild hears.
+  let hashed: ReadonlySet<string> | undefined;
   const nodeEnv = process.env.NODE_ENV;
 
   beforeAll(async () => {
     process.env.NODE_ENV = "production";
+    const adapter = node();
+    adapter.afterBuild = async (_builder, build) => {
+      hashed = build.hashed;
+    };
     root = await buildFixture(
       ".tmp-build-unhashed-server-",
       {
+        plugins: [huuma({ adapter })],
         environments: {
           ssr: {
             build: { rolldownOptions: { output: { assetFileNames: "assets/[name][extname]" } } },
@@ -485,18 +418,18 @@ describe("a build whose server files have no hash", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  test("caches the files the server imports briefly, also on Workers", async () => {
+  test("caches the files the server imports briefly", async () => {
     const page = await (await fetch(`${origin}/image`)).text();
     expect(page).toContain('src="/assets/logo.svg"');
     const image = await fetch(`${origin}/assets/logo.svg`);
     expect(image.status).toStrictEqual(200);
     expect(image.headers.get("cache-control")).toStrictEqual("public, max-age=3600");
+  });
 
-    // `/assets/*` would cover it: each hashed file gets its own rule.
-    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
-    expect(headers).not.toContain("/assets/*");
-    expect(headers).not.toContain("logo.svg");
-    expect(headers).toMatch(/^\/assets\/runtime-.+\.js$/m);
+  test("tells the adapter which files have a hash, not the server's", () => {
+    // For its platform, e.g. Workers' `_headers`.
+    expect([...hashed!]).toContainEqual(expect.stringMatching(/^assets\/runtime-.+\.js$/));
+    expect(hashed).not.toContain("assets/logo.svg");
   });
 });
 

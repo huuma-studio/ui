@@ -1,33 +1,18 @@
 import type { Environment, Plugin, Rolldown, UserConfig, ViteBuilder } from "vite";
-import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
-import { dirname, join, parse, relative, resolve, sep } from "node:path";
+import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { dirname, join, parse, resolve } from "node:path";
 
 import { listIslands } from "../platform/server/discover.ts";
-import { appBase, baseDirectory } from "./base.ts";
+import type { HuumaAdapter } from "./adapter.ts";
+import { baseDirectory } from "./base.ts";
 import { CLIENT_BUILD_FILE, readClientBuild, RUNTIME_INPUT } from "./client-build.ts";
 import { SERVER_ID } from "./entry.ts";
 import { RUNTIME_ID } from "./islands.ts";
-import { assetsDirectory, writeWorkersFiles } from "./workers.ts";
 
 // The files with a content hash in their name that a server build
 // emitted, for `buildApp`, which builds that environment and moves the
 // files to the client build.
 const serverHashed = new WeakMap<Environment, Set<string>>();
-
-/**
- * The app as a Cloudflare Worker: `dist/server/worker.js`. Server only. In
- * dev too, for a platform's plugin that runs the app itself, e.g.
- * `"main": "virtual:huuma/worker"` with `@cloudflare/vite-plugin`.
- */
-export const WORKER_ID = "virtual:huuma/worker";
-
-/**
- * What the Worker entry sends Vite in dev once it's evaluated, e.g. again
- * after a server change: the dev server reloads the browser then.
- */
-export const SERVER_READY = "huuma:server-ready";
-
-const RESOLVED_WORKER_ID = `\0${WORKER_ID}`;
 
 /**
  * The production build (`vite build`): the client environment builds the
@@ -36,11 +21,9 @@ const RESOLVED_WORKER_ID = `\0${WORKER_ID}`;
  * files' paths are their URLs' paths;
  * then the ssr environment builds the app into `dist/server`, reading the
  * client's manifest for the islands' browser paths: `app.js` exports the
- * app, `worker.js` is it as a Cloudflare Worker, and the adapter adds its
- * entries, e.g. `server.js` for Node. The client build also gets the files
- * Workers reads (`workers.ts`).
+ * app, and the adapter adds its entries, e.g. `server.js` for Node.
  */
-export function buildPlugin(root: () => string): Plugin {
+export function buildPlugin(root: () => string, adapter: HuumaAdapter): Plugin {
   // The islands' files, which the client build emits as chunks.
   const islands = new Set<string>();
   return {
@@ -52,7 +35,7 @@ export function buildPlugin(root: () => string): Plugin {
         // config's, not a plugin hook, so it replaces another plugin's
         // default, e.g. @cloudflare/vite-plugin's, which would build them
         // all again, the server first.
-        builder: { buildApp },
+        builder: { buildApp: (builder) => buildApp(builder, adapter) },
         environments: {
           client: {
             build: {
@@ -76,31 +59,11 @@ export function buildPlugin(root: () => string): Plugin {
               // Files the server code imports, e.g. an image a page shows:
               // `buildApp` moves them to the client build, which serves them.
               emitAssets: true,
-              rolldownOptions: { input: { app: SERVER_ID, worker: WORKER_ID } },
+              rolldownOptions: { input: { app: SERVER_ID } },
             },
           },
         },
       } satisfies UserConfig;
-    },
-    resolveId: {
-      filter: { id: new RegExp(`^${WORKER_ID}$`) },
-      handler() {
-        return RESOLVED_WORKER_ID;
-      },
-    },
-    load: {
-      filter: { id: new RegExp(`^\0${WORKER_ID}$`) },
-      handler() {
-        if (this.environment.config.consumer !== "server") {
-          this.error(`${WORKER_ID} is the app as a Worker and is server only.`);
-        }
-        const config = this.environment.getTopLevelConfig();
-        const dev = this.environment.mode === "dev";
-        return {
-          code: workerModule(appBase(config.base), dev ? config.base : undefined),
-          moduleType: "js",
-        };
-      },
     },
     async buildStart() {
       if (this.environment.config.consumer !== "client" || this.environment.mode !== "build") {
@@ -118,8 +81,8 @@ export function buildPlugin(root: () => string): Plugin {
         });
       }
     },
-    // The files with a content hash in their name, which `server.js` and
-    // Workers cache for good, go to a file next to Vite's manifest:
+    // The files with a content hash in their name, which adapters cache for
+    // good, e.g. `server.js`, go to a file next to Vite's manifest:
     // `vite build` with a config file gives each environment its own
     // instance of this plugin, so the server build can't share memory
     // with the client build.
@@ -149,20 +112,15 @@ export function buildPlugin(root: () => string): Plugin {
 /**
  * Builds the app: the client first, since the server reads its manifest,
  * then the ssr environment, whose imported files then move to the client
- * build. With @cloudflare/vite-plugin, its plugin shapes the ssr build:
- * `index.js` (the Worker that wraps `virtual:huuma/worker`) and the
- * `wrangler.json` to deploy it with.
+ * build. The adapter's `beforeBuild` and `afterBuild` run around it, and
+ * its plugins can shape the server build, e.g. @cloudflare/vite-plugin's
+ * into a Worker.
  */
-async function buildApp(builder: ViteBuilder): Promise<void> {
+async function buildApp(builder: ViteBuilder, adapter: HuumaAdapter): Promise<void> {
   const client = builder.environments.client;
   const outDir = resolve(client.config.root, client.config.build.outDir);
-  const assetsDir = assetsDirectory(outDir, client.config.base);
-  // Only in `dist/client`, which this plugin chose, not in a directory of the app's.
-  const ours = assetsDir === resolve(builder.config.root, builder.config.build.outDir, "client");
-  const { emptyOutDir, write } = client.config.build;
-  if (ours && write && emptiesOutDir(client.config.root, outDir, emptyOutDir)) {
-    await removeOtherBuilds(assetsDir, outDir);
-  }
+  const { write } = client.config.build;
+  if (write) await adapter.beforeBuild?.(builder);
   await builder.build(client);
   const ssr = builder.environments.ssr;
   const output = await builder.build(ssr);
@@ -177,18 +135,11 @@ async function buildApp(builder: ViteBuilder): Promise<void> {
       ssr.logger.info(`Moved ${moved.length} file(s) the server imports to the client build.`);
     }
   }
-  // After the move, so the rules see the moved files, and cache them for
-  // good only when the server build named them with a hash.
-  if (write) {
+  if (write && adapter.afterBuild) {
+    // The moved files have a hash when the server build named them with one.
     const hashed = new Set((await readClientBuild(builder.config)).hashed);
     for (const file of moved) if (serverHashed.get(ssr)?.has(file)) hashed.add(file);
-    await writeWorkersFiles({
-      assetsDir,
-      outDir,
-      publicDir: client.config.publicDir,
-      hashed,
-      warn: (message) => client.logger.warn(message),
-    });
+    await adapter.afterBuild(builder, { hashed });
   }
 }
 
@@ -315,61 +266,4 @@ function fileNamePattern(pattern: string): RegExp | undefined {
     })
     .join("");
   return new RegExp(`^${source}$`);
-}
-
-// Whether Vite empties the client build's `outDir` before it builds:
-// `emptyOutDir`, or by default when it's inside the project's root.
-function emptiesOutDir(root: string, outDir: string, emptyOutDir: boolean | null): boolean {
-  return emptyOutDir ?? outDir.startsWith(root.endsWith(sep) ? root : root + sep);
-}
-
-/**
- * Removes what an earlier build with another base left in `assetsDir`,
- * next to `outDir` in it, on each level: e.g. `dist/client/assets` from
- * the base `/`, or `dist/client/shop/assets` from `/shop/`, when the base
- * is now `/shop/admin/`. Workers would serve them. Vite empties `outDir`
- * itself.
- */
-async function removeOtherBuilds(assetsDir: string, outDir: string): Promise<void> {
-  if (assetsDir === outDir) return;
-  let directory = assetsDir;
-  for (const next of relative(assetsDir, outDir).split(sep)) {
-    let entries: string[];
-    try {
-      entries = await readdir(directory);
-    } catch {
-      // No earlier build this deep.
-      return;
-    }
-    for (const entry of entries) {
-      if (entry !== next) await rm(join(directory, entry), { recursive: true, force: true });
-    }
-    directory = join(directory, next);
-  }
-}
-
-/**
- * Generates the source of `virtual:huuma/worker`. In dev, `viteBase` is
- * Vite's `base`: the app's HTML gets Vite's client, and the module tells
- * the dev server once it's evaluated (`SERVER_READY`).
- */
-export function workerModule(base: string, viteBase?: string): string {
-  if (viteBase === undefined) {
-    return [
-      `import app from ${JSON.stringify(SERVER_ID)};`,
-      'import { worker } from "@huuma/ui/vite/runtime";',
-      "",
-      `export default worker(app, ${JSON.stringify(base)});`,
-      "",
-    ].join("\n");
-  }
-  return [
-    `import app from ${JSON.stringify(SERVER_ID)};`,
-    'import { withDevClient, worker } from "@huuma/ui/vite/runtime";',
-    "",
-    `export default worker(withDevClient(app, ${JSON.stringify(viteBase)}), ${JSON.stringify(base)});`,
-    "",
-    `import.meta.hot?.send(${JSON.stringify(SERVER_READY)});`,
-    "",
-  ].join("\n");
 }

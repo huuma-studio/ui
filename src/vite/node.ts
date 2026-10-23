@@ -75,7 +75,8 @@ function port(value: string | undefined): number | undefined {
  * Responds with a file of the client build for a `GET` or `HEAD` request
  * below `base`, or `undefined` if there is none. Files and directories
  * starting with `.` (like Vite's `.vite/manifest.json`) aren't served, and
- * neither is `_headers`, Cloudflare Workers' configuration for them.
+ * neither is `_headers`, other platforms' header rules for them, e.g.
+ * Cloudflare Workers', from Vite's public dir.
  * Files with hashed names (`hashed`) are cached for good, others for an
  * hour.
  */
@@ -107,7 +108,7 @@ export function clientFiles(
     ) {
       return;
     }
-    // At the base /, the build writes `_headers` next to the files.
+    // E.g. from Vite's public dir, for another platform.
     if (path === "_headers") return;
     const file = resolve(directory, path);
     if (!file.startsWith(directory + sep)) return;

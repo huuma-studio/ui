@@ -21,6 +21,7 @@
     "./i18n/middleware": "./src/i18n/middleware/mod.ts",
     "./lint": "./src/lint/mod.ts",
     "./vite": "./src/vite/mod.ts",
+    "./vite/adapter": "./src/vite/adapter.ts",
     "./vite/runtime": "./src/vite/runtime.ts",
     "./vite/node": "./src/vite/node.ts"
   },
@@ -31,9 +32,9 @@
   "devDependencies": {
     "@babel/core": "^8.0.7",
     "@babel/plugin-proposal-decorators": "^8.0.2",
-    "@cloudflare/vite-plugin": "^1.64.0",
     "@huuma/inject": "npm:@jsr/huuma__inject@^0.0.1",
     "@huuma/ui": "link:.",
+    "@huuma/ui-cloudflare": "workspace:*",
     "@types/node": "^24",
     "happy-dom": "^20.14.6",
     "jsr": "0.14.3",

@@ -1,14 +1,17 @@
 /*
  * Runs in the app's server (Vite's ssr environment), not in the Vite
- * config: the server entry the plugin generates imports it. Not meant for
+ * config: the server entry the plugin generates imports it, and so do
+ * adapters' entries, e.g. `@huuma/ui-cloudflare`'s Worker. Not meant for
  * app code; its API can change with the plugin.
  */
 import type { JSX } from "../jsx-runtime/mod.ts";
 import type { UIApp, UIAppContext } from "../platform/server/app.ts";
 import type { List } from "../platform/server/pack/mod.ts";
 import { packPages, serveRemoteFunctions } from "../platform/server/pack/pack.ts";
-import { belowBase } from "./base.ts";
 import { withViteClient } from "./vite-client.ts";
+
+// For adapters' entries, e.g. a Worker that strips the base like `server.js`.
+export { belowBase } from "./base.ts";
 
 /** What the plugin's virtual modules provide. */
 export interface Manifest {
@@ -61,31 +64,15 @@ export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest)
 }
 
 /** A handler with a Worker's `fetch`, like the app. */
-interface FetchHandler {
+export interface FetchHandler {
   fetch(request: Request, env?: unknown, ctx?: unknown): Promise<Response>;
 }
 
 /**
- * The app as a Cloudflare Worker (`worker.js`). Workers' static assets
- * serve the client build before the Worker runs, below the base too: the
- * build puts the files in `dist/client` at their URLs' paths. Below a
- * base other than `/`, e.g. `/shop/`, the Worker strips the base for the
- * app, like `server.js`.
- */
-export function worker(app: FetchHandler, base: string): FetchHandler {
-  if (base === "/") return app;
-  return {
-    fetch(request, env, ctx) {
-      const below = belowBase(request, base);
-      return below instanceof Response ? Promise.resolve(below) : app.fetch(below, env, ctx);
-    },
-  };
-}
-
-/**
- * Adds Vite's client to the app's HTML responses: the Worker entry in dev,
- * where the app runs in a platform's runtime and Huuma's Node middleware
- * never sees the response. `base` is Vite's `base`.
+ * Adds Vite's client to the app's HTML responses: for a platform's entry
+ * in dev, e.g. a Worker in workerd, where the app runs in the platform's
+ * runtime and Huuma's Node middleware never sees the response. `base` is
+ * Vite's `base`.
  */
 export function withDevClient(app: FetchHandler, base: string): FetchHandler {
   return {

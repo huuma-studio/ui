@@ -21,9 +21,8 @@ import { node } from "./node-adapter.ts";
 import { remotePlugin } from "./remote.ts";
 import { routesPlugin } from "./routes.ts";
 import { serverOnlyPlugin } from "./server-only.ts";
-import { wranglerAssetsPlugin } from "./workers.ts";
 
-export type { HuumaAdapter } from "./adapter.ts";
+export type { AppBuild, HuumaAdapter } from "./adapter.ts";
 export { node } from "./node-adapter.ts";
 
 /** Options of the Huuma UI plugin. */
@@ -70,6 +69,7 @@ export function huuma(options: HuumaOptions = {}): PluginOption[] {
   // Vite's resolved config, known once Vite resolved it.
   const app = { root: "", base: "/" };
   const serverEntry = () => resolve(app.root, options.server ?? "server.ts");
+  const adapter = options.adapter ?? node();
   return [
     configPlugin((config) => {
       app.root = config.root;
@@ -86,10 +86,9 @@ export function huuma(options: HuumaOptions = {}): PluginOption[] {
     ),
     entryPlugin(() => ({ server: serverEntry(), base: app.base })),
     devPlugin(serverEntry),
-    buildPlugin(() => app.root),
-    wranglerAssetsPlugin(),
+    buildPlugin(() => app.root, adapter),
     // After Huuma's own: see `HuumaAdapter.plugins`.
-    ...((options.adapter ?? node()).plugins ?? []),
+    ...(adapter.plugins ?? []),
   ];
 }
 

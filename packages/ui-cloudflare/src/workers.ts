@@ -4,11 +4,11 @@
  * both and uploads neither. They do for Workers what `server.js` does on
  * Node: keep `.vite/` private and cache the hashed files for good.
  */
-import type { Plugin } from "vite";
+import type { Plugin, ViteBuilder } from "vite";
+import type { AppBuild } from "@huuma/ui/vite/adapter";
+import { baseDirectory } from "@huuma/ui/vite/adapter";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
-
-import { baseDirectory } from "./base.ts";
 
 // The Cache-Control header `server.js` sends for hashed files.
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -159,4 +159,67 @@ export function wranglerAssetsPlugin(): Plugin {
       },
     },
   };
+}
+
+/**
+ * Before the client build (`beforeBuild`): removes what an earlier build
+ * with another base left in the directory Workers serves at `/`
+ * (`removeOtherBuilds()`). Only in `dist/client`, which Huuma chose, not
+ * in a directory of the app's, and only when Vite empties `outDir` too.
+ */
+export async function cleanClientBuild(builder: ViteBuilder): Promise<void> {
+  const client = builder.environments.client;
+  const outDir = resolve(client.config.root, client.config.build.outDir);
+  const assetsDir = assetsDirectory(outDir, client.config.base);
+  const ours = assetsDir === resolve(builder.config.root, builder.config.build.outDir, "client");
+  if (ours && emptiesOutDir(client.config.root, outDir, client.config.build.emptyOutDir)) {
+    await removeOtherBuilds(assetsDir, outDir);
+  }
+}
+
+/**
+ * After the build (`afterBuild`): `.assetsignore` and `_headers` for the
+ * client build, the moved files the server imports included.
+ */
+export async function writeClientFiles(builder: ViteBuilder, build: AppBuild): Promise<void> {
+  const client = builder.environments.client;
+  const outDir = resolve(client.config.root, client.config.build.outDir);
+  await writeWorkersFiles({
+    assetsDir: assetsDirectory(outDir, client.config.base),
+    outDir,
+    publicDir: client.config.publicDir,
+    hashed: build.hashed,
+    warn: (message) => client.logger.warn(message),
+  });
+}
+
+// Whether Vite empties the client build's `outDir` before it builds:
+// `emptyOutDir`, or by default when it's inside the project's root.
+function emptiesOutDir(root: string, outDir: string, emptyOutDir: boolean | null): boolean {
+  return emptyOutDir ?? outDir.startsWith(root.endsWith(sep) ? root : root + sep);
+}
+
+/**
+ * Removes what an earlier build with another base left in `assetsDir`,
+ * next to `outDir` in it, on each level: e.g. `dist/client/assets` from
+ * the base `/`, or `dist/client/shop/assets` from `/shop/`, when the base
+ * is now `/shop/admin/`. Workers would serve them. Vite empties `outDir`
+ * itself.
+ */
+async function removeOtherBuilds(assetsDir: string, outDir: string): Promise<void> {
+  if (assetsDir === outDir) return;
+  let directory = assetsDir;
+  for (const next of relative(assetsDir, outDir).split(sep)) {
+    let entries: string[];
+    try {
+      entries = await readdir(directory);
+    } catch {
+      // No earlier build this deep.
+      return;
+    }
+    for (const entry of entries) {
+      if (entry !== next) await rm(join(directory, entry), { recursive: true, force: true });
+    }
+    directory = join(directory, next);
+  }
 }

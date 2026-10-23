@@ -7,7 +7,7 @@ export default defineConfig({
     jsx: { runtime: "automatic", importSource: "@huuma/ui" },
   },
   test: {
-    include: ["src/**/*.test.{ts,tsx}", "test/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "test/*.test.ts", "packages/*/src/**/*.test.ts"],
     // The plugin tests run the Vite they import. That's Vite+'s copy
     // (pnpm's override installs it as `vite`), or with `HUUMA_VITE=upstream`
     // upstream Vite (`vite-upstream`, npm:vite@^8), like an app without Vite+.

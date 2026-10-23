@@ -1,17 +1,17 @@
-// `vite dev` with @cloudflare/vite-plugin, which runs the app's server code
-// in workerd: Huuma leaves it the requests, and the plugin runs
-// `virtual:huuma/worker`, named as `main` in wrangler.jsonc.
+// `vite dev` with the adapter, whose @cloudflare/vite-plugin runs the app's
+// server code in workerd: Huuma leaves it the requests, and the plugin
+// runs `virtual:huuma/worker`, the adapter's `main`.
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
-import { cloudflare } from "@cloudflare/vite-plugin";
+import { huuma } from "@huuma/ui/vite";
 import { createServer, type ViteDevServer } from "vite";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Browser } from "playwright-core";
 
-import { button, findChromium, launchChromium, open } from "../../test/browser.ts";
-import { fixtures, freePort } from "../../test/build.ts";
-import { remoteEndpoint } from "../platform/server/remote.ts";
-import { huuma } from "./mod.ts";
+import { button, findChromium, launchChromium, open } from "../../../test/browser.ts";
+import { fixtures, freePort } from "../../../test/build.ts";
+import { remoteEndpoint } from "../../../src/platform/server/remote.ts";
+import { cloudflare } from "./mod.ts";
 
 // Starting workerd takes a few seconds.
 const STARTUP = 60_000;
@@ -34,7 +34,6 @@ async function startDev(
     JSON.stringify({
       name: "huuma-fixture",
       compatibility_date: "2026-10-01",
-      main: "virtual:huuma/worker",
       kv_namespaces: [{ binding: "KV", id: "huuma-fixture" }],
     }),
   );
@@ -45,7 +44,7 @@ async function startDev(
     logLevel: "silent",
     // A fixed port, which a restart keeps.
     server: { host: "127.0.0.1", port: await freePort(), strictPort: true },
-    plugins: [huuma(), cloudflare({ viteEnvironment: { name: "ssr" }, inspectorPort: false })],
+    plugins: [huuma({ adapter: cloudflare({ inspectorPort: false }) })],
   });
   await server.listen();
   return { root, server };

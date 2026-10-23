@@ -20,6 +20,7 @@
     "./i18n/middleware": "./src/i18n/middleware/mod.ts",
     "./lint": "./src/lint/mod.ts",
     "./vite": "./src/vite/mod.ts",
+    "./vite/adapter": "./src/vite/adapter.ts",
     "./vite/runtime": "./src/vite/runtime.ts",
     "./vite/node": "./src/vite/node.ts"
   },
@@ -30,5 +31,6 @@
   "imports": {
     "@huuma/route": "jsr:@huuma/route@^0.3.1",
     "@huuma/validate": "jsr:@huuma/validate@^0.2.0"
-  }
+  },
+  "workspace": ["./packages/ui-cloudflare"]
 }

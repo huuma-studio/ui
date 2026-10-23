@@ -1,0 +1,13 @@
+{
+  "name": "@huuma/ui-cloudflare",
+  "private": true,
+  "description": "Development tooling only. @huuma/ui-cloudflare is published to JSR from deno.json.",
+  "type": "module",
+  "exports": {
+    ".": "./src/mod.ts",
+    "./runtime": "./src/runtime.ts"
+  },
+  "dependencies": {
+    "@cloudflare/vite-plugin": "^1.64.0"
+  }
+}

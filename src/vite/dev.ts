@@ -5,7 +5,7 @@
 import type { Connect, DevEnvironment, Plugin, RunnableDevEnvironment, ViteDevServer } from "vite";
 import { toRequest, writeResponse } from "@huuma/route/node";
 
-import { SERVER_READY } from "./build.ts";
+import { SERVER_READY } from "./adapter.ts";
 import { SERVER_ID } from "./entry.ts";
 import { ISLANDS_ID } from "./islands.ts";
 import { REMOTE_ID } from "./remote.ts";
@@ -42,7 +42,7 @@ export function devPlugin(serverEntry: () => string): Plugin {
     configureServer(server) {
       const ssr = server.environments.ssr;
       if (isPlatformOwned(ssr)) {
-        // The Worker entry was evaluated again: reloading the browser
+        // The platform's entry was evaluated again: reloading the browser
         // earlier, its request could reach the app while it's evaluated.
         ssr.hot.on(SERVER_READY, () => {
           if (!app.reload) return;
@@ -78,7 +78,7 @@ export function devPlugin(serverEntry: () => string): Plugin {
         !!server.environments.client.moduleGraph.getModulesByFile(file)?.size;
       if (isPlatformOwned(this.environment)) {
         // The module runner in the platform's runtime clears its whole
-        // cache and imports the Worker entry again, which then sends
+        // cache and imports the platform's entry again, which then sends
         // `SERVER_READY`: the in-runtime `runner.clearCache()`.
         if (!island) app.reload = true;
         this.environment.hot.send({ type: "full-reload" });
@@ -173,7 +173,7 @@ function isRunnable(environment: DevEnvironment): environment is RunnableDevEnvi
  * environment Huuma can neither run in this process (`runner`) nor send
  * requests to (`dispatchFetch`), like `@cloudflare/vite-plugin`'s in
  * workerd. That plugin serves the requests, and runs the app through the
- * entry it's given, e.g. `"main": "virtual:huuma/worker"`.
+ * entry it's given, e.g. `@huuma/ui-cloudflare`'s Worker.
  */
 function isPlatformOwned(environment: DevEnvironment): boolean {
   return !isRunnable(environment) && !("dispatchFetch" in environment);

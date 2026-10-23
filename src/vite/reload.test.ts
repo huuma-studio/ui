@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { remoteEndpoint } from "../platform/server/remote.ts";
-import { SERVER_READY } from "./build.ts";
+import { SERVER_READY } from "./adapter.ts";
 import { huuma } from "./mod.ts";
 
 const fixtures = fileURLToPath(new URL("../../test/fixtures", import.meta.url));
@@ -31,14 +31,26 @@ async function eventually(check: () => Promise<void>, timeout = 5_000): Promise<
   }
 }
 
+// The platform's entry: the app with Vite's client, which tells the dev
+// server once it's evaluated, like `@huuma/ui-cloudflare`'s Worker.
+const ENTRY = "virtual:test/platform-entry";
+const ENTRY_CODE = [
+  'import app from "virtual:huuma/server";',
+  'import { withDevClient } from "@huuma/ui/vite/runtime";',
+  'export default withDevClient(app, "/");',
+  `import.meta.hot?.send(${JSON.stringify(SERVER_READY)});`,
+].join("\n");
+
 /**
  * A platform's plugin, in this process: like `@cloudflare/vite-plugin`'s
  * in workerd, the ssr environment has no runner Huuma can use, and the
- * plugin runs the Worker entry with a module runner of its own.
+ * plugin runs the platform's entry with a module runner of its own.
  */
 function platform(): Plugin {
   return {
     name: "test:platform",
+    resolveId: (id) => (id === ENTRY ? `\0${ENTRY}` : undefined),
+    load: (id) => (id === `\0${ENTRY}` ? ENTRY_CODE : undefined),
     config: () => ({
       environments: {
         ssr: {
@@ -54,7 +66,7 @@ function platform(): Plugin {
       return () => {
         server.middlewares.use(async (req, res, next) => {
           try {
-            const { default: worker } = (await runner.import("virtual:huuma/worker")) as {
+            const { default: worker } = (await runner.import(ENTRY)) as {
               default: { fetch(request: Request, env: unknown, ctx: unknown): Promise<Response> };
             };
             const request = toRequest(req, new AbortController().signal);
@@ -69,9 +81,13 @@ function platform(): Plugin {
 }
 
 describe.each([
-  { mode: "Node", plugins: () => [], platformOwned: false },
-  { mode: "a platform's runtime", plugins: () => [platform()], platformOwned: true },
-])("dev server after changes, in $mode", ({ plugins, platformOwned }) => {
+  { mode: "Node", adapter: () => undefined, platformOwned: false },
+  {
+    mode: "a platform's runtime",
+    adapter: () => ({ name: "test", plugins: [platform()] }),
+    platformOwned: true,
+  },
+])("dev server after changes, in $mode", ({ adapter, platformOwned }) => {
   // A copy of the basic fixture, inside test/fixtures so `@huuma/ui` still
   // resolves to this repo.
   let root: string;
@@ -95,7 +111,7 @@ describe.each([
       configFile: false,
       logLevel: "silent",
       server: { host: "127.0.0.1", port: 0 },
-      plugins: [huuma(), ...plugins()],
+      plugins: [huuma({ adapter: adapter() })],
     });
     await server.listen();
     origin = new URL(server.resolvedUrls!.local[0]).origin;
