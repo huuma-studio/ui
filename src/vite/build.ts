@@ -1,4 +1,4 @@
-import type { Plugin, Rolldown, UserConfig, ViteBuilder } from "vite";
+import type { Environment, Plugin, Rolldown, UserConfig, ViteBuilder } from "vite";
 import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname, join, parse, relative, resolve, sep } from "node:path";
 
@@ -14,6 +14,11 @@ import { assetsDirectory, writeWorkersFiles } from "./workers.ts";
  * `dist/server/server.js`. Server only, in the production build.
  */
 export const NODE_ID = "virtual:huuma/node";
+
+// The files with a content hash in their name that a server build
+// emitted, for `buildApp`, which builds that environment and moves the
+// files to the client build.
+const serverHashed = new WeakMap<Environment, Set<string>>();
 
 /**
  * The app as a Cloudflare Worker: `dist/server/worker.js`. Server only. In
@@ -146,7 +151,15 @@ export function buildPlugin(root: () => string): Plugin {
     // instance of this plugin, so the server build can't share memory
     // with the client build.
     generateBundle(options, bundle) {
-      if (this.environment.config.consumer !== "client") return;
+      if (this.environment.config.consumer !== "client") {
+        // The server build's own, for `buildApp` in the same process.
+        const assets = Object.values(bundle).filter((file) => file.type === "asset");
+        serverHashed.set(
+          this.environment,
+          new Set(assets.filter((file) => hasHash(file, options)).map((file) => file.fileName)),
+        );
+        return;
+      }
       const hashed = Object.values(bundle)
         .filter((file) => hasHash(file, options, islands))
         .map((file) => file.fileName)
@@ -178,19 +191,11 @@ async function buildApp(builder: ViteBuilder): Promise<void> {
     await removeOtherBuilds(assetsDir, outDir);
   }
   await builder.build(client);
-  if (write) {
-    await writeWorkersFiles({
-      assetsDir,
-      outDir,
-      publicDir: client.config.publicDir,
-      hashed: new Set((await readClientBuild(builder.config)).hashed),
-      warn: (message) => client.logger.warn(message),
-    });
-  }
   const ssr = builder.environments.ssr;
   const output = await builder.build(ssr);
+  let moved: string[] = [];
   if (ssr.config.build.write) {
-    const moved = await moveServerAssets(
+    moved = await moveServerAssets(
       resolve(ssr.config.root, ssr.config.build.outDir),
       outDir,
       importedAssets(output),
@@ -198,6 +203,19 @@ async function buildApp(builder: ViteBuilder): Promise<void> {
     if (moved.length) {
       ssr.logger.info(`Moved ${moved.length} file(s) the server imports to the client build.`);
     }
+  }
+  // After the move, so the rules see the moved files, and cache them for
+  // good only when the server build named them with a hash.
+  if (write) {
+    const hashed = new Set((await readClientBuild(builder.config)).hashed);
+    for (const file of moved) if (serverHashed.get(ssr)?.has(file)) hashed.add(file);
+    await writeWorkersFiles({
+      assetsDir,
+      outDir,
+      publicDir: client.config.publicDir,
+      hashed,
+      warn: (message) => client.logger.warn(message),
+    });
   }
 }
 

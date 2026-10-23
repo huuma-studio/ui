@@ -458,6 +458,48 @@ describe("a build with unhashed file names", () => {
   });
 });
 
+describe("a build whose server files have no hash", () => {
+  let root: string;
+  let server: ChildProcess;
+  let origin: string;
+  const nodeEnv = process.env.NODE_ENV;
+
+  beforeAll(async () => {
+    process.env.NODE_ENV = "production";
+    root = await buildFixture(
+      ".tmp-build-unhashed-server-",
+      {
+        environments: {
+          ssr: {
+            build: { rolldownOptions: { output: { assetFileNames: "assets/[name][extname]" } } },
+          },
+        },
+      },
+      IMAGE_PAGE,
+    );
+    ({ origin, server } = await startServer(root));
+  });
+  afterAll(async () => {
+    process.env.NODE_ENV = nodeEnv;
+    server?.kill();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("caches the files the server imports briefly, also on Workers", async () => {
+    const page = await (await fetch(`${origin}/image`)).text();
+    expect(page).toContain('src="/assets/logo.svg"');
+    const image = await fetch(`${origin}/assets/logo.svg`);
+    expect(image.status).toStrictEqual(200);
+    expect(image.headers.get("cache-control")).toStrictEqual("public, max-age=3600");
+
+    // `/assets/*` would cover it: each hashed file gets its own rule.
+    const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+    expect(headers).not.toContain("/assets/*");
+    expect(headers).not.toContain("logo.svg");
+    expect(headers).toMatch(/^\/assets\/runtime-.+\.js$/m);
+  });
+});
+
 describe(hasHash.name, () => {
   const options = {
     entryFileNames: "assets/[name]-[hash].js",
