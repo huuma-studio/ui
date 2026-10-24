@@ -5,6 +5,9 @@
  * (`app.js`, a fetch handler); the adapter adds what its platform runs
  * around it, e.g. `server.js` on Node. `@huuma/ui/vite/adapter` exports
  * it for adapters, with what their entries and plugins need of the core.
+ *
+ * Experimental: only Huuma's own adapters use it so far, and it can
+ * change in any release before 0.3.0, also the hooks and what they get.
  */
 import type { PluginOption, ViteBuilder } from "vite";
 
@@ -14,11 +17,19 @@ export { SERVER_ID } from "./entry.ts";
 /**
  * What a platform's entry sends Vite in dev once it's evaluated, e.g.
  * again after a server change: the dev server reloads the browser then,
- * so its request doesn't reach the app while it's evaluated.
+ * so its request doesn't reach the app while it's evaluated. An adapter
+ * with `dev: "platform"` must send it, with `import.meta.hot?.send()`:
+ * without it, the browser doesn't reload after a server change.
+ *
+ * @experimental Can change before 0.3.0, with `HuumaAdapter`.
  */
 export const SERVER_READY = "huuma:server-ready";
 
-/** One platform the app runs on: `huuma({ adapter })`. */
+/**
+ * One platform the app runs on: `huuma({ adapter })`.
+ *
+ * @experimental Can change before 0.3.0; see the module's notes.
+ */
 export interface HuumaAdapter {
   /** The adapter's name, e.g. `"node"`, for messages. */
   name: string;
@@ -50,7 +61,11 @@ export interface HuumaAdapter {
   afterBuild?(builder: ViteBuilder, build: AppBuild): Promise<void>;
 }
 
-/** What `afterBuild` gets to know about the build. */
+/**
+ * What `afterBuild` gets to know about the build.
+ *
+ * @experimental Can change before 0.3.0, with `HuumaAdapter`.
+ */
 export interface AppBuild {
   /**
    * The files in the client build's `outDir` with a content hash in
