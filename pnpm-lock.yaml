@@ -186,9 +186,6 @@ importers:
       '@huuma/inject':
         specifier: npm:@jsr/huuma__inject@^0.0.1
         version: '@jsr/huuma__inject@0.0.1'
-      '@huuma/ui':
-        specifier: link:.
-        version: 'link:'
       '@types/node':
         specifier: ^24
         version: 24.19.2

@@ -1,7 +1,7 @@
 {
-  "name": "huuma-ui-workspace",
+  "name": "@huuma/ui",
   "private": true,
-  "description": "Development tooling only. @huuma/ui is published to JSR from deno.json.",
+  "description": "Development tooling only. @huuma/ui is published to JSR from jsr.json.",
   "type": "module",
   "exports": {
     ".": "./src/mod.ts",
@@ -33,7 +33,6 @@
     "@babel/core": "^8.0.7",
     "@babel/plugin-proposal-decorators": "^8.0.2",
     "@huuma/inject": "npm:@jsr/huuma__inject@^0.0.1",
-    "@huuma/ui": "link:.",
     "@types/node": "^24",
     "happy-dom": "^20.14.6",
     "jsr": "0.14.3",

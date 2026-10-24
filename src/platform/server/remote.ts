@@ -4,7 +4,7 @@ import { generateHash, toCanonicalPath } from "./utils.ts";
 
 // Remote functions: the endpoint a `*.remote.ts` module is served at, and
 // the browser module that calls it. Used by the Vite plugin (`src/vite`);
-// not an entry point in `deno.json`'s exports map.
+// not an entry point in `jsr.json`'s exports map.
 
 /**
  * The endpoint of a remote module, e.g.

@@ -1,5 +1,5 @@
 import { defineConfig } from "vite-plus";
-import jsr from "./deno.json" with { type: "json" };
+import jsr from "./jsr.json" with { type: "json" };
 
 export default defineConfig({
   oxc: {
@@ -33,7 +33,7 @@ export default defineConfig({
     ignorePatterns: ["**/*.md"],
   },
   // A native npm build (spec #126, D7), checked in CI but not published. It
-  // mirrors src/ so each deno.json export maps to one file in dist/.
+  // mirrors src/ so each jsr.json export maps to one file in dist/.
   pack: {
     entry: Object.values(jsr.exports),
     root: "src",

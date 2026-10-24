@@ -1,11 +1,11 @@
-// Checks the native npm build from `vp pack` (spec #126, D7): every deno.json
+// Checks the native npm build from `vp pack` (spec #126, D7): every jsr.json
 // export has its JavaScript and declaration file in dist/ and loads in Node,
 // and every file a module opens by `new URL(..., import.meta.url)` exists.
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const jsr = JSON.parse(readFileSync("deno.json", "utf8")) as {
+const jsr = JSON.parse(readFileSync("jsr.json", "utf8")) as {
   exports: Record<string, string>;
 };
 
@@ -40,4 +40,4 @@ if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(`dist/ has all ${Object.keys(jsr.exports).length} deno.json exports.`);
+console.log(`dist/ has all ${Object.keys(jsr.exports).length} jsr.json exports.`);
