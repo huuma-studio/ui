@@ -7,7 +7,7 @@ export default defineConfig({
     jsx: { runtime: "automatic", importSource: "@huuma/ui" },
   },
   test: {
-    include: ["src/**/*.test.{ts,tsx}", "test/*.test.ts", "packages/*/src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "test/*.test.ts"],
     // The plugin tests run the Vite they import. That's Vite+'s copy
     // (pnpm's override installs it as `vite`), or with `HUUMA_VITE=upstream`
     // upstream Vite (`vite-upstream`, npm:vite@^8), like an app without Vite+.
@@ -48,15 +48,8 @@ export default defineConfig({
   },
   run: {
     tasks: {
-      // Runs every check JSR publish runs, including slow types, for each
-      // package: @huuma/ui, then @huuma/ui-cloudflare.
-      "jsr:dry-run": {
-        command: [
-          "jsr publish --dry-run",
-          "jsr publish --dry-run --config packages/ui-cloudflare/deno.json",
-        ],
-        cache: false,
-      },
+      // Runs every check JSR publish runs, including slow types.
+      "jsr:dry-run": { command: "jsr publish --dry-run", cache: false },
       pack: { command: ["vp pack", "node scripts/check-pack.ts"], cache: false },
     },
   },

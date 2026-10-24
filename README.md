@@ -152,7 +152,7 @@ The app's server code runs on Node, in Vite's process. With the [Cloudflare adap
 
 Options of `huuma()`:
 
-- `adapter`: the platform the app runs on. Defaults to `node()` from `@huuma/ui/vite`; for Cloudflare Workers, `cloudflare()` from `@huuma/ui-cloudflare` (see [Cloudflare Workers](#cloudflare-workers)).
+- `adapter`: the platform the app runs on. Defaults to `node()` from `@huuma/ui/vite`; for Cloudflare Workers, `cloudflare()` from `@huuma/cloudflare` (see [Cloudflare Workers](#cloudflare-workers)).
 - `routes`: the directory with `page.tsx`, `layout.tsx` and `middleware.ts` files. Defaults to `"app"`.
 - `server`: the module that exports the app. Defaults to `"server.ts"`.
 - `decorators`: `"auto"` (default) compiles standard decorators unless Oxc's legacy decorators (`oxc.decorator.legacy`) are on; `true` or `false` to force it. Huuma supports standard decorators. If your app uses legacy (TypeScript `experimentalDecorators`) decorators, set `oxc: { decorator: { legacy: true } }` in your Vite config: `experimentalDecorators` in `tsconfig.json` alone isn't picked up, and Babel would compile them as standard decorators.
@@ -219,17 +219,17 @@ With a `package.json`, Deno takes the packages from `node_modules`, like Node.js
 
 ## Cloudflare Workers
 
-`@huuma/ui-cloudflare` runs the app as a [Cloudflare Worker](https://developers.cloudflare.com/workers/), with `dist/client/` as the Worker's [static assets](https://developers.cloudflare.com/workers/static-assets/). Its adapter brings [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/) (tested with 1.64), so `vite` runs the app's server code in workerd too, with the Worker's runtime and bindings. It's a package of its own, so apps on Node don't install workerd:
+`@huuma/cloudflare` runs the app as a [Cloudflare Worker](https://developers.cloudflare.com/workers/), with `dist/client/` as the Worker's [static assets](https://developers.cloudflare.com/workers/static-assets/). Its adapter brings [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/) (tested with 1.64), so `vite` runs the app's server code in workerd too, with the Worker's runtime and bindings. It's a package of its own, so apps on Node don't install workerd:
 
 ```sh
-pnpm add -D jsr:@huuma/ui-cloudflare@0.3.0-beta.2
+pnpm add -D jsr:@huuma/cloudflare@0.1.0-beta.1
 ```
 
 ```ts
 // vite.config.ts
 import { defineConfig } from "vite";
 import { huuma } from "@huuma/ui/vite";
-import { cloudflare } from "@huuma/ui-cloudflare";
+import { cloudflare } from "@huuma/cloudflare";
 
 export default defineConfig({ plugins: [huuma({ adapter: cloudflare() })] });
 ```

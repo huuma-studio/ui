@@ -1,7 +1,7 @@
 /*
  * Runs in the app's server (Vite's ssr environment), not in the Vite
  * config: the server entry the plugin generates imports it, and so do
- * adapters' entries, e.g. `@huuma/ui-cloudflare`'s Worker. Not meant for
+ * adapters' entries, e.g. `@huuma/cloudflare`'s Worker. Not meant for
  * app code; its API can change with the plugin.
  */
 import type { JSX } from "../jsx-runtime/mod.ts";

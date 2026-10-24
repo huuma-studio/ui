@@ -34,15 +34,13 @@
     "@babel/plugin-proposal-decorators": "^8.0.2",
     "@huuma/inject": "npm:@jsr/huuma__inject@^0.0.1",
     "@huuma/ui": "link:.",
-    "@huuma/ui-cloudflare": "workspace:*",
     "@types/node": "^24",
     "happy-dom": "^20.14.6",
     "jsr": "0.14.3",
     "playwright-core": "^1.64.0",
     "vite": "^8",
     "vite-plus": "1.1.0",
-    "vite-upstream": "npm:vite@^8",
-    "wrangler": "^4.151.0"
+    "vite-upstream": "npm:vite@^8"
   },
   "packageManager": "pnpm@12.11.2"
 }

@@ -18,7 +18,7 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["src", "packages", "test", "scripts", "vite.config.ts"],
+  "include": ["src", "test", "scripts", "vite.config.ts"],
   // Deno-only smoke tests, checked by `deno test`.
   "exclude": ["test/deno"]
 }

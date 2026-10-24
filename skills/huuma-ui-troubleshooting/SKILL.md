@@ -69,7 +69,7 @@ Use this skill when the agent (or user) hits a Huuma UI lint violation or runtim
 ### `requestContext().env` is `{}` in dev
 
 - **Cause:** `vite` runs the server code on Node, which has no Worker bindings: `huuma()` without the Cloudflare adapter, or with `cloudflare()` from `@cloudflare/vite-plugin` in `plugins` instead of the adapter, which runs a Worker environment of its own while Huuma still serves the app from Node.
-- **Fix:** Use `huuma({ adapter: cloudflare() })` with `cloudflare` from `@huuma/ui-cloudflare`, and remove `@cloudflare/vite-plugin` from `plugins` (README "Cloudflare Workers"). Or try the code with `vite build` and `wrangler dev`.
+- **Fix:** Use `huuma({ adapter: cloudflare() })` with `cloudflare` from `@huuma/cloudflare`, and remove `@cloudflare/vite-plugin` from `plugins` (README "Cloudflare Workers"). Or try the code with `vite build` and `wrangler dev`.
 
 ### "Missing entry-point to Worker script or to assets directory"
 

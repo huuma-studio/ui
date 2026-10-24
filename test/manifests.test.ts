@@ -11,12 +11,6 @@ const read = (file: string) =>
   JSON.parse(readFileSync(new URL(`../${file}`, import.meta.url), "utf8"));
 const jsr = read("deno.json");
 const pkg = read("package.json");
-// @huuma/ui-cloudflare, a member of the workspace, released with the core.
-const cloudflare = {
-  jsr: read("packages/ui-cloudflare/deno.json"),
-  pkg: read("packages/ui-cloudflare/package.json"),
-};
-
 describe("manifests", () => {
   test("don't share the package's name", () => {
     // Deno would resolve another package's `@huuma/ui` imports to the
@@ -44,31 +38,5 @@ describe("manifests", () => {
       ),
     );
     expect(fromPackage).toStrictEqual(fromJsr);
-  });
-});
-
-describe("@huuma/ui-cloudflare's manifests", () => {
-  test("are a member of the workspace", () => {
-    expect(jsr.workspace).toContain("./packages/ui-cloudflare");
-    expect(pkg.devDependencies[cloudflare.jsr.name]).toStrictEqual("workspace:*");
-  });
-
-  test("have the core's version, and import the core at it", () => {
-    // Released together: the pre-release workflow reads the root's version.
-    expect(cloudflare.jsr.version).toStrictEqual(jsr.version);
-    expect(cloudflare.jsr.imports["@huuma/ui"]).toStrictEqual(`jsr:@huuma/ui@^${jsr.version}`);
-  });
-
-  test("export the same entry points", () => {
-    expect(cloudflare.pkg.exports).toStrictEqual(cloudflare.jsr.exports);
-  });
-
-  test("declare the same npm dependencies, and the core's Vite", () => {
-    for (const [name, version] of Object.entries(
-      cloudflare.pkg.dependencies as Record<string, string>,
-    )) {
-      expect(cloudflare.jsr.imports[name], name).toStrictEqual(`npm:${name}@${version}`);
-    }
-    expect(cloudflare.jsr.imports.vite).toStrictEqual(`npm:vite@${pkg.devDependencies.vite}`);
   });
 });

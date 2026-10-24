@@ -32,7 +32,7 @@ async function eventually(check: () => Promise<void>, timeout = 5_000): Promise<
 }
 
 // The platform's entry: the app with Vite's client, which tells the dev
-// server once it's evaluated, like `@huuma/ui-cloudflare`'s Worker.
+// server once it's evaluated, like `@huuma/cloudflare`'s Worker.
 const ENTRY = "virtual:test/platform-entry";
 const ENTRY_CODE = [
   'import app from "virtual:huuma/server";',

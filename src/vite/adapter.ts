@@ -1,7 +1,7 @@
 /*
  * The contract between `huuma()` and an adapter, which targets one
  * platform: `node()` (`node-adapter.ts`), the default, or e.g.
- * `cloudflare()` from `@huuma/ui-cloudflare`. The core builds the app
+ * `cloudflare()` from `@huuma/cloudflare`. The core builds the app
  * (`app.js`, a fetch handler); the adapter adds what its platform runs
  * around it, e.g. `server.js` on Node. `@huuma/ui/vite/adapter` exports
  * it for adapters, with what their entries and plugins need of the core.
