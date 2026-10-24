@@ -171,6 +171,53 @@ describeWorker("a Cloudflare Worker below a base", "/shop/");
 // In the directory `sale%`, which the rules in `_headers` name encoded.
 describeWorker("a Cloudflare Worker below an encoded base", "/sale%25/");
 
+// A Worker of the app's own, e.g. for more than HTTP, which passes the
+// app's requests to Huuma's.
+test(
+  "builds the app's own Worker named as `main`, around Huuma's",
+  async () => {
+    const nodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    let root: string | undefined;
+    let stop: (() => void) | undefined;
+    try {
+      root = await buildFixture(
+        ".tmp-build-cloudflare-main-",
+        { base: "/shop/", plugins: [huuma({ adapter: cloudflare({ inspectorPort: false }) })] },
+        {
+          "wrangler.jsonc": JSON.stringify({ ...JSON.parse(WRANGLER), main: "./worker.js" }),
+          "worker.js": [
+            'import huuma from "virtual:huuma/worker";',
+            "",
+            "export default {",
+            "  fetch(request, env, ctx) {",
+            '    if (new URL(request.url).pathname === "/shop/own") return new Response("own");',
+            "    return huuma.fetch(request, env, ctx);",
+            "  },",
+            "  scheduled() {},",
+            "};",
+            "",
+          ].join("\n"),
+        },
+      );
+      let origin: string;
+      ({ origin, stop } = await startWorker(root));
+      expect(await (await fetch(`${origin}/shop/own`)).text()).toStrictEqual("own");
+      const page = await fetch(`${origin}/shop/about`);
+      expect(page.status).toStrictEqual(200);
+      expect(await page.text()).toContain("<h1>About</h1>");
+      // Workers' files for the client build, as with Huuma's Worker.
+      const headers = await readFile(join(root, "dist/client/_headers"), "utf8");
+      expect(headers).toContain(`/shop/assets/*\n  Cache-Control: ${IMMUTABLE}\n`);
+    } finally {
+      process.env.NODE_ENV = nodeEnv;
+      stop?.();
+      if (root) await rm(root, { recursive: true, force: true });
+    }
+  },
+  STARTUP,
+);
+
 test("writes Workers' files to dist/client, for the hashed files", async () => {
   const root = await buildFixture(
     ".tmp-build-cloudflare-files-",
