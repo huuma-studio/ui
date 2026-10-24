@@ -5,10 +5,12 @@
 import type { Connect, DevEnvironment, Plugin, RunnableDevEnvironment, ViteDevServer } from "vite";
 import { toRequest, writeResponse } from "@huuma/route/node";
 
+import { type HuumaAdapter, SERVER_READY } from "./adapter.ts";
 import { SERVER_ID } from "./entry.ts";
 import { ISLANDS_ID } from "./islands.ts";
 import { REMOTE_ID } from "./remote.ts";
 import { ROUTES_ID } from "./routes.ts";
+import { withViteClient } from "./vite-client.ts";
 
 // The files discovery finds: adding or deleting one changes the routes,
 // islands or remote modules, which the generated modules list.
@@ -27,14 +29,29 @@ interface App {
 /**
  * Serves the app from Vite's dev server, and rebuilds it when its server
  * code changes. `serverEntry()` is the absolute path of the app's module.
+ * When the adapter's plugins run the app in the platform's runtime
+ * (`dev: "platform"`), they serve the requests instead.
  */
-export function devPlugin(serverEntry: () => string): Plugin {
-  // Whether the app must be rebuilt before the next request.
-  const app = { stale: false };
+export function devPlugin(serverEntry: () => string, adapter: HuumaAdapter): Plugin {
+  const platform = adapter.dev === "platform";
+  // Whether the app must be rebuilt before the next request, and whether
+  // the browser reloads once a platform's runtime evaluated it again.
+  const app = { stale: false, reload: false };
   return {
     name: "huuma:dev",
     apply: "serve",
     configureServer(server) {
+      const ssr = server.environments.ssr;
+      if (platform) {
+        // The platform's entry was evaluated again: reloading the browser
+        // earlier, its request could reach the app while it's evaluated.
+        ssr.hot.on(SERVER_READY, () => {
+          if (!app.reload) return;
+          app.reload = false;
+          server.environments.client.hot.send({ type: "full-reload" });
+        });
+        return;
+      }
       // Returned: runs after Vite's own middlewares, so Vite serves
       // modules and assets first and the app gets every other request.
       return () => {
@@ -54,14 +71,22 @@ export function devPlugin(serverEntry: () => string): Plugin {
           if (module) graph.invalidateModule(module);
         }
       }
-      app.stale = true;
       // An island the browser loaded updates itself (see `islandsPlugin`);
       // everything else reloads the page.
       const island =
         type === "update" &&
         ISLAND.test(file) &&
         !!server.environments.client.moduleGraph.getModulesByFile(file)?.size;
-      if (!island) server.environments.client.hot.send({ type: "full-reload" });
+      if (platform) {
+        // The module runner in the platform's runtime clears its whole
+        // cache and imports the platform's entry again, which then sends
+        // `SERVER_READY`: the in-runtime `runner.clearCache()`.
+        if (!island) app.reload = true;
+        this.environment.hot.send({ type: "full-reload" });
+      } else {
+        app.stale = true;
+        if (!island) server.environments.client.hot.send({ type: "full-reload" });
+      }
       // Handled: the ModuleRunner gets no HMR update of its own.
       return [];
     },
@@ -142,74 +167,4 @@ async function loadApp(server: ViteDevServer, app: { stale: boolean }): Promise<
 // `isRunnableDevEnvironment()` from `vite` would be a runtime import.
 function isRunnable(environment: DevEnvironment): environment is RunnableDevEnvironment {
   return "runner" in environment;
-}
-
-/**
- * Adds Vite's client (HMR) to an HTML response. With a Content-Security-
- * Policy nonce, the script gets the same nonce as the page's own scripts,
- * and the policy allows the client's worker (see `allowViteWorker()`).
- * A response without a body (`204`, `304`) stays as it is: those statuses
- * can't have one.
- */
-export async function withViteClient(response: Response, base: string): Promise<Response> {
-  if (!response.body) return response;
-  const policy = response.headers.get("content-security-policy");
-  const nonce = /'nonce-([^']+)'/.exec(policy ?? "")?.[1];
-  const headers = new Headers(response.headers);
-  headers.delete("content-length");
-  if (policy) headers.set("content-security-policy", allowViteWorker(policy));
-  return new Response(injectViteClient(await response.text(), base, nonce), {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
-
-/**
- * Allows workers from `blob:` URLs in a Content-Security-Policy. Vite's
- * client starts one to poll for a restarted dev server and then reloads the
- * page; the app's default policy (`script-src 'none'`, no `worker-src`)
- * blocks it, so the page stayed stale. Adds `blob:` to `worker-src`, or
- * without one, to a copy of the directive browsers fall back to (`child-src`,
- * `script-src`, then `default-src`), so the app's own workers keep what they
- * were allowed. Without any of them, workers aren't restricted.
- */
-export function allowViteWorker(policy: string): string {
-  const directives = policy
-    .split(";")
-    .map((directive) => directive.trim().split(/\s+/))
-    .filter(([name]) => name);
-  const find = (name: string) => directives.find(([directive]) => directive === name);
-
-  const worker = find("worker-src");
-  if (worker) {
-    if (!worker.includes("blob:")) worker.push("blob:");
-  } else {
-    const fallback = find("child-src") ?? find("script-src") ?? find("default-src");
-    if (!fallback) return policy;
-    directives.push([
-      "worker-src",
-      ...fallback.slice(1).filter((source) => source !== "'none'"),
-      "blob:",
-    ]);
-  }
-  return directives.map((directive) => directive.join(" ")).join("; ");
-}
-
-/**
- * Inserts Vite's client script at the end of `<head>`; without one, after
- * `<html>`, after the doctype or at the very start.
- */
-export function injectViteClient(html: string, base: string, nonce?: string): string {
-  const script = `<script type="module" src="${base}@vite/client"${
-    nonce ? ` nonce="${nonce}"` : ""
-  }></script>`;
-  const head = /<\/head>/i.exec(html);
-  if (head) return html.slice(0, head.index) + script + html.slice(head.index);
-  const start = /<html[^>]*>/i.exec(html) ?? /<!doctype html>/i.exec(html);
-  if (start) {
-    const at = start.index + start[0].length;
-    return html.slice(0, at) + script + html.slice(at);
-  }
-  return script + html;
 }

@@ -25,7 +25,7 @@ describe(clientFiles.name, () => {
     await writeFile(join(client, "robots.txt"), "User-agent: *");
     await writeFile(join(client, ".vite/manifest.json"), "{}");
     await writeFile(join(client, ".env"), "SECRET=1");
-    // Cloudflare Workers' configuration, which the build writes.
+    // Another platform's header rules, e.g. from Vite's public dir.
     await writeFile(join(client, "_headers"), "/assets/*\n  Cache-Control: immutable\n");
     files = clientFiles({ client, hashed: ["assets/app-3f2a.js", "assets/app-9c1d.css"] });
   });
