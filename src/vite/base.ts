@@ -25,7 +25,8 @@ export function baseDirectory(base: string): string {
 
 /**
  * The request as the app sees it, without `base`, as in Vite's dev
- * server, for `server.js` and `worker.js`: `/shop/about` becomes `/about`. Outside of `base`, `/` redirects
+ * server, for `server.js` and adapters' entries, e.g. the Cloudflare
+ * Worker: `/shop/about` becomes `/about`. Outside of `base`, `/` redirects
  * to it, and everything else is not found.
  */
 export function belowBase(request: Request, base: string): Request | Response {

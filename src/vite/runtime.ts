@@ -1,13 +1,17 @@
 /*
  * Runs in the app's server (Vite's ssr environment), not in the Vite
- * config: the server entry the plugin generates imports it. Not meant for
+ * config: the server entry the plugin generates imports it, and so do
+ * adapters' entries, e.g. `@huuma/cloudflare`'s Worker. Not meant for
  * app code; its API can change with the plugin.
  */
 import type { JSX } from "../jsx-runtime/mod.ts";
 import type { UIApp, UIAppContext } from "../platform/server/app.ts";
 import type { List } from "../platform/server/pack/mod.ts";
 import { packPages, serveRemoteFunctions } from "../platform/server/pack/pack.ts";
-import { belowBase } from "./base.ts";
+import { withViteClient } from "./vite-client.ts";
+
+// For adapters' entries, e.g. a Worker that strips the base like `server.js`.
+export { belowBase } from "./base.ts";
 
 /** What the plugin's virtual modules provide. */
 export interface Manifest {
@@ -21,9 +25,16 @@ export interface Manifest {
   runtime: string;
 }
 
+// Marks an app `mount()` registered the modules on. A key from the global
+// symbol registry, not a set here: this module can be evaluated again too.
+const MOUNTED = Symbol.for("huuma.mounted");
+
 /**
  * Registers the plugin's modules on `app`: the browser runtime, the
  * islands, the remote functions and the pages. Vite serves the scripts, so the app only references them.
+ * Mounting the same app again does nothing: a dev server's module runner
+ * can evaluate the server entry a second time against the cached app,
+ * whose router would reject the routes it already has.
  */
 export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest): UIApp<T> {
   // The server entry's default export, which nothing type-checks.
@@ -32,6 +43,9 @@ export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest)
       "The server entry must export the app as default: `export default createUIApp(Root);`",
     );
   }
+  const marked = app as UIApp<T> & { [MOUNTED]?: true };
+  if (marked[MOUNTED]) return app;
+  marked[MOUNTED] = true;
   app.addScript(manifest.runtime, undefined, { isRuntime: true });
 
   for (const [path, island] of Object.entries(manifest.islands)) {
@@ -50,23 +64,23 @@ export function mount<T extends UIAppContext>(app: UIApp<T>, manifest: Manifest)
 }
 
 /** A handler with a Worker's `fetch`, like the app. */
-interface FetchHandler {
+export interface FetchHandler {
   fetch(request: Request, env?: unknown, ctx?: unknown): Promise<Response>;
 }
 
 /**
- * The app as a Cloudflare Worker (`worker.js`). Workers' static assets
- * serve the client build before the Worker runs, below the base too: the
- * build puts the files in `dist/client` at their URLs' paths. Below a
- * base other than `/`, e.g. `/shop/`, the Worker strips the base for the
- * app, like `server.js`.
+ * Adds Vite's client to the app's HTML responses: for a platform's entry
+ * in dev, e.g. a Worker in workerd, where the app runs in the platform's
+ * runtime and Huuma's Node middleware never sees the response. `base` is
+ * Vite's `base`.
  */
-export function worker(app: FetchHandler, base: string): FetchHandler {
-  if (base === "/") return app;
+export function withDevClient(app: FetchHandler, base: string): FetchHandler {
   return {
-    fetch(request, env, ctx) {
-      const below = belowBase(request, base);
-      return below instanceof Response ? Promise.resolve(below) : app.fetch(below, env, ctx);
+    async fetch(request, env, ctx) {
+      const response = await app.fetch(request, env, ctx);
+      return response.headers.get("content-type")?.startsWith("text/html")
+        ? withViteClient(response, base)
+        : response;
     },
   };
 }

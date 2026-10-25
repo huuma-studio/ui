@@ -21,6 +21,7 @@
     "./i18n/middleware": "./src/i18n/middleware/mod.ts",
     "./lint": "./src/lint/mod.ts",
     "./vite": "./src/vite/mod.ts",
+    "./vite/adapter": "./src/vite/adapter.ts",
     "./vite/runtime": "./src/vite/runtime.ts",
     "./vite/node": "./src/vite/node.ts"
   },
@@ -38,8 +39,7 @@
     "playwright-core": "^1.64.0",
     "vite": "^8",
     "vite-plus": "1.1.0",
-    "vite-upstream": "npm:vite@^8",
-    "wrangler": "^4.151.0"
+    "vite-upstream": "npm:vite@^8"
   },
   "packageManager": "pnpm@12.11.2"
 }

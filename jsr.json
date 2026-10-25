@@ -1,6 +1,6 @@
 {
   "name": "@huuma/ui",
-  "version": "0.3.0-beta.2",
+  "version": "0.3.0-beta.3",
   "license": "MIT",
   "exports": {
     ".": "./src/mod.ts",
@@ -20,6 +20,7 @@
     "./i18n/middleware": "./src/i18n/middleware/mod.ts",
     "./lint": "./src/lint/mod.ts",
     "./vite": "./src/vite/mod.ts",
+    "./vite/adapter": "./src/vite/adapter.ts",
     "./vite/runtime": "./src/vite/runtime.ts",
     "./vite/node": "./src/vite/node.ts"
   },

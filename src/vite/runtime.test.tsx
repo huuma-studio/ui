@@ -3,7 +3,7 @@ import { describe, expect, test } from "vite-plus/test";
 import type { JSX } from "../jsx-runtime/mod.ts";
 import { createUIApp, type PageLikeProps, type RootPageProps } from "../platform/server/app.ts";
 import { Launch } from "../platform/server/scripts.ts";
-import { type Manifest, mount, worker } from "./runtime.ts";
+import { type Manifest, mount, withDevClient } from "./runtime.ts";
 
 function Root({ children, scripts, islands, transferState }: RootPageProps<unknown>) {
   return (
@@ -77,6 +77,16 @@ describe(mount.name, () => {
     expect(await response.json()).toStrictEqual(3);
   });
 
+  test("mounts an app only once", async () => {
+    const app = createUIApp(Root);
+    expect(mount(mount(app, manifest), manifest)).toBe(app);
+
+    const home = await app.deliver()(new Request("http://localhost/"), connection);
+    expect(home.status).toStrictEqual(200);
+    // The runtime script once, not twice.
+    expect((await home.text()).match(/virtual:huuma\/runtime/g)).toHaveLength(1);
+  });
+
   test("rejects a server entry without an app", () => {
     expect(() => mount(undefined as never, manifest)).toThrow(
       "The server entry must export the app as default",
@@ -90,35 +100,27 @@ describe(mount.name, () => {
   });
 });
 
-describe(worker.name, () => {
-  // An app that answers with the path and method it saw.
+describe(withDevClient.name, () => {
   const app = {
-    fetch: (request: Request, env?: unknown) =>
+    fetch: (request: Request) =>
       Promise.resolve(
-        new Response(`app ${request.method} ${new URL(request.url).pathname}`, {
-          headers: { "x-env": String(env !== undefined) },
-        }),
+        new URL(request.url).pathname === "/data"
+          ? Response.json({ ok: true })
+          : new Response("<html><head></head></html>", {
+              headers: { "content-type": "text/html; charset=utf-8" },
+            }),
       ),
   };
-  const get = (handler: ReturnType<typeof worker>, path: string, init?: RequestInit) =>
-    handler.fetch(new Request(`http://localhost${path}`, init), {}, {});
 
-  test("is the app itself at /", () => {
-    expect(worker(app, "/")).toBe(app);
+  test("adds Vite's client to HTML responses", async () => {
+    const response = await withDevClient(app, "/shop/").fetch(new Request("http://localhost/"));
+    expect(await response.text()).toStrictEqual(
+      '<html><head><script type="module" src="/shop/@vite/client"></script></head></html>',
+    );
   });
 
-  test("passes requests to the app without the base, with env", async () => {
-    const handler = worker(app, "/shop/");
-    const response = await get(handler, "/shop/about");
-    expect(await response.text()).toStrictEqual("app GET /about");
-    expect(response.headers.get("x-env")).toStrictEqual("true");
-    const post = await get(handler, "/shop/_huuma/remote/1/a", { method: "POST", body: "{}" });
-    expect(await post.text()).toStrictEqual("app POST /_huuma/remote/1/a");
-  });
-
-  test("redirects / to the base and doesn't find the rest", async () => {
-    const handler = worker(app, "/shop/");
-    expect((await get(handler, "/")).headers.get("location")).toStrictEqual("/shop/");
-    expect((await get(handler, "/about")).status).toStrictEqual(404);
+  test("leaves other responses alone", async () => {
+    const response = await withDevClient(app, "/").fetch(new Request("http://localhost/data"));
+    expect(await response.json()).toStrictEqual({ ok: true });
   });
 });
