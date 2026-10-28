@@ -317,3 +317,21 @@ describe("signal text when its component renders again", () => {
     expect(writes.count).toStrictEqual(1);
   });
 });
+
+describe("hydrating next to comments", () => {
+  test("keeps the element after a comment the client tree doesn't have", () => {
+    const fn = () => (
+      <div>
+        <section>list</section>
+      </div>
+    );
+    serve(renderToStringSync(fn()));
+    const main = document.querySelector("main")!;
+    main.querySelector("div")!.prepend(document.createComment(" note "));
+    const section = main.querySelector("section");
+    hydrate(fn);
+
+    expect(main.querySelector("section")).toBe(section);
+    expect(markup(main)).toStrictEqual("<div><section>list</section></div>");
+  });
+});

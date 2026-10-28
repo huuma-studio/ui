@@ -14,6 +14,43 @@ import { huuma } from "./mod.ts";
 
 const chromium = findChromium();
 
+// Added only to this suite's production fixture, without changing the
+// shared fixture's routes or its build snapshots.
+const NESTED_ISLANDS = {
+  "components/frame.client.tsx": `
+    import type { JSX } from "@huuma/ui/jsx-runtime";
+    export default function Frame({ children }: JSX.ComponentProps) {
+      return <section>{children}</section>;
+    }
+  `,
+  "components/nested-counter.client.tsx": `
+    import type { JSX } from "@huuma/ui/jsx-runtime";
+    import { $signal } from "@huuma/ui/hooks/signal";
+    export default function Counter({ label, children }: JSX.ComponentProps & { label: string }) {
+      const count = $signal(0);
+      return <article data-counter={label}>
+        <button on-click={() => count.set(count.get() + 1)}>{label}: {count}</button>
+        {children}
+      </article>;
+    }
+  `,
+  "app/nested/page.tsx": `
+    import Frame from "../../components/frame.client.tsx";
+    import Counter from "../../components/nested-counter.client.tsx";
+    export default function Nested() {
+      return <main>
+        <Frame><div>
+          <p>before</p>
+          <Counter label="first"><span>first child</span></Counter>
+          <Counter label="second"><span>second child</span></Counter>
+          <p>after</p>
+        </div></Frame>
+        <Counter label="following"><span>following child</span></Counter>
+      </main>;
+    }
+  `,
+};
+
 describe.skipIf(chromium === undefined)("in a browser", () => {
   let browser: Browser;
   beforeAll(async () => {
@@ -138,7 +175,7 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
     beforeAll(async () => {
       // As with `vite build`; Vitest sets "test", which builds JSX in dev mode.
       process.env.NODE_ENV = "production";
-      root = await buildFixture(".tmp-browser-build-");
+      root = await buildFixture(".tmp-browser-build-", {}, NESTED_ISLANDS);
       ({ origin, server } = await startServer(root));
     });
     afterAll(async () => {
@@ -162,6 +199,27 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
       await button(page, "2");
       expect(errors).toStrictEqual([]);
       await page.close();
+    });
+
+    test("hydrates nested slot islands without duplicating content or losing following islands", async () => {
+      const { page, errors } = await open(browser, `${origin}/nested`);
+      try {
+        expect(errors).toStrictEqual([]);
+        expect(await page.locator("article").count()).toBe(3);
+        expect(await page.locator("main span").allTextContents()).toStrictEqual([
+          "first child",
+          "second child",
+          "following child",
+        ]);
+        expect(await page.locator("main p").allTextContents()).toStrictEqual(["before", "after"]);
+        for (const label of ["first", "second", "following"]) {
+          await page.getByRole("button", { name: `${label}: 0`, exact: true }).click();
+          await button(page, `${label}: 1`);
+        }
+        expect(errors).toStrictEqual([]);
+      } finally {
+        await page.close();
+      }
     });
   });
 });
