@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { generateCSP } from "./content-security-policy.ts";
+import { type ContentSecurityPolicy, generateCSP } from "./content-security-policy.ts";
 
 describe(generateCSP.name, () => {
   test("should generate nonce by default", () => {
@@ -53,5 +53,55 @@ describe(generateCSP.name, () => {
 
     expect(result.nonce).toStrictEqual(undefined);
     expect(result.contentSecurityPolicy).toStrictEqual("");
+  });
+
+  test.each([{ sources: [] }, { sources: ["'self'", "https://cdn.example.com"] }])(
+    "keeps nonces request-local when reusing script sources $sources",
+    ({ sources }) => {
+      const policy: ContentSecurityPolicy = { "script-src-elem": [...sources] };
+      const first = generateCSP(policy);
+      const second = generateCSP(policy);
+
+      expect(second.nonce).not.toBe(first.nonce);
+      expect(second.contentSecurityPolicy).toContain(`'nonce-${second.nonce}'`);
+      expect(second.contentSecurityPolicy).not.toContain(`'nonce-${first.nonce}'`);
+      expect(policy["script-src-elem"]).toStrictEqual(sources);
+    },
+  );
+
+  test("accepts frozen shared configuration without mutating its directives", () => {
+    const policy: ContentSecurityPolicy = {
+      "script-src-elem": ["'self'"],
+      "default-src": ["'self'"],
+    };
+    Object.freeze(policy["script-src-elem"]);
+    Object.freeze(policy["default-src"]);
+    Object.freeze(policy);
+
+    const result = generateCSP(policy);
+    expect(result.contentSecurityPolicy).toContain(
+      `script-src-elem 'self' 'nonce-${result.nonce}'`,
+    );
+    expect(policy["script-src-elem"]).toStrictEqual(["'self'"]);
+  });
+
+  test("does not leak a nonce into another policy sharing the same sources", () => {
+    const sources = ["https://cdn.example.com"];
+    const enabled = generateCSP({ "script-src-elem": sources });
+    const disabled = generateCSP({ nonce: false, "script-src-elem": sources });
+
+    expect(disabled.nonce).toBeUndefined();
+    expect(disabled.contentSecurityPolicy).toBe("script-src-elem https://cdn.example.com");
+    expect(disabled.contentSecurityPolicy).not.toContain(enabled.nonce);
+  });
+
+  test("keeps the header bounded across repeated requests", () => {
+    const policy: ContentSecurityPolicy = { "script-src-elem": ["'self'"] };
+    const first = generateCSP(policy);
+    for (let i = 0; i < 1_000; i++) {
+      const result = generateCSP(policy);
+      expect(result.contentSecurityPolicy.length).toBe(first.contentSecurityPolicy.length);
+      expect(result.contentSecurityPolicy.match(/'nonce-/g)).toHaveLength(1);
+    }
   });
 });

@@ -42,7 +42,9 @@ export function generateCSP(policy?: ContentSecurityPolicy): ContentSecurityPoli
     const _nonce = crypto.randomUUID();
 
     if (Array.isArray(_policy["script-src-elem"])) {
-      _policy["script-src-elem"].push(`'nonce-${_nonce}'`);
+      // The policy copy still shares its arrays with the app's configuration.
+      // Add this request's nonce to a new array so later requests cannot reuse it.
+      _policy["script-src-elem"] = [..._policy["script-src-elem"], `'nonce-${_nonce}'`];
     } else {
       _policy["script-src-elem"] = [`'nonce-${_nonce}'`];
     }
