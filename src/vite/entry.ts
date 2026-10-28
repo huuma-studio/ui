@@ -13,6 +13,10 @@ import { ROUTES_ID } from "./routes.ts";
  * on the first one. The dev server loads it per request; the production
  * build makes it `app.js`, with the built browser paths of the runtime and
  * the islands from the client build.
+ *
+ * It re-exports the server entry's named exports too, e.g. a Durable
+ * Object class on Cloudflare Workers, which the platform looks for in the
+ * Worker's main module. Its default export stays the mounted app.
  */
 export const SERVER_ID = "virtual:huuma/server";
 const RESOLVED_SERVER_ID = `\0${SERVER_ID}`;
@@ -62,13 +66,15 @@ export function entryPlugin(options: () => EntryOptions): Plugin {
 
 /** Generates the source of `virtual:huuma/server`. */
 export function serverModule(server: string, runtime: string): string {
+  const entry = JSON.stringify(server.replaceAll("\\", "/"));
   return [
-    `import app from ${JSON.stringify(server.replaceAll("\\", "/"))};`,
+    `import app from ${entry};`,
     `import pages from ${JSON.stringify(ROUTES_ID)};`,
     `import islands from ${JSON.stringify(ISLANDS_ID)};`,
     `import remote from ${JSON.stringify(REMOTE_ID)};`,
     'import { mount } from "@huuma/ui/vite/runtime";',
     "",
+    `export * from ${entry};`,
     `export default mount(app, { pages, islands, remote, runtime: ${JSON.stringify(runtime)} });`,
     "",
   ].join("\n");
