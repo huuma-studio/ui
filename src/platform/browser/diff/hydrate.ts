@@ -47,11 +47,14 @@ export function hydrate(
       return fragment(vNode, nodes, attachmentRef);
     }
 
-    if (isVText(vNode)) {
+    skipComments(nodes);
+
+    if (isVText(vNode) && nodes.length) {
       return text(vNode, nodes, attachmentRef);
     }
 
     dropRemainder(nodes);
+    skipComments(nodes);
     const node = nodes.shift();
 
     if (node && isVElement(vNode)) {
@@ -60,6 +63,18 @@ export function hydrate(
   }
 
   return render(vNode, attachmentRef);
+}
+
+/**
+ * Skips the comments at the start of `nodes`. Comments are never part of
+ * the client tree, but island marker comments can still sit in the
+ * collected node stream (e.g. with nested islands), and would otherwise
+ * desync every following sibling.
+ */
+function skipComments(nodes: Node[]): void {
+  while (nodes[0]?.nodeType === 8 /* Node.COMMENT_NODE */) {
+    nodes.shift();
+  }
 }
 
 function component(

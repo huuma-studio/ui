@@ -36,7 +36,7 @@ function launch(html: string, islands: { id: string; fn: JSX.Component; path: st
 }
 
 function island(id: string, html: string): string {
-  return `<!-- start_island_${id} -->${html} <!--end_island_${id} -->`;
+  return `<!-- start_island_${id} -->${html}<!--end_island_${id} -->`;
 }
 
 function click(selector: string, times = 1) {

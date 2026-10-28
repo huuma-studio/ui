@@ -49,7 +49,7 @@ export function markIslands(
             },
             node,
             {
-              templates: [` <!--end_island_${island.id} -->`],
+              templates: [`<!--end_island_${island.id} -->`],
               nodes: [""],
             },
           ],
