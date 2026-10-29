@@ -2,7 +2,7 @@
 // the build tests and the browser tests.
 import { createBuilder, type InlineConfig } from "vite";
 import { type ChildProcess, spawn } from "node:child_process";
-import { cp, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,20 +50,26 @@ export async function buildFixture(
   files: Record<string, string> = {},
 ): Promise<string> {
   const root = await mkdtemp(join(fixtures, prefix));
-  await cp(join(fixtures, "basic"), root, { recursive: true });
-  for (const [path, contents] of Object.entries(files)) {
-    await mkdir(dirname(join(root, path)), { recursive: true });
-    await writeFile(join(root, path), contents);
+  try {
+    await cp(join(fixtures, "basic"), root, { recursive: true });
+    for (const [path, contents] of Object.entries(files)) {
+      await mkdir(dirname(join(root, path)), { recursive: true });
+      await writeFile(join(root, path), contents);
+    }
+    const builder = await createBuilder({
+      root,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [huuma()],
+      ...config,
+    });
+    await builder.buildApp();
+    return root;
+  } catch (error) {
+    // The caller only gets the copy once it built, so it couldn't remove it.
+    await rm(root, { recursive: true, force: true });
+    throw error;
   }
-  const builder = await createBuilder({
-    root,
-    configFile: false,
-    logLevel: "silent",
-    plugins: [huuma()],
-    ...config,
-  });
-  await builder.buildApp();
-  return root;
 }
 
 /** Starts `dist/server/server.js` like in production; resolves with its origin. */
