@@ -64,8 +64,25 @@ export function createRootAttachmentRef(node?: Node | null): AttachmentRef {
   return attachmentRef;
 }
 
-function skipCommentNodes(node?: Node | null): Node | undefined | null {
-  if (node?.nodeType === Node.COMMENT_NODE) {
+/** The comments that hold the place of an island's root (see `createIslandAnchor`). */
+const islandAnchors = new WeakSet<Node>();
+
+/**
+ * Inserts an empty comment before an island's start marker and attaches the
+ * island after it. Unlike the marker, it stays in the DOM: an island that
+ * renders nothing keeps its place, whatever its neighbours do meanwhile.
+ */
+export function createIslandAnchor(start: Node): AttachmentRef {
+  const parentNode = start.parentNode;
+  if (!parentNode) throw new Error("Not parent node found for given node.");
+  const anchor = parentNode.insertBefore(document.createComment(""), start);
+  islandAnchors.add(anchor);
+  return { type: AttachmentType.Sibling, node: anchor };
+}
+
+// Skips island markers, which are removed after hydration - not anchors.
+export function skipCommentNodes(node?: Node | null): Node | undefined | null {
+  if (node?.nodeType === Node.COMMENT_NODE && !islandAnchors.has(node)) {
     return skipCommentNodes(node.previousSibling);
   }
   return node;
@@ -97,17 +114,12 @@ export function attachmentRefFrom(vComponent: VComponent<Node>): AttachmentRef |
  * Where `vComponent` attaches its next render. The stored ref anchors on
  * the node before the component when it last rendered - a node another
  * component (e.g. a sibling island) may since have replaced or removed.
- * While the component shows a node, the node's current place wins.
+ * While the component shows a node, the node's current place wins; an
+ * island without nodes keeps its anchor (see `createIslandAnchor`).
  */
 export function currentAttachmentRef(vComponent: VComponent<Node>): AttachmentRef | undefined {
   const first = firstNode(vComponent);
-  if (first?.parentNode) {
-    const previousSibling = skipCommentNodes(first.previousSibling);
-    return previousSibling
-      ? { type: AttachmentType.Sibling, node: previousSibling }
-      : { type: AttachmentType.Parent, vNode: { [VNodeProps.NODE_REF]: first.parentNode } };
-  }
-  return attachmentRefFrom(vComponent);
+  return first?.parentNode ? createRootAttachmentRef(first) : attachmentRefFrom(vComponent);
 }
 
 function firstNode(vNode: VNode<Node>): Node | undefined {

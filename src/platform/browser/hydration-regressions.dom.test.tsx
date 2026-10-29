@@ -87,6 +87,36 @@ describe("independent island attachment after hydration", () => {
       "after",
     ]);
   });
+
+  test.each(["replaces", "removes"] as const)(
+    "a hidden second island returns after the first island %s its root",
+    async (first) => {
+      const controls = new Map<string, (value: number) => void>();
+      function Toggle({ id }: { id: string }): JSX.Element {
+        const state = hooks.$signal(0);
+        controls.set(id, (value) => state.set(value));
+        if (state.get() === 3) return null;
+        return jsx(state.get() === 2 ? "p" : "button", { children: `${id}:${state.get()}` });
+      }
+      const hydrate = await serve(
+        <main>
+          <Toggle id="first" />
+          <Toggle id="second" />
+          <aside>after</aside>
+        </main>,
+        [Toggle],
+      );
+      hydrate();
+      await Promise.resolve();
+      // With no node of its own, the second island only has its saved anchor.
+      controls.get("second")!(3);
+      controls.get("first")!(first === "replaces" ? 2 : 3);
+      expect(() => controls.get("second")!(1)).not.toThrow();
+      expect([...document.querySelector("main")!.children].map((node) => node.textContent)).toEqual(
+        first === "replaces" ? ["first:2", "second:1", "after"] : ["second:1", "after"],
+      );
+    },
+  );
 });
 
 describe("boolean attributes in server-rendered island children", () => {

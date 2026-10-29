@@ -6,7 +6,7 @@ import { create, setVNodeUpdater, update } from "../../v-node/sync.ts";
 import type { TransferState } from "../server/transfer-state.ts";
 // TODO: Move TransferState type to general location
 
-import { createRootAttachmentRef, currentAttachmentRef } from "./diff/attachment-ref.ts";
+import { createIslandAnchor, currentAttachmentRef } from "./diff/attachment-ref.ts";
 import { diff } from "./diff/diff.ts";
 import { dispatch } from "./diff/dispatch.ts";
 import { dropStale, hydrate } from "./diff/hydrate.ts";
@@ -89,13 +89,12 @@ export function launch(islands: Island[], transferState: TransferState): void {
     for (const node of islandStarts) {
       if (!node.parentNode) continue;
 
-      const attachmentRef = createRootAttachmentRef(node);
-
       if (isIslandStart(node)) {
         const islandId = getIslandId(node.textContent);
         if (islandId) {
           const island = removeIslandFrom(islands, islandId);
           if (island) {
+            const attachmentRef = createIslandAnchor(node);
             const nodes = collectIslandNodes(node, islandId);
             const element = jsx(island.fn, {
               // Todo re-construct Signals
