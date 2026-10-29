@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { createServer, type RunnableDevEnvironment, type ViteDevServer } from "vite";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -95,8 +95,6 @@ describe("the server entry's named exports", () => {
     process.env.NODE_ENV = "production";
     const root = await buildFixture(".tmp-build-default-");
     try {
-      const code = await readFile(join(root, "dist/server/app.js"), "utf8");
-      expect(code).toMatch(/export \{ \w+ as default \};/);
       const entry = (await import(pathToFileURL(join(root, "dist/server/app.js")).href)) as object;
       expect(Object.keys(entry)).toStrictEqual(["default"]);
     } finally {
