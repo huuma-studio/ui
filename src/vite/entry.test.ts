@@ -44,8 +44,9 @@ describe("the server entry's named exports", () => {
   test("are exports of the built app.js", async () => {
     const nodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
-    const root = await buildFixture(".tmp-build-exports-", {}, { "server.ts": SERVER });
+    let root: string | undefined;
     try {
+      root = await buildFixture(".tmp-build-exports-", {}, { "server.ts": SERVER });
       const entry = (await import(pathToFileURL(join(root, "dist/server/app.js")).href)) as Entry;
       expect(Object.keys(entry).sort()).toStrictEqual(["ChatRoom", "default", "region"]);
       expect(new entry.ChatRoom().name()).toStrictEqual("chat-room");
@@ -57,7 +58,7 @@ describe("the server entry's named exports", () => {
       expect(await response.text()).toContain("<h1>About</h1>");
     } finally {
       process.env.NODE_ENV = nodeEnv;
-      await rm(root, { recursive: true, force: true });
+      if (root) await rm(root, { recursive: true, force: true });
     }
   });
 
@@ -93,13 +94,14 @@ describe("the server entry's named exports", () => {
   test("leave a server entry with only a default export as it was", async () => {
     const nodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
-    const root = await buildFixture(".tmp-build-default-");
+    let root: string | undefined;
     try {
+      root = await buildFixture(".tmp-build-default-");
       const entry = (await import(pathToFileURL(join(root, "dist/server/app.js")).href)) as object;
       expect(Object.keys(entry)).toStrictEqual(["default"]);
     } finally {
       process.env.NODE_ENV = nodeEnv;
-      await rm(root, { recursive: true, force: true });
+      if (root) await rm(root, { recursive: true, force: true });
     }
   });
 });
