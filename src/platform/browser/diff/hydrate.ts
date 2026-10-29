@@ -17,7 +17,7 @@ import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { render } from "./render.ts";
-import { setAttribute } from "./types/attribute.ts";
+import { type DeleteAttributeChangeSet, setAttribute } from "./types/attribute.ts";
 import type { LinkComponentChangeSet, MountComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet, ReplaceElementChangeSet } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
@@ -151,8 +151,11 @@ function element(
 
   for (const prop in vElement[VNodeProps.PROPS]) {
     if (prop === "children") continue;
+    if (!skipChildren && isUserEdited(node, prop)) continue;
     changes.push(...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement));
   }
+
+  if (!skipChildren) changes.push(...removeServerOnlyAttributes(vElement, node));
 
   const nodes = skipChildren ? undefined : [...node.childNodes];
 
@@ -170,9 +173,44 @@ function element(
       }),
     );
   });
-  if (nodes) dropRemainder(nodes);
+  if (nodes) dropStale(nodes);
 
   return changes;
+}
+
+/**
+ * Whether the user changed `prop` of a form field before hydration: the
+ * field's live state no longer matches the server-rendered default. Writing
+ * the client's value would discard the edit (and its selection).
+ */
+function isUserEdited(node: Node, prop: string): boolean {
+  if (prop === "value" && "defaultValue" in node && "value" in node) {
+    return node.value !== node.defaultValue;
+  }
+  if (prop === "checked" && "defaultChecked" in node && "checked" in node) {
+    return node.checked !== node.defaultChecked;
+  }
+  if (prop === "selected" && "defaultSelected" in node && "selected" in node) {
+    return node.selected !== node.defaultSelected;
+  }
+  return false;
+}
+
+/** Removes the attributes the server rendered but the client doesn't. */
+function removeServerOnlyAttributes(vElement: VElement<Node>, node: Node): ChangeSet<unknown>[] {
+  if (!(node instanceof Element)) return [];
+  const props = new Set(Object.keys(vElement[VNodeProps.PROPS]).map((p) => p.toLowerCase()));
+  return node
+    .getAttributeNames()
+    .filter((name) => !props.has(name.toLowerCase()) && !isUserEdited(node, name))
+    .map(
+      (name) =>
+        <DeleteAttributeChangeSet>{
+          [Props.Type]: Type.Attribute,
+          [Props.Action]: Action.Delete,
+          [Props.Payload]: { vNode: vElement, name },
+        },
+    );
 }
 
 /**
@@ -226,6 +264,17 @@ function text(
       [Props.Payload]: { vText, attachmentRef },
     },
   ];
+}
+
+/**
+ * Removes the server nodes left in `nodes` once hydration took what the
+ * client renders: markup the client no longer renders. Comments stay -
+ * island markers are removed after hydration.
+ */
+export function dropStale(nodes: Node[]): void {
+  for (const node of nodes.splice(0)) {
+    if (node.nodeType !== 8 /* Node.COMMENT_NODE */) node.parentNode?.removeChild(node);
+  }
 }
 
 /**

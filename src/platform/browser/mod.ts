@@ -1,14 +1,15 @@
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
+import { BOOLEAN_ATTRIBUTES } from "../../jsx-runtime/boolean-attributes.ts";
 import type { Cleanup } from "../../signal/mod.ts";
-import { isVComponent, snapshot, VNodeProps } from "../../v-node/mod.ts";
+import { isVComponent, snapshot, type VComponent, VNodeProps } from "../../v-node/mod.ts";
 import { create, setVNodeUpdater, update } from "../../v-node/sync.ts";
 import type { TransferState } from "../server/transfer-state.ts";
 // TODO: Move TransferState type to general location
 
-import { attachmentRefFrom, createRootAttachmentRef } from "./diff/attachment-ref.ts";
+import { createRootAttachmentRef, currentAttachmentRef } from "./diff/attachment-ref.ts";
 import { diff } from "./diff/diff.ts";
 import { dispatch } from "./diff/dispatch.ts";
-import { dropRemainder, hydrate } from "./diff/hydrate.ts";
+import { dropStale, hydrate } from "./diff/hydrate.ts";
 import { registerIslandModule, registerMountedIsland } from "./hot.ts";
 
 export { hotReplaceIsland } from "./hot.ts";
@@ -41,7 +42,7 @@ export function launch(islands: Island[], transferState: TransferState): void {
           const changeSet = diff({
             vNode: updatedVNode,
             previousVNode: snapshotVNode,
-            attachmentRef: attachmentRefFrom(vComponent),
+            attachmentRef: currentAttachmentRef(snapshotVNode as VComponent<Node>),
           });
 
           dispatch(changeSet);
@@ -105,7 +106,7 @@ export function launch(islands: Island[], transferState: TransferState): void {
             const vNode = create<Node>(element, options);
             if (isVComponent(vNode)) {
               dispatch(hydrate(vNode, nodes, attachmentRef));
-              dropRemainder(nodes);
+              dropStale(nodes);
               registerMountedIsland({ element, vNode, options });
             }
           }
@@ -233,13 +234,16 @@ export function findIslandChildren(props: {
 // Exported for hydration tests.
 export function createChild(node: Node, islands: Island[]): JSX.Element {
   if (isElement(node)) {
-    // Convert element attributes to props
+    // Convert element attributes to props. A boolean attribute is true by
+    // its presence: its value (usually "") would read as false.
     const props: JSX.ComponentProps = node.getAttributeNames().reduce(
       (prev, current) => {
-        prev[current] = node.getAttribute(current);
+        prev[current] = BOOLEAN_ATTRIBUTES.has(current.toLowerCase())
+          ? true
+          : node.getAttribute(current);
         return prev;
       },
-      {} as Record<string, string | null>,
+      {} as Record<string, string | boolean | null>,
     );
 
     const children: JSX.Element[] = [];
