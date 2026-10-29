@@ -1,35 +1,43 @@
-import { assertEquals } from "@std/assert/equals";
-import { assertThrows } from "@std/assert/throws";
+import { assert, describe, expect, test } from "vite-plus/test";
 import { t } from "@huuma/ui/i18n";
 
-Deno.test(t.name, async ({ step }) => {
-  await step("should return expected text", () => {
-    const value = t({
-      i18n: { activeLanguage: { hello: { huuma: "Hello Huuma" } } },
-    }, "hello.huuma");
-    assertEquals(value, "Hello Huuma");
+describe(t.name, () => {
+  test("should return expected text", () => {
+    const value = t(
+      {
+        i18n: { activeLanguage: { hello: { huuma: "Hello Huuma" } } },
+      },
+      "hello.huuma",
+    );
+    expect(value).toStrictEqual("Hello Huuma");
   });
 
-  await step("should return key", () => {
-    const value = t({
-      i18n: { activeLanguage: {} },
-    }, "hello.huuma");
-    assertEquals(value, "hello.huuma");
+  test("should return key", () => {
+    const value = t(
+      {
+        i18n: { activeLanguage: {} },
+      },
+      "hello.huuma",
+    );
+    expect(value).toStrictEqual("hello.huuma");
   });
 
-  await step("should return key", () => {
-    const value = t({
-      i18n: { activeLanguage: {} },
-    }, "hello.huuma");
-    assertEquals(value, "hello.huuma");
+  test("should return key", () => {
+    const value = t(
+      {
+        i18n: { activeLanguage: {} },
+      },
+      "hello.huuma",
+    );
+    expect(value).toStrictEqual("hello.huuma");
   });
 
-  await step("should throw error", () => {
-    assertThrows(() => {
+  test("should throw error", () => {
+    assert.throws(() => {
       t({ some: "random" }, "hello.huuma");
     });
-    assertThrows(() => {
-      t({ i18n: { "some": "random" } }, "hello.huuma");
+    assert.throws(() => {
+      t({ i18n: { some: "random" } }, "hello.huuma");
     });
   });
 });

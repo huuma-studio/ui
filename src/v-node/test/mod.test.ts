@@ -1,9 +1,9 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, expect, test } from "vite-plus/test";
 import { isVSignal, keyFromNode } from "../mod.ts";
 import { computed, signal } from "../../signal/mod.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
 
-Deno.test(isVSignal.name, () => {
+test(isVSignal.name, () => {
   assert(isVSignal(signal("value") as JSX.Element));
   assert(isVSignal(computed(() => "value") as JSX.Element));
 
@@ -17,12 +17,12 @@ Deno.test(isVSignal.name, () => {
   assert(!isVSignal(undefined));
 });
 
-Deno.test(keyFromNode.name, () => {
+test(keyFromNode.name, () => {
   const templateNode: JSX.TemplateNode = {
     templates: ["<div>", "</div>"],
     nodes: ["Hello"],
   };
-  assertEquals(keyFromNode(templateNode), undefined);
-  assertEquals(keyFromNode([]), undefined);
-  assertEquals(keyFromNode(<JSX.Element> { type: "div", key: 1 }), 1);
+  expect(keyFromNode(templateNode)).toStrictEqual(undefined);
+  expect(keyFromNode([])).toStrictEqual(undefined);
+  expect(keyFromNode(<JSX.Element>{ type: "div", key: 1 })).toStrictEqual(1);
 });

@@ -10,9 +10,7 @@ import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import type { DeleteElementChangeSet } from "./types/element.ts";
 import type { DeleteTextChangeSet } from "./types/text.ts";
 
-export function remove(
-  vNode: VNode<Node>,
-): ChangeSet<unknown>[] {
+export function remove(vNode: VNode<Node>): ChangeSet<unknown>[] {
   if (isVComponent(vNode)) {
     return [...remove(vNode[VNodeProps.AST])];
   }
@@ -25,7 +23,7 @@ export function remove(
 
   if (isVElement(vNode)) {
     return [
-      <DeleteElementChangeSet> {
+      <DeleteElementChangeSet>{
         [Props.Type]: Type.Element,
         [Props.Action]: Action.Delete,
         [Props.Payload]: {
@@ -37,7 +35,7 @@ export function remove(
 
   if (isVText(vNode)) {
     return [
-      <DeleteTextChangeSet> {
+      <DeleteTextChangeSet>{
         [Props.Type]: Type.Text,
         [Props.Action]: Action.Delete,
         [Props.Payload]: {

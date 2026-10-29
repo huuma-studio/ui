@@ -3,36 +3,25 @@ import { isProd } from "@huuma/route/utils/environment";
 import type { Route } from "@huuma/route/http/route";
 import { App, type AppOptions } from "@huuma/route";
 import { info } from "@huuma/route/utils/logger";
-import { parse } from "@std/path/parse";
-import type {
-  Handler,
-  RequestContext,
-  SearchParams,
-} from "@huuma/route/http/request";
+import { parse } from "node:path";
+import type { Handler, RequestContext, SearchParams } from "@huuma/route/http/request";
 
 import { type Island, markIslands } from "../../islands/islands.ts";
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
 import { create } from "../../v-node/async.ts";
 
 import type { TransferState, TransferStateItem } from "./transfer-state.ts";
-import {
-  type ContentSecurityPolicy,
-  generateCSP,
-} from "./content-security-policy.ts";
+import { type ContentSecurityPolicy, generateCSP } from "./content-security-policy.ts";
 import { DEFAULT_STYLES_PATH, type Stylesheet } from "./stylesheet.ts";
 import type { Metadata, MetadataGenerator } from "./metadata.ts";
 import { renderToString, vNodeToString } from "./render.ts";
+import { type Env, provideRequestContext } from "./request-context.ts";
 
-export type Resolver<T> = (
-  ctx: RequestContext,
-) => Record<string, T> | Promise<Record<string, T>>;
+export type Resolver<T> = (ctx: RequestContext) => Record<string, T> | Promise<Record<string, T>>;
 
-export type PageLike<T> = (
-  props: PageLikeProps<T>,
-) => JSX.Element | Promise<JSX.Element>;
+export type PageLike<T> = (props: PageLikeProps<T>) => JSX.Element | Promise<JSX.Element>;
 
-export interface PageLikeProps<R = undefined, T = undefined>
-  extends JSX.ComponentProps {
+export interface PageLikeProps<R = undefined, T = undefined> extends JSX.ComponentProps {
   params: Record<string, string>;
   searchParams: Record<string, string>;
   request: Request;
@@ -73,9 +62,7 @@ export type RootPageProps<T> = PageLikeProps<T> & {
   metadata?: Metadata;
 };
 
-export type RootPage<T> = (
-  props: RootPageProps<T>,
-) => JSX.Element | Promise<JSX.Element>;
+export type RootPage<T> = (props: RootPageProps<T>) => JSX.Element | Promise<JSX.Element>;
 
 export interface RenderProps<T> {
   root: PageLike<T>;
@@ -107,6 +94,10 @@ interface ScriptWithImports {
 
 export type UIAppContext<D = unknown> = {
   State: { data: D; transferState: TransferState };
+  // The app's bindings, typed by augmenting `Env`, also for `ctx.env` in
+  // middleware. With a record, as @huuma/route's `AppContext` wants one
+  // and an interface isn't.
+  Env?: Env & Record<string, unknown>;
 };
 
 interface UIAppOption<T extends UIAppContext> extends AppOptions<T> {
@@ -132,6 +123,8 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
   constructor(root: RootPage<D>, options?: UIAppOption<T>) {
     const { contentSecurityPolicy, ..._options } = options ?? {};
     super(_options);
+    // First, so the app's own middleware runs inside it too.
+    this.use(provideRequestContext);
     this.#contentSecurityPolicy = contentSecurityPolicy;
     this.#root = root;
   }
@@ -155,11 +148,16 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     return this.#entryPoints ? [...this.#entryPoints] : [];
   }
 
+  /**
+   * Registers an island component and its client script. Without
+   * `contents`, something else serves the script, such as the Vite dev
+   * server (see `addScript`).
+   */
   addIsland(
     island: JSX.Component,
     script: {
       path: string;
-      contents: Uint8Array<ArrayBuffer>;
+      contents?: Uint8Array<ArrayBuffer>;
       imports?: string[];
     },
   ): void {
@@ -170,14 +168,19 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     this.#islands.push({ path: script.path, island });
   }
 
+  /**
+   * Registers a script for the page's script tags, loaded from `/${path}`.
+   * With `content`, the app serves it at that path; without it, something
+   * else does, such as the Vite dev server.
+   */
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: ScriptWithImports,
   ): void;
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: {
       isEntryPoint: boolean;
       head?: boolean;
@@ -185,21 +188,21 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
   ): void;
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: {
       isIsland: boolean;
     } & ScriptWithImports,
   ): void;
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: {
       isRuntime: boolean;
     } & ScriptWithImports,
   ): void;
   addScript(
     path: string,
-    content: Uint8Array<ArrayBuffer>,
+    content: Uint8Array<ArrayBuffer> | undefined,
     options?: {
       isEntryPoint?: boolean;
       isIsland?: boolean;
@@ -217,19 +220,18 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
       imports: options?.imports,
       head: options?.head,
     });
+    if (!content) return;
     this.get(`/${path}`, () => {
       return new Response(content, {
         headers: {
           "Content-Type": "application/javascript",
-          ...(isProd()
-            ? { "Cache-Control": "public, max-age=604800, immutable" }
-            : {}),
+          ...(isProd() ? { "Cache-Control": "public, max-age=604800, immutable" } : {}),
         },
       });
     });
   }
 
-  addStylesheet(stylesheet: Stylesheet) {
+  addStylesheet(stylesheet: Stylesheet): void {
     const existing = this.#stylesheets.find((s) => s.name === stylesheet.name);
     if (!existing) {
       if (stylesheet.entrypoint) {
@@ -252,7 +254,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     }
   }
 
-  addTransferState(key: string, state: TransferStateItem) {
+  addTransferState(key: string, state: TransferStateItem): void {
     this.#transferState[key] = state;
   }
 
@@ -278,23 +280,24 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
         const auth = ctx.auth;
 
         const resolved = (
-          await Promise.all(props.resolvers.map((resolver) => resolver(ctx)))
+          await Promise.all(props.resolvers.map(async (resolver) => resolver(ctx)))
         ).reduce((acc, value) => {
           return { ...acc, ...value };
         }, {});
 
-        const metadata = typeof props.metadata === "function"
-          ? await props.metadata({
-            request,
-            params,
-            searchParams,
-            transferState,
-            data,
-            auth,
-            // deno-lint-ignore no-explicit-any
-            resolved: resolved as any,
-          })
-          : props.metadata;
+        const metadata =
+          typeof props.metadata === "function"
+            ? await props.metadata({
+                request,
+                params,
+                searchParams,
+                transferState,
+                data,
+                auth,
+                // deno-lint-ignore no-explicit-any
+                resolved: resolved as any,
+              })
+            : props.metadata;
 
         return new Response(
           await this.#render({
@@ -356,12 +359,10 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     const vNode = await create(node, {
       transferState,
       url,
-      ...(this.#islands.length
-        ? { beforeCreate: markIslands(this.#islands, islands) }
-        : undefined),
+      ...(this.#islands.length ? { beforeCreate: markIslands(this.#islands, islands) } : undefined),
     });
     return `<!DOCTYPE html>${await renderToString(
-      jsx(<JSX.Component> this.#root, {
+      jsx(<JSX.Component>this.#root, {
         children: [
           {
             templates: [vNodeToString(vNode)],
@@ -384,11 +385,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     )}`;
   }
 
-  #splitScripts(
-    scripts: Script[],
-    islands: Island[],
-    nonce?: string,
-  ): PageScripts | undefined {
+  #splitScripts(scripts: Script[], islands: Island[], nonce?: string): PageScripts | undefined {
     if (!scripts.length && !islands.length) {
       return undefined;
     }
@@ -411,11 +408,11 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
         _scripts.body.runtime = script;
         continue;
       }
+      // By path: island file names repeat across directories.
       if (
         this.#islands.length &&
         script.isIsland &&
-        !!islands.filter((island) => parse(island.path).name === script.name)
-          .length
+        islands.some((island) => island.path === script.path)
       ) {
         _scripts.body.islands.push(script);
         continue;
@@ -442,19 +439,10 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
     request: Request;
     resolved?: Record<string, unknown>;
   }): JSX.Element {
-    const {
-      page,
-      layouts,
-      params,
-      searchParams,
-      data,
-      auth,
-      request,
-      resolved,
-    } = props;
+    const { page, layouts, params, searchParams, data, auth, request, resolved } = props;
     return (layouts?.length ? [...layouts] : []).reduce<JSX.Element>(
       (accumulator, currentLayout) => {
-        return jsx(<JSX.Component> currentLayout, {
+        return jsx(<JSX.Component>currentLayout, {
           params,
           searchParams,
           request,
@@ -464,7 +452,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
           children: [accumulator],
         });
       },
-      jsx(<JSX.Component> page, {
+      jsx(<JSX.Component>page, {
         params,
         searchParams,
         request,

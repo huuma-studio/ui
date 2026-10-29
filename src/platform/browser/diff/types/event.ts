@@ -1,8 +1,4 @@
-import {
-  type VNode,
-  type HasVNodeRef,
-  VNodeProps,
-} from "../../../../v-node/mod.ts";
+import { type VNode, type HasVNodeRef, VNodeProps } from "../../../../v-node/mod.ts";
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
 import type { JSX } from "../../../../jsx-runtime/mod.ts";
 
@@ -18,13 +14,11 @@ export interface DeleteEventPayload extends JSX.EventRef {
   vNode: VNode<Node>;
 }
 
-export interface CreateEventChangeSet
-  extends BaseEventChangeSet<CreateEventPayload> {
+export interface CreateEventChangeSet extends BaseEventChangeSet<CreateEventPayload> {
   [Props.Action]: Action.Create;
 }
 
-export interface DeleteEventChangeSet
-  extends BaseEventChangeSet<DeleteEventPayload> {
+export interface DeleteEventChangeSet extends BaseEventChangeSet<DeleteEventPayload> {
   [Props.Action]: Action.Delete;
 }
 

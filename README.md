@@ -4,7 +4,9 @@
 
 > ⚠️ **Developer Preview** - Huuma UI is currently in active development and should be considered experimental software. This release contains known bugs, incomplete features, and APIs that will change without notice. Documentation may be outdated or incorrect. Performance has not been optimized and memory leaks may occur. **Do not use in production environments.** We encourage experimentation and feedback, but please expect breaking changes, data loss, and unstable behavior. Use at your own risk.
 
-Huuma UI An easy to use web framework for Deno that lets you build interactive websites with components that work on both server and client. Features remote server functions, reactive state management, and automatic code splitting for optimal performance.
+Huuma UI is a web framework for interactive websites: components render on the server, and islands come alive in the browser. It builds with [Vite 8](https://vite.dev) and runs on Node.js; Deno works too. Features remote server functions, reactive state management, and automatic code splitting.
+
+> Huuma UI 0.3, the Vite version described here, is a pre-release: `0.3.0-beta.2` on JSR, from the `next` branch. JSR's latest version is still 0.2, the Deno version, which [Huuma CLI](https://jsr.io/@huuma/cli) creates projects for; see [Migrating from the Deno setup](#migrating-from-the-deno-setup).
 
 ## Features
 
@@ -15,78 +17,276 @@ Huuma UI An easy to use web framework for Deno that lets you build interactive w
 - **Signal-Based Reactivity**: Fine-grained reactivity system for efficient updates
 - **Internationalization (i18n)**: Built-in support for multilingual applications
 - **TypeScript First**: Fully typed API for improved developer experience
-- **Live Module Reloading**: Fast development cycle with live reloading
+- **Hot Updates**: Edited islands update in place and keep their state, with Vite's dev server
+
+## Installation
+
+Huuma UI is published on [JSR](https://jsr.io/@huuma/ui). It needs Node.js 24 or later (the router of [`@huuma/route`](https://jsr.io/@huuma/route) uses the global `URLPattern`) and Vite 8.
+
+With pnpm 10.9+ (recommended) or Yarn 4.9+, which install JSR packages natively:
+
+```sh
+pnpm add jsr:@huuma/ui@0.3.0-beta.2
+pnpm add -D vite@^8
+```
+
+With npm or Bun, through JSR's npm compatibility layer (`jsr add` also writes an `.npmrc` for it):
+
+```sh
+npx jsr add @huuma/ui@0.3.0-beta.2
+npm install -D vite@^8
+```
+
+pnpm is recommended: npm and Yarn can install a package twice through the compatibility layer. Add `@huuma/route` the same way if your app imports it, e.g. for middlewares. For Deno, see [Deno](#deno).
 
 ## Quick Start
 
-### 1. Create a New Project with Huuma CLI
+`package.json`:
 
-```bash
-# Install Huuma CLI if you haven't already
-deno install -A -f -g -r -n huuma jsr:@huuma/cli
-
-# Create a new project
-huuma project
-
-# Enter your project name when prompted
-# Select "website" as the project type
+```json
+{
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "node dist/server/server.js"
+  }
+}
 ```
 
-This will create a project with the following structure:
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import { huuma } from "@huuma/ui/vite";
 
-```
-your-project-name/
-├── assets/            # Static assets
-├── app/             # Page components
-│   ├── page.tsx       # Main page component
-│   └── root.tsx       # Root layout component
-├── src/               # Application source code
-├── app.ts             # Production entry point
-├── dev.ts             # Development entry point
-└── deno.json          # Deno configuration
+export default defineConfig({ plugins: [huuma()] });
 ```
 
-### 2. Run Your Project
+```ts
+// server.ts: the app, as the default export
+import { createUIApp } from "@huuma/ui/server";
+import Root from "./app/root.tsx";
 
-```bash
-cd your-project-name
-
-# Start the development server
-deno task dev
+export default createUIApp(Root);
 ```
-
-The default page.tsx will look something like:
 
 ```tsx
-// app/page.tsx
-export default function HomePage() {
+// app/root.tsx: the HTML document around every page
+import { Launch, type RootPageProps, Scripts } from "@huuma/ui/server";
+
+export default function Root({ children, scripts, islands, transferState }: RootPageProps<unknown>) {
   return (
-    <>
-      <main>
-        <h2>Hello Huuma</h2>
-      </main>
-    </>
+    <html lang="en">
+      <head>
+        <Scripts scripts={scripts?.head} nonce={scripts?.nonce} />
+      </head>
+      <body>
+        {children}
+        <Launch body={scripts?.body} islands={islands} transferState={transferState} nonce={scripts?.nonce} />
+      </body>
+    </html>
   );
 }
 ```
 
-### 3. Add Interactivity with Islands
+```tsx
+// app/page.tsx: the page at /
+import Counter from "./counter.client.tsx";
+
+export default function HomePage() {
+  return (
+    <main>
+      <h2>Hello Huuma</h2>
+      <Counter />
+    </main>
+  );
+}
+```
 
 ```tsx
-// app/counter.client.tsx (the .client.tsx suffix marks this as an island component)
+// app/counter.client.tsx: an island (the .client.tsx suffix), interactive in the browser
 import { $signal } from "@huuma/ui/hooks/signal";
 
 export default function Counter() {
   const count = $signal(0);
-
-  return (
-    <div>
-      <p>Count: {count.get()}</p>
-      <button on-click={() => count.set(count.get() + 1)}>Increment</button>
-    </div>
-  );
+  return <button on-click={() => count.set(count.get() + 1)}>Count: {count}</button>;
 }
 ```
+
+Start the dev server with `pnpm dev` (or `vp dev` with [Vite+](https://viteplus.dev)) and open the URL it prints. For type checking and your editor, set `"jsx": "react-jsx"` and `"jsxImportSource": "@huuma/ui"` in `tsconfig.json`; Vite compiles JSX for Huuma either way.
+
+## Project Structure
+
+```
+my-app/
+├── app/                    # Pages, layouts and middlewares
+│   ├── root.tsx            # The HTML document
+│   ├── layout.tsx          # A layout around the pages below it
+│   ├── middleware.ts       # Middlewares for the pages below it
+│   ├── page.tsx            # The page at /
+│   ├── about/page.tsx      # The page at /about
+│   ├── !404/page.tsx       # The page for paths that aren't found
+│   └── counter.client.tsx  # An island
+├── src/                    # Application code
+│   ├── user.remote.ts      # Remote server functions
+│   └── db.server.ts        # Server-only code
+├── public/                 # Static files, served as they are
+├── server.ts               # The app
+├── vite.config.ts
+└── package.json
+```
+
+Pages, layouts and middlewares go in `app/`, islands anywhere in the project as `*.client.tsx`, remote functions as `*.remote.ts`, server-only modules as `*.server.*`.
+
+## Dev Server
+
+The dev server discovers your pages, layouts, middlewares and islands, renders pages on the server and serves islands to the browser. Edits to server code rebuild the app and reload the page.
+
+The app's server code runs on Node, in Vite's process. With the [Cloudflare adapter](#cloudflare-workers), it runs in Cloudflare's workerd instead, with the Worker's bindings.
+
+- **Remote functions:** browser code gets a stub that calls the server, never the module's code or imports. Every value export of a remote module is a remote function: `export async function`, `export const f = async () => {}` (also with several declarators or a type annotation), `export { f }`, `export { f } from "./f.ts"` and the default export. `export *`, destructuring, classes and enums fail with an error at the export.
+- **Server-only code:** importing a `*.server.*` module (any extension) from browser code fails, naming the importer. Use it from server code, e.g. a remote function.
+- **Environment variables:** `PUBLIC_*` variables (from the environment and `.env` files) are available as `import.meta.env.PUBLIC_*`, in the browser and on the server. Other variables stay on the server. `Deno.env.get()` still works for one more minor version, with a deprecation warning. Declare your variables' types yourself, e.g. with `/// <reference types="vite/client" />` and an `ImportMetaEnv` interface.
+- **Decorators:** standard decorators, e.g. `@inject()` from `@huuma/inject`, are compiled with Babel in the modules that use them. Install it in your app: `pnpm add -D @babel/core @babel/plugin-proposal-decorators`.
+- **Updates:** an edited island updates in place, without reloading the page, and keeps its state: signals keep their values, and typed input and focus stay. If you add, remove or reorder hooks (`$signal`, `$computed`, …) or change their arguments, the island starts over with its initial state. Components defined in the island's module next to it start over too. Other edits, e.g. to pages, layouts or an island's helper modules, reload the page.
+
+Options of `huuma()`:
+
+- `adapter`: the platform the app runs on. Defaults to `node()` from `@huuma/ui/vite`; for Cloudflare Workers, `cloudflare()` from `@huuma/cloudflare` (see [Cloudflare Workers](#cloudflare-workers)).
+- `routes`: the directory with `page.tsx`, `layout.tsx` and `middleware.ts` files. Defaults to `"app"`.
+- `server`: the module that exports the app, as its default export. Defaults to `"server.ts"`. Its named exports are exports of the built `dist/server/app.js` too, e.g. a Durable Object class for Cloudflare Workers (see [Cloudflare Workers](#cloudflare-workers)).
+- `decorators`: `"auto"` (default) compiles standard decorators unless Oxc's legacy decorators (`oxc.decorator.legacy`) are on; `true` or `false` to force it. Huuma supports standard decorators. If your app uses legacy (TypeScript `experimentalDecorators`) decorators, set `oxc: { decorator: { legacy: true } }` in your Vite config: `experimentalDecorators` in `tsconfig.json` alone isn't picked up, and Babel would compile them as standard decorators.
+
+## Production Build
+
+`vite build` (or `vp build`) builds the browser scripts and the app, for Node with the default adapter:
+
+- `dist/client/`: the browser runtime, the islands and the code they share, with hashed file names in `assets/`, the files the server code imports, e.g. an image a page shows, plus Vite's `public/` directory. Each file's path in it is its URL's path: with a `base` other than `/` (see below), e.g. `/shop/`, the files are in `dist/client/shop/`.
+- `dist/server/app.js`: the app, as the default export, with a standard `fetch(request)` handler: it renders pages and runs remote functions. It doesn't serve `dist/client/` and doesn't strip the `base` (see below); `server.js` does both. To run `app.js` on another runtime's server, e.g. `deno serve` or Bun, serve the files in `dist/client/` there too, at `/` as they are, and strip a base other than `/` before the app gets a request.
+- `dist/server/server.js`: starts the app on Node with `@huuma/route/node` and serves `dist/client/`: files named with their content hash (Vite names them so by default) are cached for good; other files, like those from `public/`, for an hour. For now, the files the server code imports get an hour too, although their names have a hash.
+
+```sh
+HUUMA_ENV=PROD PORT=3000 node dist/server/server.js
+```
+
+`PORT` (default `8000`) and `HOST` (default: all interfaces) set where it listens; `HUUMA_ENV=PROD` is `@huuma/route`'s production mode. Set `build.outDir` to build somewhere else than `dist/`.
+
+With a [`base`](https://vite.dev/config/shared-options.html#base) other than `/`, e.g. `/shop/`, the app lives below it, in the dev server and with `server.js` alike: `/shop/about` renders the page `app/about/page.tsx`, `/` redirects to `/shop/`, and other paths outside of it are not found. Remote functions are called below the base too. Links in your pages need the base themselves, e.g. from `import.meta.env.BASE_URL`. With a URL as the base, e.g. `https://cdn.example/shop/` for a CDN, built pages load their scripts from that URL, while the app lives below its path, `/shop/`, and remote functions are called there. The client files are then in `dist/client/shop/`, so you upload `dist/client/` to the CDN's root as it is.
+
+Not there yet: CSS imported by islands or pages. Put stylesheets in `public/` and link them in `root.tsx`, or add them with `app.addStylesheet()`.
+
+## Linting
+
+`@huuma/ui/lint` checks remote functions, hooks and islands: remote modules export async functions only, async components don't call hooks (`$signal`, …), islands aren't async, and islands don't read the [request context](#request-context). It works with Oxlint, ESLint and `deno lint`.
+
+For Oxlint, in `.oxlintrc.json`:
+
+```json
+{
+  "jsPlugins": ["@huuma/ui/lint"],
+  "rules": {
+    "huuma/async-remote-functions": "error",
+    "huuma/no-async-hook-calling": "error",
+    "huuma/no-async-client-jsx": "error",
+    "huuma/no-request-context-in-islands": "error"
+  }
+}
+```
+
+For ESLint, in `eslint.config.js`, with typescript-eslint's parser for TypeScript files:
+
+```js
+import tseslint from "typescript-eslint";
+import huuma from "@huuma/ui/lint";
+
+export default [
+  { files: ["**/*.ts", "**/*.tsx"], languageOptions: { parser: tseslint.parser } },
+  huuma.configs.recommended,
+];
+```
+
+## Deno
+
+Deno runs Vite and the built app too. Deno support is best effort: CI checks it, but Node.js is the supported runtime. Keep the `package.json` from the [Quick Start](#quick-start), install the dependencies (e.g. with pnpm), and run Vite and `server.js` with Deno:
+
+```sh
+deno run -A npm:vite          # dev server
+deno run -A npm:vite build    # production build
+deno run -A dist/server/server.js
+```
+
+With a `package.json`, Deno takes the packages from `node_modules`, like Node.js.
+
+## Cloudflare Workers
+
+`@huuma/cloudflare` runs the app as a [Cloudflare Worker](https://developers.cloudflare.com/workers/), with `dist/client/` as the Worker's [static assets](https://developers.cloudflare.com/workers/static-assets/). Its adapter brings [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/) (tested with 1.64), so `vite` runs the app's server code in workerd too, with the Worker's runtime and bindings. It's a package of its own, so apps on Node don't install workerd:
+
+```sh
+pnpm add -D jsr:@huuma/cloudflare@0.1.0-beta.1
+```
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import { huuma } from "@huuma/ui/vite";
+import { cloudflare } from "@huuma/cloudflare";
+
+export default defineConfig({ plugins: [huuma({ adapter: cloudflare() })] });
+```
+
+Add a `wrangler.jsonc` next to `vite.config.ts`. It needs no `main` or `assets`: the Worker is the app, and the build names the static assets.
+
+```jsonc
+{
+  "name": "my-app",
+  "compatibility_date": "2026-10-01",
+}
+```
+
+```sh
+vite                  # dev, in workerd
+vite build
+npx wrangler dev      # the build, locally in workerd
+npx wrangler deploy
+```
+
+- **Dev:** `vite` renders pages and runs middleware and remote functions in workerd. `requestContext().env` holds the bindings from `wrangler.jsonc`, local to the dev server. Islands update in place, as on Node; after an edit to server code, the page reloads once the app runs again in workerd.
+- **Build and deploy:** `vite build` builds the client and the server once each: `dist/server/index.js`, the Worker, and `dist/server/wrangler.json`, with `dist/client/` as the static assets. `npx wrangler dev` and `npx wrangler deploy` use that file without further options. There's no `server.js` for Node.
+- **Options:** `cloudflare()` takes the options of `@cloudflare/vite-plugin`, e.g. `configPath`, `remoteBindings` or `inspectorPort`, except `viteEnvironment`: the adapter runs the plugin in Vite's `ssr` environment, where Huuma builds the app. A `main` in `wrangler.jsonc` or from the `config` option replaces Huuma's Worker.
+- **Durable Objects, Workflows and named entrypoints:** Cloudflare finds them as named exports of the Worker. Export them from `server.ts`, next to the app; the build's Worker exports them. `wrangler.jsonc` names them as usual, e.g. `durable_objects.bindings` with `{ "name": "CHAT_ROOM", "class_name": "ChatRoom" }`, without a `main`. If it names a class `server.ts` doesn't export, the build fails and names it. See [@huuma/cloudflare](https://jsr.io/@huuma/cloudflare) for an example.
+- **Caching:** the build writes `dist/client/_headers`, which caches files named with their content hash for good, like `server.js`. It also writes `dist/client/.assetsignore`, which keeps Vite's manifest (`.vite/`) out of the upload. If `public/` has its own `_headers` or `.assetsignore`, the build keeps it and adds its rules to it.
+- **Base:** with a `base` other than `/`, e.g. `/shop/`, the configuration stays the same. The files are in `dist/client/shop/`, so Workers serves them at `/shop/` before the Worker runs, and the Worker strips the base for the app, like `server.js`. `_headers` and `.assetsignore` stay at the top of `dist/client/`, where Workers reads them.
+- **Environment:** vars and secrets reach `process.env`. Set `HUUMA_ENV` to `PROD` in `vars` for `@huuma/route`'s production mode.
+- **Bindings:** KV, D1, R2 and the Worker's other bindings reach server code as `requestContext().env`, and middleware as `ctx.env` (see [Request context](#request-context)).
+
+Coming from 0.3.0-beta.2, where every build wrote `dist/server/worker.js`: replace `cloudflare({ viteEnvironment: { name: "ssr" } })` from `@cloudflare/vite-plugin` with `huuma({ adapter: cloudflare() })`, remove `main` and `assets` from `wrangler.jsonc`, and deploy after `vite build`, which writes `dist/server/wrangler.json`.
+
+## Migrating from the Deno Setup
+
+Huuma UI 0.3 replaces the Deno build pipeline (`prepare()` and `list()` from `@huuma/ui/server/pack/list`, `pack()` from `@huuma/ui/server/pack`, the `.huuma/` directory and `--bundle`) with the Vite plugin. For a project created by Huuma CLI:
+
+1. **Dependencies:** create a `package.json` with the scripts from the [Quick Start](#quick-start) and install `@huuma/ui` (and `@huuma/route`, if you import it) and `vite` as in [Installation](#installation). The `jsr:` imports in `deno.json` become dependencies in `package.json`.
+2. **Vite config:** create `vite.config.ts` with the `huuma()` plugin. Huuma CLI's `app/root.tsx` creates and exports the app, so point the plugin at it, `huuma({ server: "app/root.tsx" })`, or move `createUIApp()` to `server.ts`. If you used the import map's aliases, move them to Vite's `resolve.alias`, e.g. `"@": fileURLToPath(new URL("./src", import.meta.url))` for `@/` (with `fileURLToPath` from `node:url`), and to `paths` in `tsconfig.json` for your editor. Drop `@manifest/`.
+3. **Entry points:** delete `dev.ts` and `app.ts`, and the `.huuma/` directory. The dev server replaces `dev.ts` with `prepare()`; `vite build` and `server.js` replace `--bundle`, `pack()` and `Deno.serve()`.
+4. **Static files:** move `static/` to `public/` and remove `loadStaticFiles(app)` from `app/root.tsx`. Vite serves `public/` in the dev server, and `server.js` serves it in production.
+5. **JSX:** precompiled JSX (`"jsx": "precompile"`) isn't supported; Vite compiles JSX with the automatic runtime. Put `"jsx": "react-jsx"` and `"jsxImportSource": "@huuma/ui"` in `tsconfig.json` for your editor.
+6. **Environment variables:** replace `Deno.env.get("PUBLIC_…")` with `import.meta.env.PUBLIC_…`. `Deno.env.get()` keeps working for one minor version, with a warning. Server code can also read `process.env`.
+7. **Linting:** with `deno.json` gone, run `@huuma/ui/lint` with Oxlint or ESLint (see [Linting](#linting)), or keep a `deno.json` with just its `lint` settings.
+8. **Run it:** `pnpm dev` instead of `deno task dev`; `pnpm build` and `pnpm start` instead of `deno task bundle` and `deno task start`. Live reload is now Vite's hot updates. To stay on Deno, see [Deno](#deno).
+
+Pages, layouts, middlewares, islands, remote functions, `createUIApp()`, `Scripts` and `Launch` don't change. Remote modules may now also use `export const f = async () => {}` and the other forms in [Dev Server](#dev-server).
+
+With Tailwind, `@huuma/theme`'s `tailwindcss()` ran in `dev.ts`. Until Huuma supports CSS imports, compile the stylesheet into `public/` with the Tailwind CLI, e.g. `npx @tailwindcss/cli -i src/styles.css -o public/styles.css --watch` next to the dev server.
+
+## Attributes
+
+Attributes go to the HTML as you write them: `class` and `for`, not `className` and `htmlFor`. Events are `on-*` props with a function, e.g. `on-click={() => …}`. The server and the browser write attributes the same way:
+
+- Strings and numbers become the attribute's value, escaped. `<script>` and `<style>` content is written as it is (escaping would break it), except that `</script` or `</style` inside can't close the element.
+- `true` and `false`: boolean attributes (`disabled`, `checked`, …) are there for `true` and left out for `false`. `aria-*` and `data-*` attributes get `"true"` and `"false"`. Other attributes are there, empty, for `true` and left out for `false`.
+- Left out, with a warning in development, because escaping can't make them safe: attribute names that aren't valid (e.g. from spread props built from request data), string event handlers (`onclick="…"`), and `javascript:` URLs in `href`, `src`, `action`, `formaction`, `xlink:href` and `data`. An invalid tag name fails the render.
+
+Warnings appear outside production, that is unless `NODE_ENV=production` or `HUUMA_ENV=PROD` is set, once per message and at most 100.
 
 ## Remote server functions
 
@@ -142,13 +342,13 @@ export default function CreateUserForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form on-submit={handleSubmit}>
       <div>
-        <label htmlFor="name">Name:</label>
+        <label for="name">Name:</label>
         <input type="text" id="name" name="name" required />
       </div>
       <div>
-        <label htmlFor="email">Email:</label>
+        <label for="email">Email:</label>
         <input type="email" id="email" name="email" required />
       </div>
       <button type="submit" disabled={pending.get()}>
@@ -191,6 +391,58 @@ const handleSubmit = async (event: Event) => {
 
 Note: request-body schema validation failures and unknown-function-name errors still go through the framework's global error handler and may not yet produce a structured `{ name, message }` body. Network-level fetch failures surface as `TypeError: Failed to fetch`.
 
+### Calls from other sites
+
+Remote functions answer only the JSON requests the generated stub sends: a request with another `Content-Type` gets `415`, and one a browser marks as cross-site (`Sec-Fetch-Site: cross-site`) gets `403`. So another site can't call them with your visitors' cookies (cross-site request forgery). To call one from a script or test, `POST` to its endpoint with `content-type: application/json` and a body of `{ "remoteFunction": "<name>", "args": [...] }`. Remote functions still decide themselves who may call them, e.g. by checking the session.
+
+## Request context
+
+Server code reads the current request with `requestContext()` from `@huuma/ui/server`: remote functions, pages, layouts, the root component, `metadata()` and resolvers, middleware, and code they call, such as `*.server.ts` modules. No need to pass the request along.
+
+```ts
+// app/todos.remote.ts
+import { UnauthorizedException } from "@huuma/route/http/exception/unauthorized-exception";
+import { requestContext } from "@huuma/ui/server";
+
+export async function addTodo(text: string) {
+  const { env, auth } = requestContext();
+  if (!auth) throw new UnauthorizedException();
+  await env.DB.prepare("insert into todos (text) values (?)").bind(text).run();
+}
+```
+
+It's a read-only view of the request with `request`, `params`, `searchParams`, `auth`, `env`, `connection` (the client's address) and `waitUntil(promise)`. Its values are live: `auth` that a later middleware sets shows.
+
+- **Auth for remote functions:** remote functions run the app-wide middleware from `server.ts` (`app.use()`), but not the pages' `middleware.ts`. So check the session there, set `ctx.auth`, and read it in the remote function:
+
+  ```ts
+  // server.ts
+  const app = createUIApp(Root);
+
+  app.use(async (ctx, next) => {
+    ctx.auth = await userFromSession(ctx.request);
+    return await next();
+  });
+
+  export default app;
+  ```
+
+- **Bindings:** on Cloudflare Workers, `env` holds the Worker's bindings. Declare their types once, in any module of the app, e.g. from what `wrangler types` generates:
+
+  ```ts
+  // env.d.ts
+  export {};
+
+  declare module "@huuma/ui/server" {
+    interface Env extends Cloudflare.Env {}
+  }
+  ```
+
+  Or list them yourself: `interface Env { DB: D1Database }`. `ctx.env` in middleware gets the same type. On Node and Deno, `env` is `{}`, also in `vite` dev on Node; with the [Cloudflare adapter](#cloudflare-workers), `vite` dev has the bindings. Read vars with `process.env` everywhere.
+- **`waitUntil(promise)`** keeps work running after the response is sent (`ctx.waitUntil()` on Workers). Work a request starts keeps its context, so that work can still call `requestContext()`.
+- **Outside a request**, e.g. at a module's top level, `requestContext()` throws. `hasRequestContext()` tells whether a request is running, for helpers that run in both places.
+- **Not in islands:** islands render in the browser too, where there's no request. Read what an island needs in its page and pass it as props. The lint rule `huuma/no-request-context-in-islands` catches calls in `*.client.tsx`.
+
 ## Signals and Reactivity
 
 Huuma UI uses a signal-based reactivity system for efficient UI updates:
@@ -219,6 +471,8 @@ function Counter() {
   );
 }
 ```
+
+A signal passed as a child (`<p>{count}</p>`, without `.get()`) binds just that text to it, so it updates without re-rendering the component. Like static values, `null`, `undefined`, `true` and `false` render as nothing: `{error}` with `$signal<string | null>(null)` shows no text until an error is set. Numbers show as text, `0`, `NaN` and `Infinity` too.
 
 ## Lifecycle Hooks
 
@@ -326,7 +580,7 @@ const app = createUIApp(({ children, scripts, islands, transferState }) => {
 // app/blog/layout.tsx
 export default function BlogLayout({ children }) {
   return (
-    <div className="blog-layout">
+    <div class="blog-layout">
       <aside>Blog Sidebar</aside>
       <section>{children}</section>
     </div>
@@ -349,60 +603,16 @@ function NavigationLink({ href, children }) {
   const isActive = currentUrl.pathname.startsWith(href);
 
   return (
-    <a href={href} className={isActive ? "active" : ""}>
+    <a href={href} class={isActive ? "active" : ""}>
       {children}
     </a>
   );
 }
 ```
 
-## Project Structure
-
-A typical Huuma UI project structure:
-
-```
-my-app/
-├── assets/           # Static assets
-├── app/            # Page components
-│   ├── layout.tsx    # Layout components
-│   ├── page.tsx      # Page components
-│   └── counter.client.tsx  # Island components (with .client.tsx suffix)
-├── src/              # Application code
-│   ├── user.remote.ts    # Remote server functions for user operations
-│   └── blog.remote.ts    # Remote server functions for blog operations
-├── app.ts            # Main application entry
-└── deno.json         # Deno configuration
-```
-
-## Development Workflow
-
-Once you've created your project with Huuma CLI, you can use the following commands:
-
-1. **Development Mode** - Start the development server with hot reloading
-
-```bash
-deno task dev
-```
-
-2. **Production Bundle** - Bundle your application for production
-
-```bash
-deno task bundle
-```
-
-3. **Production Start** - Start the production server
-
-```bash
-deno task start
-```
-
 ## Browser Support
 
-Huuma UI targets modern browsers with good ES module support:
-
-- Chrome/Edge 79+
-- Firefox 67+
-- Safari/iOS Safari 11.1+
+The production build targets Vite's default, [Baseline Widely Available](https://vite.dev/config/build-options.html#build-target) browsers: Chrome/Edge 111+, Firefox 114+ and Safari 16.4+.
 
 ## License
 

@@ -13,18 +13,31 @@ export type Cleanup = {
   cleanup: () => void;
 };
 
-interface SubscriberScope<T> {
-  subscriber: Subscriber<T>;
+interface SubscriberScope {
+  // Creation order, see notify().
+  id: number;
+  subscriber: Subscriber<never>;
   signals: Signal<unknown>[];
 }
 
-const subscriberScopes: SubscriberScope<unknown>[] = [];
+// The subscription of a computed signal to the signals it reads.
+interface ComputedScope extends SubscriberScope {
+  signal: Signal<unknown>;
+  // The scopes that read the computed signal.
+  readers: Set<SubscriberScope>;
+  // Runs the callback again and returns whether the value changed.
+  recompute: () => boolean;
+}
 
-export function setSubscriber<T, S>(
-  callback: () => T,
-  subscriber: Subscriber<S>,
-): T {
-  subscriberScopes.push(<SubscriberScope<unknown>> { subscriber, signals: [] });
+const subscriberScopes: SubscriberScope[] = [];
+let scopeCount = 0;
+
+export function setSubscriber<T, S>(callback: () => T, subscriber: Subscriber<S>): T {
+  return track({ id: scopeCount++, subscriber, signals: [] }, callback);
+}
+
+function track<T>(scope: SubscriberScope, callback: () => T): T {
+  subscriberScopes.push(scope);
   try {
     return callback();
   } finally {
@@ -34,15 +47,109 @@ export function setSubscriber<T, S>(
   }
 }
 
+function isComputed(scope: SubscriberScope): scope is ComputedScope {
+  return "recompute" in scope;
+}
+
+/*
+ * A WritableSignal.set() notifies in two steps:
+ * - Mark: collect every scope downstream of the signal, without running
+ *   any.
+ * - Settle: go through them in creation order. First recompute each
+ *   computed if a signal it reads changed, so it computes once and only
+ *   from settled values. Then run each other scope once if it still reads
+ *   a signal that changed.
+ * Creation order puts a computed after the signals it reads, and a
+ * component before the children it renders, so a parent re-render cancels
+ * the old child scopes before they would run.
+ * A computed that throws keeps its old value and nothing that reads it is
+ * updated. Every other scope still runs, then set() rethrows. The failed
+ * and skipped scopes stay pending: the next set() that reaches them runs
+ * them even if nothing they read changed, so they catch up.
+ */
+const pending = new WeakSet<SubscriberScope>();
+
+function notify(source: Signal<unknown>, readers: Set<SubscriberScope>): void {
+  const marked = new Set<SubscriberScope>();
+  mark(marked, readers);
+  const scopes = [...marked].sort((a, b) => a.id - b.id);
+  const changed = new Set<Signal<unknown>>([source]);
+  const failed = new Set<Signal<unknown>>();
+  const errors: unknown[] = [];
+
+  for (const scope of scopes) {
+    if (!isComputed(scope)) continue;
+    if (reads(scope, failed)) {
+      failed.add(scope.signal);
+      pending.add(scope);
+    } else if (pending.has(scope) || reads(scope, changed)) {
+      try {
+        if (scope.recompute()) changed.add(scope.signal);
+        pending.delete(scope);
+      } catch (error) {
+        failed.add(scope.signal);
+        pending.add(scope);
+        errors.push(error);
+      }
+    }
+  }
+
+  for (const scope of scopes) {
+    if (isComputed(scope)) continue;
+    if (reads(scope, failed)) {
+      pending.add(scope);
+      continue;
+    }
+    // Checked when it runs: an earlier subscriber may have canceled some
+    // or all of its subscriptions.
+    const from =
+      lastRead(scope, changed) ??
+      (pending.has(scope) ? scope.signals[scope.signals.length - 1] : undefined);
+    if (!from) continue;
+    pending.delete(scope);
+    try {
+      (<Subscriber<unknown>>scope.subscriber).update(untracked(() => from.get()));
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) {
+    throw new AggregateError(errors, "Signal subscribers failed");
+  }
+}
+
+function mark(marked: Set<SubscriberScope>, readers: Set<SubscriberScope>): void {
+  for (const scope of readers) {
+    if (marked.has(scope)) continue;
+    marked.add(scope);
+    if (isComputed(scope)) mark(marked, scope.readers);
+  }
+}
+
+// A loop instead of findLast(): the bundler targets browsers without it.
+function lastRead(
+  scope: SubscriberScope,
+  signals: Set<Signal<unknown>>,
+): Signal<unknown> | undefined {
+  for (let i = scope.signals.length - 1; i >= 0; i--) {
+    if (signals.has(scope.signals[i])) return scope.signals[i];
+  }
+}
+
+function reads(scope: SubscriberScope, signals: Set<Signal<unknown>>): boolean {
+  return !!signals.size && scope.signals.some((signal) => signals.has(signal));
+}
+
 export abstract class Signal<T> {
   abstract get(): T;
-  abstract subscribe(subscriber: SubscriberScope<T>): Cleanup;
-  abstract dependsOn(signal: Signal<unknown>): boolean;
+  abstract subscribe(subscriber: SubscriberScope): Cleanup;
 }
 
 export class WritableSignal<T> extends Signal<T> {
   #value: T;
-  #scopes: SubscriberScope<T>[] = [];
+  #scopes = new Set<SubscriberScope>();
 
   constructor(value: T) {
     super();
@@ -51,9 +158,7 @@ export class WritableSignal<T> extends Signal<T> {
 
   get(): T {
     if (subscriberScopes.length) {
-      this.subscribe(
-        <SubscriberScope<T>> subscriberScopes[subscriberScopes.length - 1],
-      );
+      this.subscribe(subscriberScopes[subscriberScopes.length - 1]);
     }
     return this.#value;
   }
@@ -61,18 +166,14 @@ export class WritableSignal<T> extends Signal<T> {
   set(value: T): T {
     if (this.#value === value) return value;
     this.#value = value;
-    this.#notify();
+    notify(this, this.#scopes);
     return value;
   }
 
-  dependsOn(_: Signal<unknown>): boolean {
-    return false;
-  }
-
-  subscribe(scope: SubscriberScope<T>): Cleanup {
+  subscribe(scope: SubscriberScope): Cleanup {
     const cleanup = this.#createCleanup(scope);
-    if (!this.#scopes.find((existing) => existing === scope)) {
-      this.#scopes.push(scope);
+    if (!this.#scopes.has(scope)) {
+      this.#scopes.add(scope);
       scope.signals.push(this);
       scope.subscriber.cleanupCallback?.call(this, cleanup);
     }
@@ -80,74 +181,54 @@ export class WritableSignal<T> extends Signal<T> {
     return cleanup;
   }
 
-  #createCleanup(scope: SubscriberScope<T>): Cleanup {
+  #createCleanup(scope: SubscriberScope): Cleanup {
     return {
       signal: this,
       cleanup: () => {
         scope.signals = scope.signals.filter((signal) => signal !== this);
-        this.#scopes = this.#scopes.filter((existing) => existing !== scope);
+        this.#scopes.delete(scope);
       },
     };
-  }
-
-  #notify(): void {
-    const scopes: SubscriberScope<T>[] = this.#scopes.map((scope) => ({
-      signals: [...scope.signals],
-      subscriber: scope.subscriber,
-    }));
-    scopes.forEach((scope) => {
-      if (!scope.signals.filter((signal) => signal.dependsOn(this)).length) {
-        scope.subscriber.update(this.#value);
-      }
-    });
   }
 }
 
 export class ComputedSignal<T> extends Signal<T> {
   #value: T;
-  #scopes: SubscriberScope<T>[] = [];
-  #cleanups: Cleanup[] = [];
+  #scopes = new Set<SubscriberScope>();
 
   constructor(callbackFn: () => T) {
     super();
 
-    const value = setSubscriber(() => callbackFn(), {
-      update: () => {
-        const value = callbackFn();
-        if (value !== this.#value) {
-          this.#set(value);
-        }
+    const scope: ComputedScope = {
+      id: 0,
+      // Never called: notify() recomputes computed signals itself.
+      subscriber: { update: () => {} },
+      signals: [],
+      signal: this,
+      readers: this.#scopes,
+      recompute: () => {
+        const value = untracked(callbackFn);
+        if (value === this.#value) return false;
+        this.#value = value;
+        return true;
       },
-      cleanupCallback: (cleanup) => {
-        this.#cleanups.push(cleanup);
-      },
-    });
-    this.#value = value;
-  }
-
-  dependsOn(signal: Signal<unknown>): boolean {
-    return !!this.#cleanups.find((cleanup) => cleanup.signal === signal);
+    };
+    this.#value = track(scope, callbackFn);
+    // Numbered after its callback, so it comes after every computed it
+    // reads, even one created inside the callback.
+    scope.id = scopeCount++;
   }
 
   get(): T {
     if (subscriberScopes.length) {
-      this.subscribe(
-        <SubscriberScope<T>> subscriberScopes[subscriberScopes.length - 1],
-      );
+      this.subscribe(subscriberScopes[subscriberScopes.length - 1]);
     }
     return this.#value;
   }
 
-  #set(value: T): T {
-    if (value === this.#value) return value;
-    this.#value = value;
-    this.#notify();
-    return value;
-  }
-
-  subscribe(scope: SubscriberScope<T>): Cleanup {
-    if (!this.#scopes.find((existing) => existing === scope)) {
-      this.#scopes.push(scope);
+  subscribe(scope: SubscriberScope): Cleanup {
+    if (!this.#scopes.has(scope)) {
+      this.#scopes.add(scope);
       scope.signals.push(this);
       scope.subscriber.cleanupCallback?.call(this, this.#createCleanup(scope));
     }
@@ -155,26 +236,14 @@ export class ComputedSignal<T> extends Signal<T> {
     return this.#createCleanup(scope);
   }
 
-  #createCleanup(scope: SubscriberScope<T>): Cleanup {
+  #createCleanup(scope: SubscriberScope): Cleanup {
     return {
       signal: this,
       cleanup: () => {
-        this.#scopes = this.#scopes.filter((existing) => existing !== scope);
+        this.#scopes.delete(scope);
         scope.signals = scope.signals.filter((signal) => signal !== this);
       },
     };
-  }
-
-  #notify(): void {
-    const scopes: SubscriberScope<T>[] = this.#scopes.map((scope) => ({
-      signals: [...scope.signals],
-      subscriber: scope.subscriber,
-    }));
-    scopes.forEach((scope) => {
-      if (!scope.signals.filter((signal) => signal.dependsOn(this)).length) {
-        scope.subscriber.update(this.#value);
-      }
-    });
   }
 }
 
@@ -204,7 +273,9 @@ export function effect(callback: () => void): () => void {
 export function untracked<T>(callbackFn: () => T): T {
   const _subscriberScopes = [...subscriberScopes];
   subscriberScopes.length = 0;
-  const value = callbackFn();
-  subscriberScopes.push(..._subscriberScopes);
-  return value;
+  try {
+    return callbackFn();
+  } finally {
+    subscriberScopes.push(..._subscriberScopes);
+  }
 }

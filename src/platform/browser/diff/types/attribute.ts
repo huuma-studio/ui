@@ -1,9 +1,6 @@
-import {
-  type HasVNodeRef,
-  type VElement,
-  VNodeProps,
-} from "../../../../v-node/mod.ts";
+import { type HasVNodeRef, type VElement, VNodeProps } from "../../../../v-node/mod.ts";
 import { BOOLEAN_ATTRIBUTES } from "../../../../jsx-runtime/boolean-attributes.ts";
+import { attributeValue, isValidAttributeName } from "../../../../jsx-runtime/attributes.ts";
 import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
@@ -13,13 +10,13 @@ interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
 export interface CreateAttributePayload {
   vNode: VElement<Node>;
   name: string;
-  value: string | boolean | { __html: string };
+  value: string | number | boolean | { __html: string };
 }
 
 export interface UpdateAttributePayload {
   vNode: VElement<Node>;
   name: string;
-  value: string | boolean | { __html: string };
+  value: string | number | boolean | { __html: string };
 }
 
 export interface DeleteAttributePayload {
@@ -27,18 +24,15 @@ export interface DeleteAttributePayload {
   name: string;
 }
 
-export interface CreateAttributeChangeSet
-  extends BaseAttributeChangeSet<CreateAttributePayload> {
+export interface CreateAttributeChangeSet extends BaseAttributeChangeSet<CreateAttributePayload> {
   [Props.Action]: Action.Create;
 }
 
-export interface UpdateAttributeChangeSet
-  extends BaseAttributeChangeSet<UpdateAttributePayload> {
+export interface UpdateAttributeChangeSet extends BaseAttributeChangeSet<UpdateAttributePayload> {
   [Props.Action]: Action.Update;
 }
 
-export interface DeleteAttributeChangeSet
-  extends BaseAttributeChangeSet<DeleteAttributePayload> {
+export interface DeleteAttributeChangeSet extends BaseAttributeChangeSet<DeleteAttributePayload> {
   [Props.Action]: Action.Delete;
 }
 
@@ -47,7 +41,7 @@ export type AttributeChangeSet =
   | UpdateAttributeChangeSet
   | DeleteAttributeChangeSet;
 
-export function attribute(change: AttributeChangeSet) {
+export function attribute(change: AttributeChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
       return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
@@ -74,35 +68,45 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, "");
     return;
   }
-  if (name === "value" && value != null) {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] =
-      value != null ? `${value}` : "";
+  if (typeof value === "object" && value !== null) {
+    // Only dangerouslySetInnerHTML takes an object; never "[object Object]".
+    if (name === "dangerouslySetInnerHTML" && value.__html) {
+      (<HTMLElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
+    }
     return;
   }
-  if (
-    name === "dangerouslySetInnerHTML" &&
-    typeof value === "object" &&
-    value.__html
-  ) {
-    (<HTMLElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
+  if (name === "value") {
+    // The field's current value, by the same rule as the attribute:
+    // `false` clears it, like the server, which writes no value.
+    const text = attributeValue(name, value);
+    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = text ?? "";
+    if (text === undefined) (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
     return;
   }
-  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(
-    name,
-    value != null ? `${value}` : "",
-  );
+  // The same rules as the server renderer (attributes.ts): invalid names,
+  // string event handlers and javascript: URLs are left out; `true`/`false`
+  // follow one rule.
+  const text = attributeValue(name, value);
+  if (text === undefined) {
+    // An invalid name can't be on the element, and removeAttribute() would
+    // throw on it.
+    if (isValidAttributeName(name)) {
+      (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
+    }
+    return;
+  }
+  (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, text);
 }
 
 function remove({ name, vNode }: DeleteAttributePayload): void {
+  if (!isValidAttributeName(name)) return;
   if (name === "checked") {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = false;
   }
   if (name === "value") {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = "";
   }
-  (<HTMLElement>(
-    (<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]
-  )).removeAttribute(name);
+  (<HTMLElement>(<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]).removeAttribute(name);
 }
 
 export function compareAttributes(
@@ -110,48 +114,33 @@ export function compareAttributes(
   previousVNode: VElement<Node>,
 ): ChangeSet<unknown>[] {
   const changes: AttributeChangeSet[] = [];
-  const { ...previousProps } = previousVNode[VNodeProps.PROPS];
+  const props = vNode[VNodeProps.PROPS];
+  const previousProps = previousVNode[VNodeProps.PROPS];
 
-  for (const prop in vNode[VNodeProps.PROPS]) {
-    if (
-      !BOOLEAN_ATTRIBUTES.has(prop) &&
-      typeof vNode[VNodeProps.PROPS][prop] !== "string" &&
-      typeof vNode[VNodeProps.PROPS][prop] !== "boolean" &&
-      prop !== "dangerouslySetInnerHTML"
-    ) {
-      continue;
-    }
-
-    // Attribute does not exist on previous vnode
-    if (!previousProps[prop]) {
-      changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
-      continue;
-    }
+  for (const prop in props) {
+    if (!isAttribute(prop, props[prop])) continue;
 
     // Compare dangerously set inner html
-    if (prop === "dangerouslySetInnerHTML" && previousProps[prop]) {
-      const previousInnerHTML = previousProps[prop]?.__html;
-      const innerHTML = vNode[VNodeProps.PROPS][prop]?.__html;
-
-      if (previousInnerHTML !== innerHTML) {
-        changes.push(
-          ...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode),
-        );
-        delete previousProps[prop];
+    if (prop === "dangerouslySetInnerHTML") {
+      if (props[prop]?.__html !== previousProps[prop]?.__html) {
+        changes.push(...setAttribute(prop, props[prop], vNode));
       }
       continue;
     }
 
-    // Update attribute if value has changed
-    if (vNode[VNodeProps.PROPS][prop] !== previousProps[prop]) {
-      changes.push(...setAttribute(prop, vNode[VNodeProps.PROPS][prop], vNode));
-      delete previousProps[prop];
+    // Existence is checked by key: "" and false are valid previous values.
+    if (hasOwn(previousProps, prop) && props[prop] === previousProps[prop]) {
+      continue;
     }
+    changes.push(...setAttribute(prop, props[prop], vNode));
   }
 
-  // Remove left attributes from node
+  // Remove attributes the vnode no longer renders
   for (const prop in previousProps) {
-    if (!vNode[VNodeProps.PROPS][prop]) {
+    if (
+      isAttribute(prop, previousProps[prop]) &&
+      (!hasOwn(props, prop) || !isAttribute(prop, props[prop]))
+    ) {
       changes.push({
         [Props.Action]: Action.Delete,
         [Props.Type]: Type.Attribute,
@@ -164,6 +153,23 @@ export function compareAttributes(
   }
 
   return changes;
+}
+
+// Object.hasOwn() is missing from browsers the bundler targets (Safari 15).
+function hasOwn(object: object, prop: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, prop);
+}
+
+function isAttribute(prop: string, value: unknown): boolean {
+  if (prop === "children") return false;
+  if (prop === "dangerouslySetInnerHTML") return value != null;
+  // Boolean attributes are diffed for any value: falsy ones are removed.
+  return (
+    BOOLEAN_ATTRIBUTES.has(prop) ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
 }
 
 export function setAttribute(
@@ -198,7 +204,9 @@ export function setAttribute(
       },
     ];
   }
-  if (typeof value === "string" || value === true) {
+  // createOrUpdate() decides how `false` is written: `"false"` for
+  // `aria-*` and `data-*`, left out otherwise.
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return [
       {
         [Props.Action]: Action.Create,
@@ -207,18 +215,6 @@ export function setAttribute(
           vNode,
           name: key,
           value,
-        },
-      },
-    ];
-  }
-  if (value === false) {
-    return [
-      {
-        [Props.Type]: Type.Attribute,
-        [Props.Action]: Action.Delete,
-        [Props.Payload]: {
-          vNode,
-          name: key,
         },
       },
     ];
