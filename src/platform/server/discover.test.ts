@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { type FileImport, listIslands, listPages, sortPages } from "./discover.ts";
 
 // Helper: build a FileImport with just the filePath (the only field sortPages
@@ -11,6 +11,60 @@ function page(filePath: string): FileImport {
 }
 
 const BASE = "app";
+
+describe("route directory boundaries", () => {
+  let root: string;
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "huuma-route-boundaries-"));
+    const directories = [
+      "",
+      "admin",
+      "admin/users",
+      "administrator",
+      "administrator/profile",
+      "admin-tools",
+      "admin2/[id]",
+      "(staff)/account",
+      "(staff)/accounting",
+    ];
+    for (const directory of directories) {
+      await mkdir(join(root, directory), { recursive: true });
+      await writeFile(join(root, directory, "page.tsx"), "");
+    }
+    for (const directory of ["", "admin", "administrator", "(staff)", "(staff)/account"]) {
+      await writeFile(join(root, directory, "layout.tsx"), "");
+      await writeFile(join(root, directory, "middleware.ts"), "");
+    }
+  });
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test.each([
+    ["/administrator", ["", "administrator"]],
+    ["/administrator/profile", ["", "administrator"]],
+    ["/admin-tools", [""]],
+    ["/admin2/[id]", [""]],
+    ["/accounting", ["", "(staff)"]],
+    // Controls: a boundary fix must retain exact matches and real ancestors.
+    ["/admin", ["", "admin"]],
+    ["/admin/users", ["", "admin"]],
+    ["/account", ["", "(staff)", "(staff)/account"]],
+    ["/", [""]],
+  ] as const)("inherits only ancestor layouts and middleware at %s", async (path, expected) => {
+    const routes = await listPages(root);
+    const route = routes.pages.find(({ page }) => page.routePath === path)!;
+    const directoriesFor = (names: string[], modules: FileImport[]) =>
+      names
+        .map((name) => relative(root, modules.find((module) => module.name === name)!.filePath))
+        .sort();
+
+    expect.soft(directoriesFor(route.layouts, routes.layouts)).toStrictEqual([...expected].sort());
+    expect(directoriesFor(route.middlewares, routes.middlewares)).toStrictEqual(
+      [...expected].sort(),
+    );
+  });
+});
 
 describe("sortPages: root page is first regardless of initial order", () => {
   // The bug: the old comparator only checked `a` for the root page, never `b`.
