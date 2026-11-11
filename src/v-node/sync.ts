@@ -69,11 +69,11 @@ export function create<T>(node: JSX.Element, globalOptions: VGlobalOptions = {})
 }
 
 /**
- * The components the running update pass removed, whose destroy hooks run
- * once the pass completes: a later render in the pass may throw, and then
- * nothing was removed (see destroy()).
+ * The components the running update pass removed and created. The removed
+ * ones' destroy hooks run once the pass completes: a later render in the
+ * pass may throw, and then the tree still holds them (see destroy()).
  */
-let removed: VComponent<unknown>[] | undefined;
+let pass: { removed: VComponent<unknown>[]; created: VComponent<unknown>[] } | undefined;
 
 export function update<T>(
   node: JSX.Element,
@@ -83,19 +83,41 @@ export function update<T>(
 ): VNode<T> {
   if (!cleanupVNode) return reconcile(node, vNode, globalOptions, cleanupVNode);
 
-  // A root pass. Its own list: a render can start another pass, by
+  // A root pass. Its own lists: a render can start another pass, by
   // setting a signal.
-  const outer = removed;
-  removed = [];
+  const outer = pass;
+  const current = (pass = { removed: [], created: [] });
+  let next: VNode<T>;
   try {
-    const next = reconcile(node, vNode, globalOptions, cleanupVNode);
-    const components = removed;
-    removed = outer;
-    components.forEach(runDestroyHooks);
-    return next;
+    next = reconcile(node, vNode, globalOptions, cleanupVNode);
+  } catch (error) {
+    pass = outer;
+    // The pass had already updated some elements' children: the
+    // components it took out of those, or created for them, are gone for
+    // good. The tree keeps the others, for a retry.
+    const held = componentsIn(vNode);
+    runDestroyHooks(
+      [...current.removed, ...current.created].filter((vComponent) => !held.has(vComponent)),
+    );
+    throw error;
   } finally {
-    removed = outer;
+    pass = outer;
   }
+  runDestroyHooks(current.removed);
+  return next;
+}
+
+function componentsIn<T>(
+  vNode: VNode<T> | undefined,
+  components = new Set<VComponent<unknown>>(),
+): Set<VComponent<unknown>> {
+  if (isVComponent(vNode)) {
+    components.add(vNode);
+    componentsIn(vNode[VNodeProps.AST], components);
+  } else if (isVElement(vNode) || isVFragment(vNode)) {
+    vNode[VNodeProps.CHILDREN]?.forEach((vChild) => componentsIn(vChild, components));
+  }
+  return components;
 }
 
 function reconcile<T>(
@@ -238,6 +260,8 @@ function vComponent<T>(component: JSX.ComponentNode<JSX.Component>, globalOption
     [VNodeProps.PROPS]: props,
     [VNodeProps.OPTIONS]: { _GLOBAL: globalOptions },
   };
+  // Before it renders: a throwing render can leave hooks to clean up.
+  pass?.created.push(vComponent);
 
   scopedFn(vComponent, () => {
     if (typeof vNodeSignalUpdater === "function") {
@@ -397,11 +421,24 @@ function track<T>(
   return _children;
 }
 
-function runDestroyHooks<T>(vComponent: VComponent<T>): void {
-  const hooks = vComponent[VNodeProps.HOOKS]?.[VHook.DESTROY];
-  // At most once, should two passes remove the same component.
-  if (vComponent[VNodeProps.HOOKS]) vComponent[VNodeProps.HOOKS][VHook.DESTROY] = undefined;
-  hooks?.forEach((hook) => hook());
+/**
+ * Runs the destroy hooks of `vComponents`, each at most once, should two
+ * passes remove the same component. A throwing hook doesn't skip the
+ * others, and doesn't fail the pass, which already removed the
+ * components: like React, it's reported.
+ */
+function runDestroyHooks(vComponents: VComponent<unknown>[]): void {
+  for (const vComponent of vComponents) {
+    const hooks = vComponent[VNodeProps.HOOKS]?.[VHook.DESTROY];
+    if (vComponent[VNodeProps.HOOKS]) vComponent[VNodeProps.HOOKS][VHook.DESTROY] = undefined;
+    hooks?.forEach((hook) => {
+      try {
+        hook();
+      } catch (error) {
+        (typeof reportError === "function" ? reportError : console.error)(error);
+      }
+    });
+  }
 }
 
 export function assertSyncCall<T>(node: Promise<T> | T): T {
@@ -444,8 +481,8 @@ function destroy<T>(vNode: VNode<T>) {
     // In an update pass, its destroy hooks wait until the pass completes:
     // a pass aborted by a throwing render keeps the component, which a
     // retry may keep too (with its `$effect`s and `$computed`s running).
-    if (removed) removed.push(vNode);
-    else runDestroyHooks(vNode);
+    if (pass) pass.removed.push(vNode);
+    else runDestroyHooks([vNode]);
     destroy(vNode[VNodeProps.AST]);
   }
   // DOM-text subscriptions are deliberately NOT drained here: the diff

@@ -11,7 +11,7 @@ import { gzipSync } from "node:zlib";
 
 // Bytes. Raise a budget on purpose, in the commit that needs it, and lower
 // it when the runtime shrinks so the headroom stays small (~2.5%).
-const BUDGET = { minified: 33_000, gzipped: 9_000 };
+const BUDGET = { minified: 33_850, gzipped: 9_200 };
 
 const runtime = fileURLToPath(new URL("../src/platform/browser/mod.ts", import.meta.url));
 
