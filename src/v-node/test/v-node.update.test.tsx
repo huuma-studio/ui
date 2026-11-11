@@ -216,7 +216,7 @@ describe(update.name, () => {
     expect(destroyed).toStrictEqual(["Old"]);
   });
 
-  test("run destroy hooks only once when an update pass aborts", () => {
+  test("run destroy hooks once an update pass completes, and only once", () => {
     const destroyed: string[] = [];
 
     const Tracked = () => {
@@ -228,23 +228,27 @@ describe(update.name, () => {
     };
     const Stable = () => <span>stable</span>;
 
-    const Root = ({ fail }: { fail?: boolean }) => (
+    const Root = ({ fail, remove }: { fail?: boolean; remove?: boolean }) => (
       <div>
-        {fail ? false : <Tracked />}
+        {fail || remove ? false : <Tracked />}
         {fail ? <Throwing /> : <Stable />}
       </div>
     );
 
     const vNode = create(<Root />);
 
-    // Tracked is destroyed, then the sibling's render aborts the pass
-    // before the parent's children are reassigned.
+    // Tracked is removed, then the sibling's render aborts the pass
+    // before the parent's children are reassigned: Tracked is still there.
     assert.throws(() => update(<Root fail />, vNode, {}), Error, "render failed");
-    expect(destroyed).toStrictEqual(["Tracked"]);
+    assert.throws(() => update(<Root fail />, vNode, {}), Error, "render failed");
+    expect(destroyed).toStrictEqual([]);
 
-    // The retry walks the stale children again - Tracked's hooks must
-    // not re-fire.
-    assert.throws(() => update(<Root fail />, vNode, {}), Error, "render failed");
+    // A retry that keeps it.
+    update(<Root />, vNode, {});
+    expect(destroyed).toStrictEqual([]);
+
+    update(<Root remove />, vNode, {});
+    update(<Root remove />, vNode, {});
     expect(destroyed).toStrictEqual(["Tracked"]);
   });
 

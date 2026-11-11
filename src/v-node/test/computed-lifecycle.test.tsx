@@ -112,6 +112,36 @@ describe("computed hook teardown", () => {
     }
   });
 
+  test("keeps computing after a pass that would remove it fails", () => {
+    const source = signal(0);
+    const rendered: number[] = [];
+    function Child() {
+      const value = $computed(() => source.get() * 2);
+      rendered.push(value.get());
+      return <span>{value.get()}</span>;
+    }
+    function Throwing(): JSX.Element {
+      throw new Error("render failed");
+    }
+    const Root = ({ fail }: { fail?: boolean }) => (
+      <div>
+        {fail ? false : <Child />}
+        {fail ? <Throwing /> : <p />}
+      </div>
+    );
+    const vnode = create(<Root />);
+    expect(() => update(<Root fail />, vnode, {})).toThrow("render failed");
+    // A retry that keeps the component, and its computed.
+    const next = update(<Root />, vnode, {});
+    rendered.length = 0;
+    try {
+      source.set(2);
+      expect(rendered).toStrictEqual([4]);
+    } finally {
+      update(null, next, {});
+    }
+  });
+
   test("keeps a computed alive through an ordinary component rerender", () => {
     const source = signal(0);
     const rendered: number[] = [];
