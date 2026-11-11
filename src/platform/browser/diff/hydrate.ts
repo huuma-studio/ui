@@ -12,6 +12,8 @@ import {
   type VText,
 } from "../../../v-node/mod.ts";
 import { toText } from "../../../utils/text.ts";
+import { devWarn, isProduction } from "../../../utils/dev.ts";
+import { attributeValue } from "../../../jsx-runtime/attributes.ts";
 import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 
 import { diff } from "./diff.ts";
@@ -149,12 +151,26 @@ function element(
     });
   });
 
-  for (const prop in vElement[VNodeProps.PROPS]) {
-    if (prop === "children") continue;
-    changes.push(...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement));
+  // Like React, hydration keeps the server's attributes: a browser
+  // extension or a script may have changed them before hydration (a class,
+  // a style, a field the user edited). Only an element the client creates
+  // instead gets the client's attributes.
+  if (skipChildren) {
+    for (const prop in vElement[VNodeProps.PROPS]) {
+      if (prop === "children") continue;
+      changes.push(...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement));
+    }
+  } else if (!isProduction()) {
+    warnAttributeMismatch(vElement, <Element>node);
   }
 
-  const nodes = skipChildren ? undefined : [...node.childNodes];
+  // Raw HTML and a textarea's `value` (rendered as its content) have no
+  // child vNodes to claim the server's children: keep them.
+  const props = vElement[VNodeProps.PROPS];
+  const raw =
+    props.dangerouslySetInnerHTML != null ||
+    (node.nodeName.toLowerCase() === "textarea" && "value" in props);
+  const nodes = skipChildren || raw ? undefined : [...node.childNodes];
 
   const childrenAttachmentRef: ParentAttachmentRef = {
     type: AttachmentType.Parent,
@@ -170,9 +186,52 @@ function element(
       }),
     );
   });
-  if (nodes) dropRemainder(nodes);
+  if (nodes) dropStale(nodes);
 
   return changes;
+}
+
+/**
+ * Warns about the attributes the server rendered differently from the
+ * client. Hydration keeps them, so a real mismatch would go unnoticed.
+ * Attributes an extension added or changed are reported too, as React does.
+ */
+function warnAttributeMismatch(vElement: VElement<Node>, node: Element): void {
+  const props = vElement[VNodeProps.PROPS];
+  const tag = node.localName;
+  const client = new Map<string, string>();
+  for (const prop in props) {
+    if (prop === "children" || prop === "dangerouslySetInnerHTML") continue;
+    // The server renders these as content and as `selected` (render.ts).
+    if (prop === "value" && (tag === "select" || tag === "textarea")) continue;
+    const value = attributeValue(prop, props[prop]);
+    if (value !== undefined) client.set(prop.toLowerCase(), value);
+  }
+
+  const differences: string[] = [];
+  for (const name of node.getAttributeNames()) {
+    if (name === "selected" && tag === "option" && !client.has(name)) continue;
+    const server = node.getAttribute(name);
+    if (!client.has(name)) {
+      differences.push(`${name}=${JSON.stringify(server)} (server only)`);
+    } else if (client.get(name) !== server) {
+      differences.push(
+        `${name}=${JSON.stringify(server)} (client: ${JSON.stringify(client.get(name))})`,
+      );
+    }
+    client.delete(name);
+  }
+  for (const [name, value] of client) {
+    differences.push(`${name}=${JSON.stringify(value)} (client only)`);
+  }
+
+  if (differences.length) {
+    devWarn(
+      `Hydration kept the server's attributes of <${tag}>, which differ from ` +
+        `the client's: ${differences.join(", ")}. A browser extension may have changed them; ` +
+        `otherwise render the same attributes on the server and the client.`,
+    );
+  }
 }
 
 /**
@@ -226,6 +285,24 @@ function text(
       [Props.Payload]: { vText, attachmentRef },
     },
   ];
+}
+
+/**
+ * Removes the server nodes left in `nodes` once hydration took what the
+ * client renders: markup the client no longer renders. Comments stay -
+ * island markers are removed after hydration - and so do custom elements,
+ * the way browser extensions add their own markup (`<grammarly-extension>`).
+ * Hydration keeps the server's attributes for the same reason (see `element()`).
+ */
+export function dropStale(nodes: Node[]): void {
+  for (const node of nodes.splice(0)) {
+    if (node.nodeType === 8 /* Node.COMMENT_NODE */ || isCustomElement(node)) continue;
+    node.parentNode?.removeChild(node);
+  }
+}
+
+function isCustomElement(node: Node): boolean {
+  return node.nodeType === 1 /* Node.ELEMENT_NODE */ && (<Element>node).localName.includes("-");
 }
 
 /**

@@ -12,8 +12,9 @@ jobs:
           node-version: "24"
           cache: true
       - run: vp check
-      # For the browser tests, which fail in CI without it.
-      - run: vp exec playwright-core install --with-deps chromium
+      # For the browser tests, which fail in CI without a Chromium: the
+      # runner image's Chrome, so CI needs no download and no apt mirror.
+      - run: echo "HUUMA_CHROMIUM=$(command -v google-chrome)" >> "$GITHUB_ENV"
       - run: vp test
       # Again with upstream Vite instead of Vite+'s copy: apps don't need
       # Vite+ (spec #126).

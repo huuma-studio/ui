@@ -71,6 +71,10 @@ function stringify<T>(vNode: VNode<T>, foreign = false): string {
 // break the script or style.
 const RAW_TEXT_TAGS = new Set(["script", "style"]);
 
+// The `value` of the `<select>` being rendered, which marks its matching
+// `<option>` as selected (see `elementToString()`).
+let selectValue: string | undefined;
+
 function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
   const tag = vNode[VNodeProps.TAG];
   const props = vNode[VNodeProps.PROPS];
@@ -94,6 +98,43 @@ function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
   const childrenForeign = foreign ? lower !== "foreignobject" : lower === "svg" || lower === "math";
 
   const { dangerouslySetInnerHTML, children: _c, ...attributes } = props;
+  if (!foreign) {
+    // The browser ignores a `value` attribute on <textarea> and <select>:
+    // like React, the textarea gets it as its content, and the select's
+    // matching <option> gets `selected`. The page shows the value before
+    // hydration, which then keeps what the server rendered. Raw HTML stays
+    // as it is: the options in it can't be matched, so like in React, they
+    // need `selected` themselves.
+    if (lower === "textarea" && "value" in attributes && !dangerouslySetInnerHTML) {
+      const { value, ...rest } = attributes;
+      const text = attributeValue("value", value) ?? "";
+      // The parser drops a newline right after <textarea>.
+      return `<${tag}${stringFrom(rest)}>${text.startsWith("\n") ? "\n" : ""}${escape(text)}</${tag}>`;
+    }
+    if (lower === "select" && "value" in attributes && !dangerouslySetInnerHTML) {
+      const { value, ...rest } = attributes;
+      const outer = selectValue;
+      selectValue = attributeValue("value", value);
+      try {
+        return `<${tag}${stringFrom(rest)}>${
+          children?.map((child) => stringify(child, childrenForeign)).join("") ?? ""
+        }</${tag}>`;
+      } finally {
+        selectValue = outer;
+      }
+    }
+    if (lower === "option" && selectValue !== undefined && !attributes.selected) {
+      // An option without a `value` uses its text, as in the browser; a
+      // label in raw HTML has no text to read.
+      const value =
+        "value" in attributes
+          ? attributeValue("value", attributes.value)
+          : dangerouslySetInnerHTML
+            ? undefined
+            : optionText(children?.map((child) => rawContent(child)).join("") ?? "");
+      if (value !== undefined && value === selectValue) attributes.selected = true;
+    }
+  }
   if (dangerouslySetInnerHTML) {
     return `<${tag}${stringFrom(attributes)}>${dangerouslySetInnerHTML.__html}</${tag}>`;
   }
@@ -106,6 +147,15 @@ function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
   return `<${tag}${stringFrom(attributes)}>${
     children?.map((child) => stringify(child, childrenForeign)).join("") ?? ""
   }</${tag}>`;
+}
+
+/**
+ * An option's text as the browser derives its value from it: ASCII
+ * whitespace stripped and collapsed (HTML's "strip and collapse ASCII
+ * whitespace"; `trim()` would also remove other spaces, like U+00A0).
+ */
+function optionText(text: string): string {
+  return text.replace(/[\t\n\f\r ]+/g, " ").replace(/^ | $/g, "");
 }
 
 /**

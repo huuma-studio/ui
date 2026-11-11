@@ -4,6 +4,7 @@ import {
   AttachmentType,
   moveAttachmentRef,
   parentFromAttachmentRef,
+  skipCommentNodes,
 } from "../attachment-ref.ts";
 
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
@@ -124,7 +125,8 @@ function link({ vElement, node, attachmentRef }: LinkElementPayload): void {
 
   if (
     attachmentRef.type === AttachmentType.Sibling &&
-    attachmentRef.node !== node.previousSibling
+    // Island markers can still sit between an island's anchor and its node.
+    attachmentRef.node !== skipCommentNodes(node.previousSibling)
   ) {
     // Remove current node
     node.parentNode?.removeChild(node);

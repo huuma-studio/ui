@@ -3,7 +3,6 @@ import {
   isVComponent,
   isVElement,
   isVFragment,
-  isVText,
   snapshot,
   type VComponent,
   type VGlobalOptions,
@@ -12,11 +11,7 @@ import {
 } from "../../v-node/mod.ts";
 import { update } from "../../v-node/sync.ts";
 
-import {
-  type AttachmentRef,
-  attachmentRefFrom,
-  createRootAttachmentRef,
-} from "./diff/attachment-ref.ts";
+import { currentAttachmentRef } from "./diff/attachment-ref.ts";
 import { diff } from "./diff/diff.ts";
 import { dispatch } from "./diff/dispatch.ts";
 
@@ -104,28 +99,6 @@ export function hotReplaceIsland(
     island.vNode = vNode;
   }
   return true;
-}
-
-/**
- * Where an island's DOM is attached now: before its first node. The ref
- * saved at hydration can be stale, the last node of an adjacent island
- * that a replacement removed. An island without nodes keeps its saved ref.
- */
-function currentAttachmentRef(vNode: VComponent<Node>): AttachmentRef | undefined {
-  const node = firstNode(vNode);
-  return node ? createRootAttachmentRef(node) : attachmentRefFrom(vNode);
-}
-
-function firstNode(vNode: VNode<Node>): Node | undefined {
-  if (isVComponent<Node>(vNode)) return firstNode(vNode[VNodeProps.AST]);
-  if (isVElement<Node>(vNode) || isVText<Node>(vNode)) return vNode[VNodeProps.NODE_REF];
-  if (isVFragment<Node>(vNode)) {
-    for (const child of vNode[VNodeProps.CHILDREN] ?? []) {
-      const node = firstNode(child);
-      if (node) return node;
-    }
-  }
-  return undefined;
 }
 
 /** Whether a rendered tree has a component of `component`. */
