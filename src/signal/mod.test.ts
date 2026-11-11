@@ -1,5 +1,166 @@
 import { assert, describe, expect, test } from "vite-plus/test";
-import { type Cleanup, computed, setSubscriber, signal } from "./mod.ts";
+import { type Cleanup, computed, effect, setSubscriber, signal } from "./mod.ts";
+
+describe("computed dependencies that change", () => {
+  test("follows a newly selected source and can switch back", () => {
+    const left = signal(1);
+    const right = signal(10);
+    const useLeft = signal(true);
+    const selected = computed(() => (useLeft.get() ? left.get() : right.get()));
+    const values: number[] = [];
+    setSubscriber(() => selected.get(), { update: (value: number) => values.push(value) });
+
+    useLeft.set(false);
+    right.set(20);
+    expect(selected.get()).toBe(20);
+    expect(values).toStrictEqual([10, 20]);
+
+    useLeft.set(true);
+    left.set(2);
+    expect(selected.get()).toBe(2);
+    expect(values).toStrictEqual([10, 20, 1, 2]);
+  });
+
+  test("unsubscribes from an inactive branch", () => {
+    const left = signal(1);
+    const right = signal(10);
+    const useLeft = signal(true);
+    let calls = 0;
+    const selected = computed(() => {
+      calls++;
+      return useLeft.get() ? left.get() : right.get();
+    });
+    useLeft.set(false);
+    const before = calls;
+
+    left.set(2);
+    expect(selected.get()).toBe(10);
+    expect(calls).toBe(before);
+  });
+
+  test("switches dependencies even when the computed value stays equal", () => {
+    const left = signal(1);
+    const right = signal(1);
+    const useLeft = signal(true);
+    const selected = computed(() => (useLeft.get() ? left.get() : right.get()));
+    const values: number[] = [];
+    setSubscriber(() => selected.get(), { update: (value: number) => values.push(value) });
+
+    useLeft.set(false);
+    expect(values).toStrictEqual([]);
+    right.set(2);
+    expect(selected.get()).toBe(2);
+    expect(values).toStrictEqual([2]);
+  });
+
+  test("updates a downstream computed once with the new branch's settled value", () => {
+    const left = signal(1);
+    const right = signal(10);
+    const useLeft = signal(true);
+    const selected = computed(() => (useLeft.get() ? left.get() : right.get()));
+    const doubled = computed(() => selected.get() * 2);
+    const values: number[][] = [];
+    setSubscriber(
+      () => {
+        selected.get();
+        doubled.get();
+      },
+      { update: () => values.push([selected.get(), doubled.get()]) },
+    );
+
+    useLeft.set(false);
+    right.set(20);
+    expect(values).toStrictEqual([
+      [10, 20],
+      [20, 40],
+    ]);
+  });
+});
+
+describe("computed dependencies that change, in one pass", () => {
+  test("settles a computed it reads for the first time, created after it", () => {
+    const count = signal(1);
+    // Reads tenfold only from count = 2, and was created before it.
+    const reader = computed(() => (count.get() > 1 ? tenfold.get() : -1));
+    const tenfold = computed(() => count.get() * 10);
+
+    count.set(2);
+    expect(reader.get()).toBe(20);
+  });
+
+  test("settles the sources of a computed created after it first", () => {
+    const visible = signal(false);
+    const count = signal(1);
+    const reader = computed(() => (visible.get() ? tenfold.get() : -1));
+    const tenfold = computed(() => count.get() * 10);
+    const values: number[] = [];
+    setSubscriber(() => reader.get(), { update: (value: number) => values.push(value) });
+
+    visible.set(true);
+    count.set(2);
+    expect(values).toStrictEqual([10, 20]);
+  });
+
+  test("disposes a computed from the signals it read in a later run", () => {
+    const visible = signal(false);
+    const name = signal("Ada");
+    let runs = 0;
+    const label = computed(() => {
+      runs++;
+      return visible.get() ? name.get() : "hidden";
+    });
+    visible.set(true);
+    label.dispose();
+    const before = runs;
+
+    name.set("Grace");
+    visible.set(false);
+    expect(runs).toBe(before);
+    expect(label.get()).toBe("Ada");
+  });
+});
+
+describe("effect dependencies that change", () => {
+  test("tracks a signal it reads first in a later run", () => {
+    const visible = signal(false);
+    const name = signal("Ada");
+    const seen: string[] = [];
+    effect(() => {
+      seen.push(visible.get() ? name.get() : "hidden");
+    });
+
+    visible.set(true);
+    name.set("Grace");
+    expect(seen).toStrictEqual(["hidden", "Ada", "Grace"]);
+  });
+
+  test("keeps the subscriptions of a run that throws", () => {
+    const broken = signal(false);
+    const name = signal("Ada");
+    effect(() => {
+      if (broken.get()) throw new Error("effect failed");
+      name.get();
+    });
+
+    // The failed run never reached name.get(): it still runs on name.
+    assert.throws(() => broken.set(true), Error, "effect failed");
+    assert.throws(() => name.set("Grace"), Error, "effect failed");
+  });
+
+  test("disposes from the signals it read in a later run", () => {
+    const visible = signal(false);
+    const name = signal("Ada");
+    const seen: string[] = [];
+    const dispose = effect(() => {
+      seen.push(visible.get() ? name.get() : "hidden");
+    });
+
+    visible.set(true);
+    dispose();
+    name.set("Grace");
+    expect(seen).toStrictEqual(["hidden", "Ada"]);
+  });
+});
 
 describe(setSubscriber.name, () => {
   test("subscribe reads inside the callback", () => {
