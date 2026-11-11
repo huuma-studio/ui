@@ -12,12 +12,14 @@ import {
   type VText,
 } from "../../../v-node/mod.ts";
 import { toText } from "../../../utils/text.ts";
+import { devWarn, isProduction } from "../../../utils/dev.ts";
+import { attributeValue } from "../../../jsx-runtime/attributes.ts";
 import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { render } from "./render.ts";
-import { type DeleteAttributeChangeSet, setAttribute } from "./types/attribute.ts";
+import { setAttribute } from "./types/attribute.ts";
 import type { LinkComponentChangeSet, MountComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet, ReplaceElementChangeSet } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
@@ -149,13 +151,18 @@ function element(
     });
   });
 
-  for (const prop in vElement[VNodeProps.PROPS]) {
-    if (prop === "children") continue;
-    if (!skipChildren && isUserEdited(node, prop)) continue;
-    changes.push(...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement));
+  // Like React, hydration keeps the server's attributes: a browser
+  // extension or a script may have changed them before hydration (a class,
+  // a style, a field the user edited). Only an element the client creates
+  // instead gets the client's attributes.
+  if (skipChildren) {
+    for (const prop in vElement[VNodeProps.PROPS]) {
+      if (prop === "children") continue;
+      changes.push(...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement));
+    }
+  } else if (!isProduction()) {
+    warnAttributeMismatch(vElement, <Element>node);
   }
-
-  if (!skipChildren) changes.push(...removeServerOnlyAttributes(vElement, node));
 
   const nodes = skipChildren ? undefined : [...node.childNodes];
 
@@ -179,38 +186,42 @@ function element(
 }
 
 /**
- * Whether the user changed `prop` of a form field before hydration: the
- * field's live state no longer matches the server-rendered default. Writing
- * the client's value would discard the edit (and its selection).
+ * Warns about the attributes the server rendered differently from the
+ * client. Hydration keeps them, so a real mismatch would go unnoticed.
+ * Attributes an extension added or changed are reported too, as React does.
  */
-function isUserEdited(node: Node, prop: string): boolean {
-  if (prop === "value" && "defaultValue" in node && "value" in node) {
-    return node.value !== node.defaultValue;
+function warnAttributeMismatch(vElement: VElement<Node>, node: Element): void {
+  const props = vElement[VNodeProps.PROPS];
+  const client = new Map<string, string>();
+  for (const prop in props) {
+    if (prop === "children" || prop === "dangerouslySetInnerHTML") continue;
+    const value = attributeValue(prop, props[prop]);
+    if (value !== undefined) client.set(prop.toLowerCase(), value);
   }
-  if (prop === "checked" && "defaultChecked" in node && "checked" in node) {
-    return node.checked !== node.defaultChecked;
-  }
-  if (prop === "selected" && "defaultSelected" in node && "selected" in node) {
-    return node.selected !== node.defaultSelected;
-  }
-  return false;
-}
 
-/** Removes the attributes the server rendered but the client doesn't. */
-function removeServerOnlyAttributes(vElement: VElement<Node>, node: Node): ChangeSet<unknown>[] {
-  if (!(node instanceof Element)) return [];
-  const props = new Set(Object.keys(vElement[VNodeProps.PROPS]).map((p) => p.toLowerCase()));
-  return node
-    .getAttributeNames()
-    .filter((name) => !props.has(name.toLowerCase()) && !isUserEdited(node, name))
-    .map(
-      (name) =>
-        <DeleteAttributeChangeSet>{
-          [Props.Type]: Type.Attribute,
-          [Props.Action]: Action.Delete,
-          [Props.Payload]: { vNode: vElement, name },
-        },
+  const differences: string[] = [];
+  for (const name of node.getAttributeNames()) {
+    const server = node.getAttribute(name);
+    if (!client.has(name)) {
+      differences.push(`${name}=${JSON.stringify(server)} (server only)`);
+    } else if (client.get(name) !== server) {
+      differences.push(
+        `${name}=${JSON.stringify(server)} (client: ${JSON.stringify(client.get(name))})`,
+      );
+    }
+    client.delete(name);
+  }
+  for (const [name, value] of client) {
+    differences.push(`${name}=${JSON.stringify(value)} (client only)`);
+  }
+
+  if (differences.length) {
+    devWarn(
+      `Hydration kept the server's attributes of <${node.localName}>, which differ from ` +
+        `the client's: ${differences.join(", ")}. A browser extension may have changed them; ` +
+        `otherwise render the same attributes on the server and the client.`,
     );
+  }
 }
 
 /**
@@ -269,12 +280,19 @@ function text(
 /**
  * Removes the server nodes left in `nodes` once hydration took what the
  * client renders: markup the client no longer renders. Comments stay -
- * island markers are removed after hydration.
+ * island markers are removed after hydration - and so do custom elements,
+ * the way browser extensions add their own markup (`<grammarly-extension>`).
+ * Hydration keeps the server's attributes for the same reason (see `element()`).
  */
 export function dropStale(nodes: Node[]): void {
   for (const node of nodes.splice(0)) {
-    if (node.nodeType !== 8 /* Node.COMMENT_NODE */) node.parentNode?.removeChild(node);
+    if (node.nodeType === 8 /* Node.COMMENT_NODE */ || isCustomElement(node)) continue;
+    node.parentNode?.removeChild(node);
   }
+}
+
+function isCustomElement(node: Node): boolean {
+  return node.nodeType === 1 /* Node.ELEMENT_NODE */ && (<Element>node).localName.includes("-");
 }
 
 /**

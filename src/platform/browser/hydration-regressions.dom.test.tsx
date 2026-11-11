@@ -297,8 +297,10 @@ describe("hydration mismatch recovery", () => {
     },
   );
 
-  test.each(["class", "data-stale", "disabled"])(
-    "removes server-only attribute %s",
+  // Like React: an attribute the client doesn't render may come from a
+  // browser extension or a script that ran before hydration.
+  test.each(["class", "data-gramm", "disabled"])(
+    "keeps attribute %s the client doesn't render",
     async (attribute) => {
       let client = false;
       function Mismatch(): JSX.Element {
@@ -310,13 +312,97 @@ describe("hydration mismatch recovery", () => {
       }
       const hydrate = await serve(<Mismatch />, [Mismatch]);
       const button = document.querySelector("button")!;
-      expect(button.hasAttribute(attribute)).toBe(true);
       client = true;
       hydrate();
       expect(document.querySelector("button")).toBe(button);
-      expect(button.hasAttribute(attribute)).toBe(false);
+      expect(button.hasAttribute(attribute)).toBe(true);
       expect(button.getAttribute("aria-label")).toBe("keep");
-      expect(button.textContent).toBe("keep");
     },
   );
+
+  test.each([
+    ["class", "server", false],
+    ["class", "server", "client"],
+    ["disabled", true, false],
+    ["style", "color: red", "color: blue"],
+  ])(
+    "keeps attribute %s=%j the client renders as %j, and warns",
+    async (attribute, server, client) => {
+      let hydrating = false;
+      function Mismatch(): JSX.Element {
+        return jsx("button", { [attribute]: hydrating ? client : server, children: "keep" });
+      }
+      const hydrate = await serve(<Mismatch />, [Mismatch]);
+      const button = document.querySelector("button")!;
+      const before = button.getAttribute(attribute);
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        hydrating = true;
+        hydrate();
+        expect(document.querySelector("button")).toBe(button);
+        expect(button.getAttribute(attribute)).toBe(before);
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining(`Hydration kept the server's attributes of <button>`),
+        );
+        expect(warn.mock.calls.flat().join("\n")).toContain(`${attribute}=`);
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
+
+  test("keeps a class an extension added before hydration", async () => {
+    function Styled(): JSX.Element {
+      return <button class="app">keep</button>;
+    }
+    const hydrate = await serve(<Styled />, [Styled]);
+    const button = document.querySelector("button")!;
+    button.classList.add("extension");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      hydrate();
+    } finally {
+      warn.mockRestore();
+    }
+    expect(button.className).toBe("app extension");
+  });
+
+  test("doesn't warn when the server and the client render the same attributes", async () => {
+    function Same(): JSX.Element {
+      return (
+        <button class="same" disabled aria-pressed={false} data-count={2}>
+          same
+        </button>
+      );
+    }
+    const hydrate = await serve(<Same />, [Same]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      hydrate();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("keeps a custom element added before hydration, removes stale markup", async () => {
+    let client = false;
+    function Mismatch(): JSX.Element {
+      return (
+        <div data-mismatch="">
+          <span>keep</span>
+          {!client && <button>stale</button>}
+        </div>
+      );
+    }
+    const hydrate = await serve(<Mismatch />, [Mismatch]);
+    const container = document.querySelector("[data-mismatch]")!;
+    container.appendChild(document.createElement("grammarly-extension"));
+    client = true;
+    hydrate();
+    expect([...container.children].map((node) => node.localName)).toEqual([
+      "span",
+      "grammarly-extension",
+    ]);
+  });
 });
