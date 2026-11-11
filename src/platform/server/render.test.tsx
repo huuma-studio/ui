@@ -345,3 +345,53 @@ describe("rendering precompiled templates", () => {
     );
   });
 });
+
+// The browser ignores a `value` attribute on <textarea> and <select>.
+describe("form values the browser reads from content", () => {
+  const render = (node: JSX.Element) => renderToStringSync(node);
+
+  test("writes a textarea's value as its escaped content", () => {
+    expect(render(<textarea name="note" value={"a</textarea>"} />)).toStrictEqual(
+      '<textarea name="note">a&lt;/textarea&gt;</textarea>',
+    );
+    // The parser drops one newline right after <textarea>.
+    expect(render(<textarea value={"\nline"} />)).toStrictEqual("<textarea>\n\nline</textarea>");
+    expect(render(<textarea value={3} />)).toStrictEqual("<textarea>3</textarea>");
+  });
+
+  test("selects the option that matches a select's value", () => {
+    function Choice(props: { value: string; label: string }): JSX.Element {
+      return <option value={props.value}>{props.label}</option>;
+    }
+    expect(
+      render(
+        <select name="pick" value="b">
+          <option value="a">A</option>
+          <optgroup label="group">
+            <Choice value="b" label="B" />
+          </optgroup>
+          <option>c</option>
+        </select>,
+      ),
+    ).toStrictEqual(
+      '<select name="pick"><option value="a">A</option><optgroup label="group">' +
+        '<option value="b" selected>B</option></optgroup><option>c</option></select>',
+    );
+  });
+
+  test("matches an option without a value by its text, and only inside its select", () => {
+    expect(
+      render(
+        <div>
+          <select value="c">
+            <option>b</option>
+            <option>c</option>
+          </select>
+          <option>c</option>
+        </div>,
+      ),
+    ).toStrictEqual(
+      "<div><select><option>b</option><option selected>c</option></select><option>c</option></div>",
+    );
+  });
+});

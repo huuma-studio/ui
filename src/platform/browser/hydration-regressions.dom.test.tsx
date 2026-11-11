@@ -247,6 +247,68 @@ describe("form edits made before hydration", () => {
   });
 });
 
+describe("content the server renders for the client", () => {
+  test("keeps raw HTML", async () => {
+    function Raw(): JSX.Element {
+      return <div dangerouslySetInnerHTML={{ __html: "<b>Hello</b>" }} />;
+    }
+    const hydrate = await serve(<Raw />, [Raw]);
+    const bold = document.querySelector("b")!;
+    hydrate();
+    expect(document.querySelector("div")!.innerHTML).toBe("<b>Hello</b>");
+    expect(document.querySelector("b")).toBe(bold);
+  });
+
+  test("shows a select's value before and after hydration, and updates it", async () => {
+    let setValue!: (value: string) => void;
+    function Select(): JSX.Element {
+      const value = hooks.$signal("second");
+      setValue = (next) => value.set(next);
+      return (
+        <select value={value.get()}>
+          <option value="first">First</option>
+          <option value="second">Second</option>
+        </select>
+      );
+    }
+    const hydrate = await serve(<Select />, [Select]);
+    const select = document.querySelector("select")!;
+    expect(select.value).toBe("second");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      hydrate();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+    expect(select.value).toBe("second");
+    setValue("first");
+    expect(select.value).toBe("first");
+  });
+
+  test("shows a textarea's value before and after hydration, and updates it", async () => {
+    let setValue!: (value: string) => void;
+    function Textarea(): JSX.Element {
+      const value = hooks.$signal("server text");
+      setValue = (next) => value.set(next);
+      return <textarea value={value.get()} />;
+    }
+    const hydrate = await serve(<Textarea />, [Textarea]);
+    const textarea = document.querySelector("textarea")!;
+    expect(textarea.value).toBe("server text");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      hydrate();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+    expect(textarea.value).toBe("server text");
+    setValue("client text");
+    expect(textarea.value).toBe("client text");
+  });
+});
+
 describe("hydration mismatch recovery", () => {
   test.each(["trailing element", "trailing text", "all children", "null root"] as const)(
     "removes stale server markup: %s, without consuming the next island",

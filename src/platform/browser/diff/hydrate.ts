@@ -164,7 +164,13 @@ function element(
     warnAttributeMismatch(vElement, <Element>node);
   }
 
-  const nodes = skipChildren ? undefined : [...node.childNodes];
+  // Raw HTML and a textarea's `value` (rendered as its content) have no
+  // child vNodes to claim the server's children: keep them.
+  const props = vElement[VNodeProps.PROPS];
+  const raw =
+    props.dangerouslySetInnerHTML != null ||
+    (node.nodeName.toLowerCase() === "textarea" && "value" in props);
+  const nodes = skipChildren || raw ? undefined : [...node.childNodes];
 
   const childrenAttachmentRef: ParentAttachmentRef = {
     type: AttachmentType.Parent,
@@ -192,15 +198,19 @@ function element(
  */
 function warnAttributeMismatch(vElement: VElement<Node>, node: Element): void {
   const props = vElement[VNodeProps.PROPS];
+  const tag = node.localName;
   const client = new Map<string, string>();
   for (const prop in props) {
     if (prop === "children" || prop === "dangerouslySetInnerHTML") continue;
+    // The server renders these as content and as `selected` (render.ts).
+    if (prop === "value" && (tag === "select" || tag === "textarea")) continue;
     const value = attributeValue(prop, props[prop]);
     if (value !== undefined) client.set(prop.toLowerCase(), value);
   }
 
   const differences: string[] = [];
   for (const name of node.getAttributeNames()) {
+    if (name === "selected" && tag === "option" && !client.has(name)) continue;
     const server = node.getAttribute(name);
     if (!client.has(name)) {
       differences.push(`${name}=${JSON.stringify(server)} (server only)`);
@@ -217,7 +227,7 @@ function warnAttributeMismatch(vElement: VElement<Node>, node: Element): void {
 
   if (differences.length) {
     devWarn(
-      `Hydration kept the server's attributes of <${node.localName}>, which differ from ` +
+      `Hydration kept the server's attributes of <${tag}>, which differ from ` +
         `the client's: ${differences.join(", ")}. A browser extension may have changed them; ` +
         `otherwise render the same attributes on the server and the client.`,
     );
