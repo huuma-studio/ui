@@ -394,4 +394,36 @@ describe("form values the browser reads from content", () => {
       "<div><select><option>b</option><option selected>c</option></select><option>c</option></div>",
     );
   });
+
+  test("matches option text the way the browser reads it", () => {
+    expect(
+      render(
+        <select value="second choice">
+          <option>first</option>
+          <option>{"\n  second \t choice "}</option>
+        </select>,
+      ),
+    ).toStrictEqual(
+      "<select><option>first</option><option selected>\n  second \t choice </option></select>",
+    );
+    // Only ASCII whitespace: a no-break space is part of the value.
+    expect(
+      render(
+        <select value="x">
+          <option>{"\u00a0x"}</option>
+        </select>,
+      ),
+    ).toStrictEqual("<select><option>\u00a0x</option></select>");
+  });
+
+  test("keeps raw HTML of a select with a value", () => {
+    expect(
+      render(
+        <select
+          value="b"
+          dangerouslySetInnerHTML={{ __html: '<option value="b" selected>B</option>' }}
+        />,
+      ),
+    ).toStrictEqual('<select value="b"><option value="b" selected>B</option></select>');
+  });
 });

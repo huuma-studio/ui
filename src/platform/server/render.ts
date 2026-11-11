@@ -98,7 +98,9 @@ function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
   const childrenForeign = foreign ? lower !== "foreignobject" : lower === "svg" || lower === "math";
 
   const { dangerouslySetInnerHTML, children: _c, ...attributes } = props;
-  if (!foreign) {
+  // Raw HTML stays as it is: its options can't be matched, so like in
+  // React, they need `selected` themselves.
+  if (!foreign && !dangerouslySetInnerHTML) {
     // The browser ignores a `value` attribute on <textarea> and <select>:
     // like React, the textarea gets it as its content, and the select's
     // matching <option> gets `selected`. The page shows the value before
@@ -126,7 +128,7 @@ function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
       const value =
         "value" in attributes
           ? attributeValue("value", attributes.value)
-          : children?.map((child) => rawContent(child)).join("");
+          : optionText(children?.map((child) => rawContent(child)).join("") ?? "");
       if (value === selectValue) attributes.selected = true;
     }
   }
@@ -142,6 +144,15 @@ function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
   return `<${tag}${stringFrom(attributes)}>${
     children?.map((child) => stringify(child, childrenForeign)).join("") ?? ""
   }</${tag}>`;
+}
+
+/**
+ * An option's text as the browser derives its value from it: ASCII
+ * whitespace stripped and collapsed (HTML's "strip and collapse ASCII
+ * whitespace"; `trim()` would also remove other spaces, like U+00A0).
+ */
+function optionText(text: string): string {
+  return text.replace(/[\t\n\f\r ]+/g, " ").replace(/^ | $/g, "");
 }
 
 /**
