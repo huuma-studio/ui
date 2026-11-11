@@ -307,6 +307,51 @@ describe("content the server renders for the client", () => {
     setValue("client text");
     expect(textarea.value).toBe("client text");
   });
+
+  // Greptile's review of #90: each select showed its first option.
+  test.each([
+    [
+      "options in raw HTML",
+      () => (
+        <select
+          value="b"
+          dangerouslySetInnerHTML={{
+            __html: '<option value="a">A</option><option value="b" selected>B</option>',
+          }}
+        />
+      ),
+    ],
+    [
+      "option text with whitespace",
+      () => (
+        <select value="b">
+          <option>a</option>
+          <option>{"\n  b "}</option>
+        </select>
+      ),
+    ],
+    [
+      "an option label in raw HTML",
+      () => (
+        <select value="b">
+          <option value="a">A</option>
+          <option value="b" dangerouslySetInnerHTML={{ __html: "<b>B</b>" }} />
+        </select>
+      ),
+    ],
+  ])("shows the selected option with %s", async (_, render) => {
+    function Select(): JSX.Element {
+      return render();
+    }
+    const hydrate = await serve(<Select />, [Select]);
+    const select = document.querySelector("select")!;
+    // The index: happy-dom doesn't collapse an option's text into its value.
+    expect(select.selectedIndex).toBe(1);
+    hydrate();
+    expect(document.querySelector("select")).toBe(select);
+    expect(select.options).toHaveLength(2);
+    expect(select.selectedIndex).toBe(1);
+  });
 });
 
 describe("hydration mismatch recovery", () => {

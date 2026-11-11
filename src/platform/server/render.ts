@@ -98,20 +98,20 @@ function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
   const childrenForeign = foreign ? lower !== "foreignobject" : lower === "svg" || lower === "math";
 
   const { dangerouslySetInnerHTML, children: _c, ...attributes } = props;
-  // Raw HTML stays as it is: its options can't be matched, so like in
-  // React, they need `selected` themselves.
-  if (!foreign && !dangerouslySetInnerHTML) {
+  if (!foreign) {
     // The browser ignores a `value` attribute on <textarea> and <select>:
     // like React, the textarea gets it as its content, and the select's
     // matching <option> gets `selected`. The page shows the value before
-    // hydration, which then keeps what the server rendered.
-    if (lower === "textarea" && "value" in attributes) {
+    // hydration, which then keeps what the server rendered. Raw HTML stays
+    // as it is: the options in it can't be matched, so like in React, they
+    // need `selected` themselves.
+    if (lower === "textarea" && "value" in attributes && !dangerouslySetInnerHTML) {
       const { value, ...rest } = attributes;
       const text = attributeValue("value", value) ?? "";
       // The parser drops a newline right after <textarea>.
       return `<${tag}${stringFrom(rest)}>${text.startsWith("\n") ? "\n" : ""}${escape(text)}</${tag}>`;
     }
-    if (lower === "select" && "value" in attributes) {
+    if (lower === "select" && "value" in attributes && !dangerouslySetInnerHTML) {
       const { value, ...rest } = attributes;
       const outer = selectValue;
       selectValue = attributeValue("value", value);
@@ -124,12 +124,15 @@ function elementToString<T>(vNode: VElement<T>, foreign: boolean): string {
       }
     }
     if (lower === "option" && selectValue !== undefined && !attributes.selected) {
-      // An option without a `value` uses its text, as in the browser.
+      // An option without a `value` uses its text, as in the browser; a
+      // label in raw HTML has no text to read.
       const value =
         "value" in attributes
           ? attributeValue("value", attributes.value)
-          : optionText(children?.map((child) => rawContent(child)).join("") ?? "");
-      if (value === selectValue) attributes.selected = true;
+          : dangerouslySetInnerHTML
+            ? undefined
+            : optionText(children?.map((child) => rawContent(child)).join("") ?? "");
+      if (value !== undefined && value === selectValue) attributes.selected = true;
     }
   }
   if (dangerouslySetInnerHTML) {

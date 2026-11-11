@@ -416,6 +416,21 @@ describe("form values the browser reads from content", () => {
     ).toStrictEqual("<select><option>\u00a0x</option></select>");
   });
 
+  test("selects an option with a value whose label is raw HTML", () => {
+    expect(
+      render(
+        <select value="b">
+          <option value="a">A</option>
+          <option value="b" dangerouslySetInnerHTML={{ __html: "<b>B</b>" }} />
+          <option dangerouslySetInnerHTML={{ __html: "b" }} />
+        </select>,
+      ),
+    ).toStrictEqual(
+      '<select><option value="a">A</option><option value="b" selected><b>B</b></option>' +
+        "<option>b</option></select>",
+    );
+  });
+
   test("keeps raw HTML of a select with a value", () => {
     expect(
       render(
