@@ -1,4 +1,4 @@
-import { assert, describe, expect, test } from "vite-plus/test";
+import { assert, describe, expect, test, vi } from "vite-plus/test";
 import { type VComponent, type VElement, VNodeProps, type VText, VType } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/jsx.ts";
 import { $destroy } from "../../hooks/lifecycle.ts";
@@ -216,7 +216,7 @@ describe(update.name, () => {
     expect(destroyed).toStrictEqual(["Old"]);
   });
 
-  test("run destroy hooks only once when an update pass aborts", () => {
+  test("run destroy hooks once an update pass completes, and only once", () => {
     const destroyed: string[] = [];
 
     const Tracked = () => {
@@ -228,24 +228,116 @@ describe(update.name, () => {
     };
     const Stable = () => <span>stable</span>;
 
-    const Root = ({ fail }: { fail?: boolean }) => (
+    const Root = ({ fail, remove }: { fail?: boolean; remove?: boolean }) => (
       <div>
-        {fail ? false : <Tracked />}
+        {fail || remove ? false : <Tracked />}
         {fail ? <Throwing /> : <Stable />}
       </div>
     );
 
     const vNode = create(<Root />);
 
-    // Tracked is destroyed, then the sibling's render aborts the pass
-    // before the parent's children are reassigned.
+    // Tracked is removed, then the sibling's render aborts the pass
+    // before the parent's children are reassigned: Tracked is still there.
     assert.throws(() => update(<Root fail />, vNode, {}), Error, "render failed");
-    expect(destroyed).toStrictEqual(["Tracked"]);
+    assert.throws(() => update(<Root fail />, vNode, {}), Error, "render failed");
+    expect(destroyed).toStrictEqual([]);
 
-    // The retry walks the stale children again - Tracked's hooks must
-    // not re-fire.
+    // A retry that keeps it.
+    update(<Root />, vNode, {});
+    expect(destroyed).toStrictEqual([]);
+
+    update(<Root remove />, vNode, {});
+    update(<Root remove />, vNode, {});
+    expect(destroyed).toStrictEqual(["Tracked"]);
+  });
+
+  test("run the destroy hooks of the components a failed pass took out of the tree", () => {
+    const destroyed: string[] = [];
+    const Tracked = () => {
+      $destroy(() => destroyed.push("Tracked"));
+      return <div>tracked</div>;
+    };
+    const Throwing = (): JSX.Element => {
+      throw new Error("render failed");
+    };
+    // The section's children are updated before the sibling throws: no
+    // retry can find Tracked to remove it.
+    const Root = ({ fail }: { fail?: boolean }) => (
+      <div>
+        <section>{fail ? false : <Tracked />}</section>
+        {fail ? <Throwing /> : <p />}
+      </div>
+    );
+
+    const vNode = create(<Root />);
     assert.throws(() => update(<Root fail />, vNode, {}), Error, "render failed");
     expect(destroyed).toStrictEqual(["Tracked"]);
+  });
+
+  test("run the destroy hooks of the components a failed pass created, unless the tree holds them", () => {
+    const destroyed: string[] = [];
+    const Fresh = ({ id }: { id: string }) => {
+      $destroy(() => destroyed.push(id));
+      return <div>{id}</div>;
+    };
+    const Throwing = (): JSX.Element => {
+      throw new Error("render failed");
+    };
+    const Root = ({ fail }: { fail?: boolean }) => (
+      <div>
+        {/* Only in the failed pass's own list of children. */}
+        {fail ? <Fresh id="orphan" /> : false}
+        {/* In the section's children, which the pass updated. */}
+        <section>{fail ? <Fresh id="held" /> : false}</section>
+        {fail ? <Throwing /> : <p />}
+      </div>
+    );
+
+    const vNode = create(<Root />);
+    assert.throws(() => update(<Root fail />, vNode, {}), Error, "render failed");
+    expect(destroyed).toStrictEqual(["orphan"]);
+
+    update(<Root />, vNode, {});
+    expect(destroyed).toStrictEqual(["orphan", "held"]);
+  });
+
+  test("run every destroy hook when one throws, and report the error", () => {
+    const destroyed: string[] = [];
+    const reported: unknown[] = [];
+    vi.stubGlobal("reportError", (error: unknown) => reported.push(error));
+    const failure = new Error("destroy failed");
+    const First = () => {
+      $destroy(() => {
+        throw failure;
+      });
+      $destroy(() => destroyed.push("First"));
+      return <div>first</div>;
+    };
+    const Second = () => {
+      $destroy(() => destroyed.push("Second"));
+      return <div>second</div>;
+    };
+    const Root = ({ show }: { show?: boolean }) =>
+      show ? (
+        <div>
+          <First />
+          <Second />
+        </div>
+      ) : (
+        <p />
+      );
+
+    try {
+      const vNode = create(<Root show />);
+      // The pass removed them: it doesn't fail.
+      const updated = update(<Root />, vNode, {});
+      expect(destroyed).toStrictEqual(["First", "Second"]);
+      expect(reported).toStrictEqual([failure]);
+      expect(updated).toBe(vNode);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   test("keep subtree signal subscriptions until the diff commit", () => {

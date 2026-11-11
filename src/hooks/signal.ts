@@ -8,7 +8,12 @@ export function $signal<T>(value: T): WritableSignal<T> {
 }
 
 export function $computed<T>(value: () => T): Signal<T> {
-  return refFromScope<T>(value, computed);
+  const signal = refFromScope<T>(value, computed);
+  // The signals it reads would otherwise keep it computing after the
+  // component is removed. Registered on the first render only, which
+  // creates it: later renders get the same signal.
+  $hook(() => signal.dispose(), VHook.DESTROY);
+  return signal;
 }
 
 export function $effect(fn: () => void): void {

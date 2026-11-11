@@ -1,4 +1,4 @@
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import { readdir } from "node:fs/promises";
 
 // File-system discovery of pages, layouts, middlewares, islands and remote
@@ -102,7 +102,7 @@ export async function listPages(path: string): Promise<Routes> {
   const pageRecords: Page[] = pages.map((page) => {
     const pageLayouts = layouts
       .filter((layout) => {
-        return page.filePath.startsWith(layout.filePath);
+        return isWithin(page.filePath, layout.filePath);
       })
       .map((layout) => {
         return layout.name;
@@ -110,7 +110,7 @@ export async function listPages(path: string): Promise<Routes> {
 
     const pageMiddlewares = middlewares
       .filter((middleware) => {
-        return page.filePath.startsWith(middleware.filePath);
+        return isWithin(page.filePath, middleware.filePath);
       })
       .map((middleware) => {
         return middleware.name;
@@ -131,6 +131,16 @@ export async function listPages(path: string): Promise<Routes> {
     layouts: sortImports(layouts),
     middlewares: sortImports(middlewares),
   };
+}
+
+/**
+ * Whether `path` is `directory` or inside it. A plain prefix check would put
+ * `/administrator` inside `/admin`.
+ */
+function isWithin(path: string, directory: string): boolean {
+  if (path === directory) return true;
+  const prefix = directory.endsWith(sep) || directory.endsWith("/") ? directory : directory + sep;
+  return path.startsWith(prefix);
 }
 
 export async function listIslands(path: string): Promise<FileImport[]> {

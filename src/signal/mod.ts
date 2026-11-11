@@ -195,14 +195,19 @@ export class WritableSignal<T> extends Signal<T> {
 export class ComputedSignal<T> extends Signal<T> {
   #value: T;
   #scopes = new Set<SubscriberScope>();
+  // Its subscriptions to the signals it reads, see dispose().
+  #cleanups: Cleanup[] = [];
 
   constructor(callbackFn: () => T) {
     super();
 
     const scope: ComputedScope = {
       id: 0,
-      // Never called: notify() recomputes computed signals itself.
-      subscriber: { update: () => {} },
+      subscriber: {
+        // Never called: notify() recomputes computed signals itself.
+        update: () => {},
+        cleanupCallback: (cleanup) => this.#cleanups.push(cleanup),
+      },
       signals: [],
       signal: this,
       readers: this.#scopes,
@@ -224,6 +229,15 @@ export class ComputedSignal<T> extends Signal<T> {
       this.subscribe(subscriberScopes[subscriberScopes.length - 1]);
     }
     return this.#value;
+  }
+
+  /**
+   * Stops computing: unsubscribes from the signals it reads, so they no
+   * longer keep it alive and run its callback. It keeps its last value.
+   * A component disposes its `$computed` signals when it's removed.
+   */
+  dispose(): void {
+    for (const cleanup of this.#cleanups.splice(0)) cleanup.cleanup();
   }
 
   subscribe(scope: SubscriberScope): Cleanup {

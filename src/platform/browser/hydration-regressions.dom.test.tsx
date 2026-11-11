@@ -513,3 +513,43 @@ describe("hydration mismatch recovery", () => {
     ]);
   });
 });
+
+describe("an update that fails after hydration", () => {
+  test("keeps the effects of a component it would have removed", async () => {
+    const { signal } = await import("../../signal/mod.ts");
+    const source = signal(0);
+    const seen: number[] = [];
+    let setFail: (next: boolean) => void = () => {};
+    function Child(): JSX.Element {
+      hooks.$effect(() => {
+        seen.push(source.get());
+      });
+      return <span>child</span>;
+    }
+    function Throwing(): JSX.Element {
+      throw new Error("render failed");
+    }
+    function Root(): JSX.Element {
+      const fail = hooks.$signal(false);
+      setFail = (next) => fail.set(next);
+      return (
+        <div>
+          {fail.get() ? false : <Child />}
+          {fail.get() ? <Throwing /> : <p />}
+        </div>
+      );
+    }
+    const hydrate = await serve(<Root />, [Root]);
+    hydrate();
+    await Promise.resolve();
+
+    expect(() => setFail(true)).toThrow("render failed");
+    // A retry that keeps the component, and its effect.
+    setFail(false);
+    seen.length = 0;
+    source.set(1);
+
+    expect(seen).toStrictEqual([1]);
+    expect(document.querySelector("span")?.textContent).toBe("child");
+  });
+});
