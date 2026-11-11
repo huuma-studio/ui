@@ -147,6 +147,46 @@ describe("effect dependencies that change", () => {
     assert.throws(() => name.set("Grace"), Error, "effect failed");
   });
 
+  test("keeps tracking after a run inside itself, when it sets a signal it reads", () => {
+    const a = signal(0);
+    const b = signal(0);
+    const c = signal(0);
+    let runs = 0;
+    effect(() => {
+      runs++;
+      if (a.get() === 1 && b.get() === 0) b.set(1);
+      c.get();
+    });
+    a.set(1);
+    const before = runs;
+
+    c.set(1);
+    expect(runs).toBe(before + 1);
+  });
+
+  test("keeps what a run inside itself read, which saw the newer values", () => {
+    const a = signal(0);
+    const b = signal(0);
+    const c = signal(0);
+    const d = signal(0);
+    let runs = 0;
+    effect(() => {
+      runs++;
+      const first = a.get();
+      const second = b.get();
+      if (first === 1 && second === 0) b.set(1);
+      // Only the inner run, from b = 1, reads d.
+      if (second === 1) d.get();
+      c.get();
+    });
+    a.set(1);
+    const before = runs;
+
+    // First: a run from c would read d again.
+    d.set(1);
+    expect(runs).toBe(before + 1);
+  });
+
   test("disposes from the signals it read in a later run", () => {
     const visible = signal(false);
     const name = signal("Ada");

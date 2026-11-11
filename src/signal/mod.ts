@@ -57,8 +57,12 @@ function track<T>(scope: SubscriberScope, callback: () => T): T {
  * now, so a signal read only in a branch taken later is tracked too. Then
  * it drops the signals it no longer reads. A throwing callback drops
  * nothing, as it may not have reached all of its reads.
+ * A callback that sets a signal it reads runs again inside itself. The
+ * outer run keeps tracking after it, and keeps what the inner run read:
+ * the inner run saw the newer values, the outer run's earlier reads didn't.
  */
 function retrack<T>(scope: SubscriberScope, callback: () => T): T {
+  const outer = scope.seen;
   const seen = new Set<Signal<unknown>>();
   scope.seen = seen;
   try {
@@ -68,7 +72,8 @@ function retrack<T>(scope: SubscriberScope, callback: () => T): T {
     }
     return value;
   } finally {
-    scope.seen = undefined;
+    seen.forEach((signal) => outer?.add(signal));
+    scope.seen = outer;
   }
 }
 
