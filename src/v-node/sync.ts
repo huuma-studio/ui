@@ -42,6 +42,15 @@ export function setVNodeUpdater<T>(updater: VNodeSignalUpdater<T, unknown>): voi
   vNodeSignalUpdater = <VNodeSignalUpdater<unknown, unknown>>updater;
 }
 
+/**
+ * Whether components render again when a signal they read changes: in the
+ * browser, once `setVNodeUpdater()` was called. Not in a server render,
+ * which renders each component once and never removes it.
+ */
+export function hasVNodeUpdater(): boolean {
+  return typeof vNodeSignalUpdater === "function";
+}
+
 export function create<T>(node: JSX.Element, globalOptions: VGlobalOptions = {}): VNode<T> {
   if (typeof globalOptions.beforeCreate === "function") {
     node = globalOptions.beforeCreate(node);

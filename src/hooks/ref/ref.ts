@@ -7,13 +7,7 @@ import {
   VMode,
   VNodeProps,
 } from "../../v-node/mod.ts";
-import {
-  computed,
-  type ComputedSignal,
-  type Signal,
-  signal,
-  type WritableSignal,
-} from "../../signal/mod.ts";
+import { type ComputedSignal, type Signal, signal, type WritableSignal } from "../../signal/mod.ts";
 
 type VNodeWithRef<T> = VBase &
   HasVMode &
@@ -39,6 +33,10 @@ export function refFromScope<T>(
   value: () => T,
   refCreator: (value: () => T) => ComputedSignal<T>,
 ): ComputedSignal<T>;
+export function refFromScope<T>(
+  value: () => T,
+  refCreator: (value: () => T) => Signal<T>,
+): Signal<T>;
 export function refFromScope<T>(
   value: T | (() => T),
   refCreator: ((value: T) => Ref<T>) | ((value: T) => Signal<T>) | ((value: () => T) => Signal<T>),
@@ -89,11 +87,7 @@ export function refFromScope<T>(
 function createRef<T>(
   value: T | (() => T),
   refCreator: ((value: T) => Ref<T>) | ((value: T) => Signal<T>) | ((value: () => T) => Signal<T>),
-): ComputedSignal<T> | Ref<T> | WritableSignal<T> {
-  if (typeof value === "function" && refCreator === computed) {
-    return (<typeof computed>refCreator)(value as () => T);
-  }
-
+): Ref<T> | Signal<T> {
   if (refCreator === ref) {
     return (<typeof ref>refCreator)(value as T);
   }
@@ -101,5 +95,6 @@ function createRef<T>(
   if (refCreator === signal) {
     return (<typeof signal>refCreator)(value as T);
   }
-  throw new Error("Invalid ref creator");
+  // `$computed`: a computed signal, or what stands in for one on the server.
+  return (<(value: () => T) => Signal<T>>refCreator)(value as () => T);
 }
