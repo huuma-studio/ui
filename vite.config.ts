@@ -54,8 +54,10 @@ export default defineConfig({
   },
   run: {
     tasks: {
-      // Runs every check JSR publish runs, including slow types.
-      "jsr:dry-run": { command: "jsr publish --dry-run", cache: false },
+      // Runs every check JSR publish runs, including slow types. Not
+      // Deno's type check: it doesn't find the types of `vite` in
+      // node_modules, and `vp check` checks the types already.
+      "jsr:dry-run": { command: "deno publish --dry-run --no-check", cache: false },
       pack: { command: ["vp pack", "node scripts/check-pack.ts"], cache: false },
     },
   },

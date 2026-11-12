@@ -21,6 +21,10 @@ jobs:
       - run: vp test
         env:
           HUUMA_VITE: upstream
+      # For the dry run: the package is published with `deno publish`.
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
       - run: vp run jsr:dry-run
       # The native npm build (not published), which also enforces
       # isolatedDeclarations: `vp check` doesn't report those errors.
@@ -36,7 +40,7 @@ jobs:
         with:
           node-version: "24"
           cache: true
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
       - run: deno test --allow-all --no-check --node-modules-dir=none test/deno/
