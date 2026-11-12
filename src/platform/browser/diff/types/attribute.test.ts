@@ -229,8 +229,8 @@ describe("compareAttributes boolean attribute transitions", () => {
 
   test("non-boolean attribute transitions stay verbatim", () => {
     const changes = compareAttributes(
-      vElementNode({ class: "next" }),
-      vElementNode({ class: "previous" }),
+      vElementNode({ title: "next" }),
+      vElementNode({ title: "previous" }),
     );
 
     expect(changes.length).toStrictEqual(1);
@@ -345,9 +345,9 @@ describe("compareAttributes falsy previous values", () => {
   });
 
   test("empty string transitions produce one update each", () => {
-    const empty = vElementNode({ class: "" });
-    const filled = vElementNode({ class: "x" });
-    const emptyAgain = vElementNode({ class: "" });
+    const empty = vElementNode({ title: "" });
+    const filled = vElementNode({ title: "x" });
+    const emptyAgain = vElementNode({ title: "" });
 
     const toFilled = compareAttributes(filled, empty);
     const toEmpty = compareAttributes(emptyAgain, filled);
@@ -359,7 +359,7 @@ describe("compareAttributes falsy previous values", () => {
 
     const recorded = fakeElement(emptyAgain);
     toEmpty.forEach((change) => attribute(change as AttributeChangeSet));
-    expect(recorded.set).toStrictEqual([["class", ""]]);
+    expect(recorded.set).toStrictEqual([["title", ""]]);
     expect(recorded.remove).toStrictEqual([]);
   });
 
@@ -367,9 +367,9 @@ describe("compareAttributes falsy previous values", () => {
     const vNode = vElementNode({});
     const recorded = fakeElement(vNode);
 
-    const changes = compareAttributes(vNode, vElementNode({ class: "" }));
+    const changes = compareAttributes(vNode, vElementNode({ title: "" }));
     changes.forEach((change) => attribute(change as AttributeChangeSet));
-    expect(recorded.remove).toStrictEqual(["class"]);
+    expect(recorded.remove).toStrictEqual(["title"]);
   });
 
   test("keep an empty string that is still set", () => {
@@ -381,5 +381,40 @@ describe("compareAttributes falsy previous values", () => {
     expect(changes.length).toStrictEqual(1);
     expect(changes[0][Props.Action]).toStrictEqual(Action.Delete);
     expect((changes[0][Props.Payload] as { name: string }).name).toStrictEqual("class");
+  });
+});
+
+describe("class and style changesets", () => {
+  test.each(["class", "style"])("a changed %s is an update with the previous value", (name) => {
+    const vNode = vElementNode({ [name]: "next" });
+    expect(compareAttributes(vNode, vElementNode({ [name]: "previous" }))).toStrictEqual([
+      {
+        [Props.Action]: Action.Update,
+        [Props.Type]: Type.Attribute,
+        [Props.Payload]: { vNode, name, value: "next", previous: "previous" },
+      },
+    ]);
+  });
+
+  test.each(["class", "style"])("a new %s is an update without a previous value", (name) => {
+    const vNode = vElementNode({ [name]: "next" });
+    expect(compareAttributes(vNode, vElementNode({}))).toStrictEqual([
+      {
+        [Props.Action]: Action.Update,
+        [Props.Type]: Type.Attribute,
+        [Props.Payload]: { vNode, name, value: "next", previous: undefined },
+      },
+    ]);
+  });
+
+  test.each(["class", "style"])("a dropped %s is deleted with the previous value", (name) => {
+    const vNode = vElementNode({});
+    expect(compareAttributes(vNode, vElementNode({ [name]: "previous" }))).toStrictEqual([
+      {
+        [Props.Action]: Action.Delete,
+        [Props.Type]: Type.Attribute,
+        [Props.Payload]: { vNode, name, previous: "previous" },
+      },
+    ]);
   });
 });

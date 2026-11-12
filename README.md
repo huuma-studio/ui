@@ -288,6 +288,11 @@ Attributes go to the HTML as you write them: `class` and `for`, not `className` 
 
 Warnings appear outside production, that is unless `NODE_ENV=production` or `HUUMA_ENV=PROD` is set, once per message and at most 100.
 
+In the browser, a component only changes what it rendered itself, so what a browser extension or a script added to an element stays:
+
+- **Hydration** keeps the attributes the server sent, and warns in development if the component renders others.
+- **An update** changes the attributes whose value changed. For `class` and `style`, it changes only the class names and the style properties the component renders, and leaves the ones it doesn't render on the element.
+
 ## Remote server functions
 
 Remote server functions provide a type-safe way to handle form submissions and server-side data mutations. They run exclusively on the server and can be called from both server and client components. Remote server functions are defined in files with the `.remote.ts` suffix and must be exported async functions. Remote server functions only accept JSON-conform data as function input.

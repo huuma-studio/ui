@@ -16,7 +16,7 @@ const chromium = findChromium();
 
 // Added only to this suite's production fixture, without changing the
 // shared fixture's routes or its build snapshots.
-const NESTED_ISLANDS = {
+const EXTRA_FILES = {
   "components/frame.client.tsx": `
     import type { JSX } from "@huuma/ui/jsx-runtime";
     export default function Frame({ children }: JSX.ComponentProps) {
@@ -32,6 +32,25 @@ const NESTED_ISLANDS = {
         <button on-click={() => count.set(count.get() + 1)}>{label}: {count}</button>
         {children}
       </article>;
+    }
+  `,
+  "components/themed.client.tsx": `
+    import { $signal } from "@huuma/ui/hooks/signal";
+    export default function Themed() {
+      const on = $signal(false);
+      return <button
+        class={on.get() ? "toggle on" : "toggle off"}
+        style={on.get()
+          ? "color: rgb(0, 0, 255); margin: 2px; padding-left: 8px; padding-inline-start: 5px"
+          : "color: rgb(255, 0, 0); margin: 1px 2px; padding-inline-start: 5px; padding-left: 8px"}
+        on-click={() => on.set(!on.get())}
+      >themed</button>;
+    }
+  `,
+  "app/themed/page.tsx": `
+    import Themed from "../../components/themed.client.tsx";
+    export default function Page() {
+      return <main><Themed /></main>;
     }
   `,
   "app/nested/page.tsx": `
@@ -175,7 +194,7 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
     beforeAll(async () => {
       // As with `vite build`; Vitest sets "test", which builds JSX in dev mode.
       process.env.NODE_ENV = "production";
-      root = await buildFixture(".tmp-browser-build-", {}, NESTED_ISLANDS);
+      root = await buildFixture(".tmp-browser-build-", {}, EXTRA_FILES);
       ({ origin, server } = await startServer(root));
     });
     afterAll(async () => {
@@ -216,6 +235,53 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
           await page.getByRole("button", { name: `${label}: 0`, exact: true }).click();
           await button(page, `${label}: 1`);
         }
+        expect(errors).toStrictEqual([]);
+      } finally {
+        await page.close();
+      }
+    });
+
+    test("an update keeps the classes and styles added to an element", async () => {
+      const { page, errors } = await open(browser, `${origin}/themed`);
+      const state = () =>
+        page.evaluate(() => {
+          const button = document.querySelector("button")!;
+          const { classList, style } = button;
+          return [
+            [...classList].sort().join(" "),
+            style.color,
+            style.margin,
+            style.filter,
+            // The later of padding-left and padding-inline-start.
+            getComputedStyle(button).paddingLeft,
+          ];
+        });
+      try {
+        // As a browser extension or a script would.
+        await page.evaluate(() => {
+          const element = document.querySelector("button")!;
+          element.classList.add("extension");
+          element.style.setProperty("filter", "invert(1)");
+        });
+        await page.click("button");
+        await page.locator("button.on").waitFor({ timeout: 5_000 });
+        expect(await state()).toStrictEqual([
+          "extension on toggle",
+          "rgb(0, 0, 255)",
+          "2px",
+          "invert(1)",
+          "5px",
+        ]);
+
+        await page.click("button");
+        await page.locator("button.off").waitFor({ timeout: 5_000 });
+        expect(await state()).toStrictEqual([
+          "extension off toggle",
+          "rgb(255, 0, 0)",
+          "1px 2px",
+          "invert(1)",
+          "8px",
+        ]);
         expect(errors).toStrictEqual([]);
       } finally {
         await page.close();

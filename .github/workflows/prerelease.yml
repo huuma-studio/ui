@@ -16,7 +16,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # A regular version (e.g. 0.2.11) publishes from `main` only.
       - name: Read the version
@@ -47,7 +47,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Installs the dependencies: JSR publish resolves npm packages
       # through node_modules.
