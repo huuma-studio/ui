@@ -8,6 +8,12 @@ export default defineConfig({
   },
   test: {
     include: ["src/**/*.test.{ts,tsx}", "test/*.test.ts"],
+    // Many suites build a fixture, start a server or launch a browser, next
+    // to all the other test files: on a busy CI runner, that takes longer
+    // than Vitest's defaults (5s a test, 10s a hook) allow. The hooks'
+    // timeout is above the time a server may take to start (test/build.ts).
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
     // The plugin tests run the Vite they import. That's Vite+'s copy
     // (pnpm's override installs it as `vite`), or with `HUUMA_VITE=upstream`
     // upstream Vite (`vite-upstream`, npm:vite@^8), like an app without Vite+.
