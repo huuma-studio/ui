@@ -100,8 +100,19 @@ export type UIAppContext<D = unknown> = {
   Env?: Env & Record<string, unknown>;
 };
 
+/** The largest request body a remote function accepts by default: 1 MiB. */
+const DEFAULT_REMOTE_BODY_SIZE = 1024 * 1024;
+
 interface UIAppOption<T extends UIAppContext> extends AppOptions<T> {
   contentSecurityPolicy?: ContentSecurityPolicy;
+  remote?: {
+    /**
+     * The largest request body a remote function accepts, in bytes: the
+     * JSON of its arguments. A larger request gets `413` and isn't read to
+     * its end. Defaults to 1 MiB; `Infinity` accepts any size.
+     */
+    maxBodySize?: number;
+  };
 }
 
 export function createUIApp<T extends UIAppContext<D>, D = unknown>(
@@ -119,10 +130,16 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
   #transferState: TransferState = {};
   #entryPoints?: [string, string][];
   #contentSecurityPolicy?: ContentSecurityPolicy;
+  /** The largest request body a remote function accepts, in bytes. */
+  readonly remoteMaxBodySize: number;
 
   constructor(root: RootPage<D>, options?: UIAppOption<T>) {
-    const { contentSecurityPolicy, ..._options } = options ?? {};
+    const { contentSecurityPolicy, remote, ..._options } = options ?? {};
     super(_options);
+    this.remoteMaxBodySize = remote?.maxBodySize ?? DEFAULT_REMOTE_BODY_SIZE;
+    if (!(this.remoteMaxBodySize >= 0)) {
+      throw new RangeError("`remote.maxBodySize` must be a number of bytes, 0 or more.");
+    }
     // First, so the app's own middleware runs inside it too.
     this.use(provideRequestContext);
     this.#contentSecurityPolicy = contentSecurityPolicy;

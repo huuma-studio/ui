@@ -400,6 +400,14 @@ Note: request-body schema validation failures and unknown-function-name errors s
 
 Remote functions answer only the JSON requests the generated stub sends: a request with another `Content-Type` gets `415`, and one a browser marks as cross-site (`Sec-Fetch-Site: cross-site`) gets `403`. So another site can't call them with your visitors' cookies (cross-site request forgery). To call one from a script or test, `POST` to its endpoint with `content-type: application/json` and a body of `{ "remoteFunction": "<name>", "args": [...] }`. Remote functions still decide themselves who may call them, e.g. by checking the session.
 
+### Request size
+
+A remote function's request, the JSON of its arguments, can be 1 MiB at most. A larger one gets `413` and the call rejects. Set another limit, in bytes, when you create the app:
+
+```ts
+export default createUIApp(Root, { remote: { maxBodySize: 4 * 1024 * 1024 } });
+```
+
 ## Request context
 
 Server code reads the current request with `requestContext()` from `@huuma/ui/server`: remote functions, pages, layouts, the root component, `metadata()` and resolvers, middleware, and code they call, such as `*.server.ts` modules. No need to pass the request along.
@@ -561,9 +569,19 @@ function Greeting() {
   );
 }
 
-// Add the i18n middleware
-app.middleware(useI18n(i18nConfig));
 ```
+
+Add the i18n middleware to the pages, in `app/middleware.ts`, with the config that `setupI18n()` returned (exported from `server.ts` here):
+
+```ts
+// app/middleware.ts
+import { useI18n } from "@huuma/ui/i18n/middleware";
+import { i18nConfig } from "../server.ts";
+
+export default [useI18n(i18nConfig)];
+```
+
+Not app-wide with `app.use()`: that also runs for scripts, stylesheets and remote functions, whose paths have no language, so they would get `404`.
 
 ## Server Setup with Layouts
 

@@ -1,7 +1,7 @@
 import { assert, describe, expect, test } from "vite-plus/test";
 
 import { createUIApp } from "../app.ts";
-import { executeRemoteFunction, serveRemoteFunctions } from "./pack.ts";
+import { executeRemoteFunction, readRemoteBody, serveRemoteFunctions } from "./pack.ts";
 
 // Type alias for the per-file remote-function map shape used by the helper.
 // Tests pass plain functions returning Promises; the helper awaits them by
@@ -199,5 +199,129 @@ describe(serveRemoteFunctions.name, () => {
     expect(response.status).toStrictEqual(403);
     await response.body?.cancel();
     expect(calls).toStrictEqual([]);
+  });
+});
+
+describe("the body limit of remote functions", () => {
+  const endpoint = "http://localhost/_huuma/remote/1a2b3c4d/text.remote";
+  const calls: number[] = [];
+  const serve = (options?: Parameters<typeof createUIApp>[1]) => {
+    const app = createUIApp(({ children }) => children, options);
+    serveRemoteFunctions(app, new URL(endpoint).pathname, {
+      length: (text: string) => {
+        calls.push(text.length);
+        return resolve(text.length);
+      },
+    });
+    return app.deliver();
+  };
+  const body = (length: number) =>
+    JSON.stringify({ remoteFunction: "length", args: ["a".repeat(length)] });
+  // `chunks` of `size` bytes each inside the argument, without a
+  // Content-Length. `pulled` counts the chunks the server asked for.
+  const streamed = (chunks: number, size: number, pulled = { count: 0 }) => {
+    const encoder = new TextEncoder();
+    let sent = 0;
+    return new Request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: new ReadableStream<Uint8Array>(
+        {
+          start: (controller) =>
+            controller.enqueue(encoder.encode('{"remoteFunction":"length","args":["')),
+          pull(controller) {
+            pulled.count++;
+            if (sent++ < chunks) controller.enqueue(encoder.encode("a".repeat(size)));
+            else {
+              controller.enqueue(encoder.encode('"]}'));
+              controller.close();
+            }
+          },
+        },
+        { highWaterMark: 0 },
+      ),
+      duplex: "half",
+    } as RequestInit);
+  };
+  const post = (text: string) =>
+    new Request(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", "content-length": `${text.length}` },
+      body: text,
+    });
+
+  test("is 1 MiB by default", async () => {
+    calls.length = 0;
+    const handle = serve();
+    const within = await handle(post(body(1024 * 1024 - 100)));
+    expect(within.status).toStrictEqual(200);
+    expect(await within.json()).toStrictEqual(1024 * 1024 - 100);
+
+    const over = await handle(post(body(1024 * 1024)));
+    expect(over.status).toStrictEqual(413);
+    await over.body?.cancel();
+    expect(calls).toStrictEqual([1024 * 1024 - 100]);
+  });
+
+  test("refuses a streamed body once it passes the limit, without reading the rest", async () => {
+    calls.length = 0;
+    const pulled = { count: 0 };
+    const response = await serve()(streamed(64, 128 * 1024, pulled));
+    expect(response.status).toStrictEqual(413);
+    await response.body?.cancel();
+    expect(calls).toStrictEqual([]);
+    // 8 MiB were on offer; it stopped right after the first MiB.
+    expect(pulled.count).toBeLessThan(12);
+  });
+
+  test("accepts a streamed body within the limit", async () => {
+    const response = await serve()(streamed(4, 1024));
+    expect(response.status).toStrictEqual(200);
+    expect(await response.json()).toStrictEqual(4096);
+  });
+
+  test("is `remote.maxBodySize` of the app, to the byte", async () => {
+    const text = body(10);
+    const exact = await serve({ remote: { maxBodySize: text.length } })(post(text));
+    expect(exact.status).toStrictEqual(200);
+    await exact.body?.cancel();
+
+    for (const request of [post(text), streamed(1, 10)]) {
+      const response = await serve({ remote: { maxBodySize: text.length - 1 } })(request);
+      expect(response.status).toStrictEqual(413);
+      await response.body?.cancel();
+    }
+
+    const unlimited = await serve({ remote: { maxBodySize: Infinity } })(streamed(40, 64 * 1024));
+    expect(unlimited.status).toStrictEqual(200);
+    expect(await unlimited.json()).toStrictEqual(40 * 64 * 1024);
+  });
+
+  test("must be a number of bytes", () => {
+    for (const maxBodySize of [-1, NaN, "1mb" as unknown as number]) {
+      expect(() => serve({ remote: { maxBodySize } })).toThrow(RangeError);
+    }
+  });
+
+  test("reads characters split between two chunks, and fails like `request.json()`", async () => {
+    const bytes = new TextEncoder().encode(JSON.stringify({ text: "grüße €" }));
+    const chunked = (bytes: Uint8Array) =>
+      new Request(endpoint, {
+        method: "POST",
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            // One byte a chunk: every multi-byte character is split.
+            for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+            controller.close();
+          },
+        }),
+        duplex: "half",
+      } as RequestInit);
+    expect(await readRemoteBody(chunked(bytes), 1024)).toStrictEqual({ text: "grüße €" });
+
+    await expect(readRemoteBody(chunked(bytes.slice(0, 5)), 1024)).rejects.toThrow(SyntaxError);
+    await expect(readRemoteBody(new Request(endpoint, { method: "POST" }), 1024)).rejects.toThrow(
+      SyntaxError,
+    );
   });
 });

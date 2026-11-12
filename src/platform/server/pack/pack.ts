@@ -1,3 +1,4 @@
+import { EntityTooLargeException } from "@huuma/route/http/exception/entity-too-large-exception";
 import { HttpException } from "@huuma/route/http/exception/http-exception";
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
 import { UnsupportedMediaTypeException } from "@huuma/route/http/exception/unsupported-media-type-exception";
@@ -77,9 +78,39 @@ export function checkRemoteRequest(request: Request): void {
 }
 
 /**
+ * Reads the JSON body of a remote function's request, `limit` bytes at
+ * most (`remote.maxBodySize` of the app): `request.json()` would buffer a
+ * body of any size before the function's name is even checked. A larger
+ * body gets `413`: by its `Content-Length` before any of it is read, and
+ * one without that header, like a streamed body, once it passes the limit.
+ * What's left of it stays unread, for the platform to discard.
+ */
+export async function readRemoteBody(request: Request, limit: number): Promise<unknown> {
+  const tooLarge = () =>
+    new EntityTooLargeException(
+      `The request of a remote function can be ${limit} bytes at most (\`remote.maxBodySize\`).`,
+    );
+  if (Number(request.headers.get("content-length")) > limit) throw tooLarge();
+
+  const decoder = new TextDecoder();
+  let text = "";
+  let size = 0;
+  const reader = request.body?.getReader();
+  while (reader) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) throw tooLarge();
+    text += decoder.decode(value, { stream: true });
+  }
+  return JSON.parse(text + decoder.decode());
+}
+
+/**
  * Serves the functions of one remote module at `endpoint`: the browser
  * stub posts the function's name and arguments as JSON. Other requests are
- * refused (`checkRemoteRequest()`).
+ * refused (`checkRemoteRequest()`), and so are bodies over the app's limit
+ * (`readRemoteBody()`).
  */
 export function serveRemoteFunctions<T extends UIAppContext>(
   app: UIApp<T>,
@@ -89,7 +120,9 @@ export function serveRemoteFunctions<T extends UIAppContext>(
 ): UIApp<T> {
   app.post(endpoint, async ({ request }) => {
     checkRemoteRequest(request);
-    const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
+    const { remoteFunction, args } = remoteFunctionsSchema.parse(
+      await readRemoteBody(request, app.remoteMaxBodySize),
+    );
     if (
       remoteFunction in remoteFunctions &&
       typeof remoteFunctions[remoteFunction] === "function"
