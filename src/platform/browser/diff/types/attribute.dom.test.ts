@@ -112,3 +112,144 @@ describe("an input's value", () => {
     }
   });
 });
+
+// An update changes the class names and the style properties the client
+// rendered differently, and leaves the ones an extension or a script added.
+describe("class and style in an update", () => {
+  // `node` with `previous` applied, then updated to `props`. `between`
+  // stands for an extension, a script or the user.
+  function update(
+    node: Element,
+    previous: Record<string, unknown>,
+    props: Record<string, unknown>,
+    between: () => void = () => {},
+  ): void {
+    const before = vElementWith(previous, node);
+    for (const name in previous) {
+      for (const change of setAttribute(name, previous[name], before)) attribute(change);
+    }
+    between();
+    for (const change of compareAttributes(vElementWith(props, node), before)) {
+      attribute(change as AttributeChangeSet);
+    }
+  }
+  const classes = (node: Element) => [...node.classList].sort();
+  // By index: happy-dom's style isn't iterable.
+  const properties = ({ style }: HTMLElement) =>
+    Array.from({ length: style.length }, (_, i) => style[i]).sort();
+
+  test("keeps a class that was added, and changes the client's", () => {
+    const node = document.createElement("button");
+    update(node, { class: "a b" }, { class: "c a" }, () => node.classList.add("dark"));
+    expect(classes(node)).toStrictEqual(["a", "c", "dark"]);
+  });
+
+  test("adds the client's first class to the ones that are there", () => {
+    const node = document.createElement("button");
+    update(node, {}, { class: "a" }, () => node.classList.add("dark"));
+    expect(classes(node)).toStrictEqual(["a", "dark"]);
+  });
+
+  test.each([{}, { class: false }, { class: undefined }])(
+    "removes the client's classes for %o, and the attribute only if none is left",
+    (props) => {
+      const node = document.createElement("button");
+      update(node, { class: "a b" }, props, () => node.classList.add("dark"));
+      expect(node.getAttribute("class")).toStrictEqual("dark");
+
+      const own = document.createElement("button");
+      update(own, { class: "a b" }, props);
+      expect(own.hasAttribute("class")).toStrictEqual(false);
+    },
+  );
+
+  test("reads class names between any whitespace", () => {
+    const node = document.createElement("button");
+    update(node, { class: " a\n  b\tc " }, { class: "b" });
+    expect(classes(node)).toStrictEqual(["b"]);
+  });
+
+  test("leaves a class the client still renders, that was removed", () => {
+    const node = document.createElement("button");
+    update(node, { class: "a b" }, { class: "a c" }, () => node.classList.remove("a"));
+    expect(classes(node)).toStrictEqual(["c"]);
+  });
+
+  test("updates the classes of an SVG element", () => {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    update(node, { class: "a" }, { class: "b" }, () => node.classList.add("dark"));
+    expect(classes(node)).toStrictEqual(["b", "dark"]);
+  });
+
+  test("keeps a style property that was added, and changes the client's", () => {
+    const node = document.createElement("button");
+    update(node, { style: "color: red; margin-top: 1px" }, { style: "color: blue" }, () =>
+      node.style.setProperty("filter", "invert(1)"),
+    );
+    expect(node.style.color).toStrictEqual("blue");
+    expect(node.style.marginTop).toStrictEqual("");
+    expect(node.style.filter).toStrictEqual("invert(1)");
+  });
+
+  test("adds the client's first style to the properties that are there", () => {
+    const node = document.createElement("button");
+    update(node, {}, { style: "color: red" }, () => node.style.setProperty("filter", "invert(1)"));
+    expect(node.style.color).toStrictEqual("red");
+    expect(node.style.filter).toStrictEqual("invert(1)");
+  });
+
+  test.each([{}, { style: false }])(
+    "removes the client's style properties for %o, and the attribute only if none is left",
+    (props) => {
+      const node = document.createElement("button");
+      update(node, { style: "color: red" }, props, () =>
+        node.style.setProperty("filter", "invert(1)"),
+      );
+      expect(node.style.color).toStrictEqual("");
+      expect(node.style.filter).toStrictEqual("invert(1)");
+
+      const own = document.createElement("button");
+      update(own, { style: "color: red" }, props);
+      expect(own.hasAttribute("style")).toStrictEqual(false);
+    },
+  );
+
+  test("leaves a style property the client didn't change, that was changed", () => {
+    const node = document.createElement("button");
+    update(node, { style: "color: red; top: 1px" }, { style: "color: red; top: 2px" }, () =>
+      node.style.setProperty("color", "green"),
+    );
+    expect(node.style.color).toStrictEqual("green");
+    expect(node.style.top).toStrictEqual("2px");
+  });
+
+  test("keeps !important and custom properties", () => {
+    const node = document.createElement("button");
+    update(node, { style: "color: red" }, { style: "color: blue !important; --gap: 4px" });
+    expect(node.style.getPropertyValue("color")).toStrictEqual("blue");
+    expect(node.style.getPropertyPriority("color")).toStrictEqual("important");
+    expect(node.style.getPropertyValue("--gap")).toStrictEqual("4px");
+
+    update(node, { style: "color: blue !important; --gap: 4px" }, { style: "color: blue" });
+    expect(node.style.getPropertyPriority("color")).toStrictEqual("");
+    expect(node.style.getPropertyValue("--gap")).toStrictEqual("");
+  });
+
+  test.each([
+    [{ class: "a b" }, { class: "b c" }],
+    [{ class: "a" }, { class: "" }],
+    [{ style: "color: red; top: 1px" }, { style: "top: 2px; left: 0px" }],
+  ])("from %o to %o is what the server renders, with nothing added", (previous, props) => {
+    const node = document.createElement("button");
+    update(node, previous, props);
+    const server = <HTMLElement>fromServer(props);
+    expect(classes(node)).toStrictEqual(classes(server));
+    expect(node.hasAttribute("class")).toStrictEqual(server.hasAttribute("class"));
+    expect(properties(node)).toStrictEqual(properties(server));
+    for (const property of properties(server)) {
+      expect(node.style.getPropertyValue(property)).toStrictEqual(
+        server.style.getPropertyValue(property),
+      );
+    }
+  });
+});

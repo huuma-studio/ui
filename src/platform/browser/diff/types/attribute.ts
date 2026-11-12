@@ -1,6 +1,13 @@
-import { type HasVNodeRef, type VElement, VNodeProps } from "../../../../v-node/mod.ts";
+import {
+  type HasVNodeRef,
+  type VElement,
+  VNodeProps,
+} from "../../../../v-node/mod.ts";
 import { BOOLEAN_ATTRIBUTES } from "../../../../jsx-runtime/boolean-attributes.ts";
-import { attributeValue, isValidAttributeName } from "../../../../jsx-runtime/attributes.ts";
+import {
+  attributeValue,
+  isValidAttributeName,
+} from "../../../../jsx-runtime/attributes.ts";
 import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
@@ -17,11 +24,15 @@ export interface UpdateAttributePayload {
   vNode: VElement<Node>;
   name: string;
   value: string | number | boolean | { __html: string };
+  /** What the client rendered before, for `class` and `style` (see `merge()`). */
+  previous?: unknown;
 }
 
 export interface DeleteAttributePayload {
   vNode: VElement<Node>;
   name: string;
+  /** What the client rendered before, for `class` and `style` (see `merge()`). */
+  previous?: unknown;
 }
 
 export interface CreateAttributeChangeSet extends BaseAttributeChangeSet<CreateAttributePayload> {
@@ -46,10 +57,87 @@ export function attribute(change: AttributeChangeSet): void {
     case Action.Create:
       return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
     case Action.Update:
-      return createOrUpdate(<CreateAttributePayload>change[Props.Payload]);
+      return update(<UpdateAttributePayload>change[Props.Payload]);
     case Action.Delete:
       return remove(<DeleteAttributePayload>change[Props.Payload]);
   }
+}
+
+function update(payload: UpdateAttributePayload): void {
+  if (isMerged(payload.name)) {
+    return merge(payload.vNode, payload.name, payload.previous, payload.value);
+  }
+  createOrUpdate(payload);
+}
+
+// `class` and `style` hold several values, and not only the client's: a
+// browser extension or a script adds classes and styles of its own.
+function isMerged(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower === "class" || lower === "style";
+}
+
+/**
+ * Updates `class` or `style` from what the client rendered before
+ * (`previous`) to `value`: only the class names and the style properties
+ * that differ between the two change, so the ones an extension or a script
+ * added stay. Hydration keeps them for the same reason (hydrate.ts). The
+ * attribute goes once the client renders none and nothing else is left.
+ */
+function merge(
+  vNode: VElement<Node>,
+  name: string,
+  previous: unknown,
+  value: unknown,
+): void {
+  const node = <HTMLElement>vNode[VNodeProps.NODE_REF];
+  const isClass = name.toLowerCase() === "class";
+  const after = attributeValue(name, value);
+  const was = parts(isClass, attributeValue(name, previous));
+  const now = parts(isClass, after);
+
+  for (const part of was.keys()) {
+    if (now.has(part)) continue;
+    if (isClass) node.classList.remove(part);
+    else node.style.removeProperty(part);
+  }
+  for (const [part, declaration] of now) {
+    if (was.get(part) === declaration) continue;
+    if (isClass) node.classList.add(part);
+    else
+      node.style.setProperty(
+        part,
+        ...(<[string, string]>declaration.split("\0")),
+      );
+  }
+  if (after === undefined && !(isClass ? node.classList : node.style).length) {
+    node.removeAttribute(name);
+  }
+}
+
+let parser: CSSStyleDeclaration | undefined;
+
+// The parts of a `class` or `style` value: the class names, or the style
+// properties as the browser parses them, each with its value and priority
+// ("important" or ""), NUL between the two.
+function parts(isClass: boolean, value = ""): Map<string, string> {
+  const map = new Map<string, string>();
+  if (isClass) {
+    for (const token of value.split(/[\t\n\f\r ]+/))
+      if (token) map.set(token, "");
+    return map;
+  }
+  parser ??= document.createElement("i").style;
+  parser.cssText = value;
+
+  for (let i = 0; i < parser.length; i++) {
+    const property = parser[i];
+    map.set(
+      property,
+      `${parser.getPropertyValue(property)}\0${parser.getPropertyPriority(property)}`,
+    );
+  }
+  return map;
 }
 
 function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
@@ -80,7 +168,8 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     // `false` clears it, like the server, which writes no value.
     const text = attributeValue(name, value);
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = text ?? "";
-    if (text === undefined) (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
+    if (text === undefined)
+      (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
     return;
   }
   // The same rules as the server renderer (attributes.ts): invalid names,
@@ -98,15 +187,21 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
   (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, text);
 }
 
-function remove({ name, vNode }: DeleteAttributePayload): void {
+function remove(payload: DeleteAttributePayload): void {
+  const { name, vNode } = payload;
   if (!isValidAttributeName(name)) return;
+  if (isMerged(name) && "previous" in payload) {
+    return merge(vNode, name, payload.previous, undefined);
+  }
   if (name === "checked") {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = false;
   }
   if (name === "value") {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = "";
   }
-  (<HTMLElement>(<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]).removeAttribute(name);
+  (<HTMLElement>(
+    (<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]
+  )).removeAttribute(name);
 }
 
 export function compareAttributes(
@@ -132,6 +227,20 @@ export function compareAttributes(
     if (hasOwn(previousProps, prop) && props[prop] === previousProps[prop]) {
       continue;
     }
+    if (isMerged(prop)) {
+      changes.push({
+        [Props.Action]: Action.Update,
+        [Props.Type]: Type.Attribute,
+        [Props.Payload]: {
+          vNode,
+          name: prop,
+          // A string, a number or a boolean: isAttribute().
+          value: <string | number | boolean>props[prop],
+          previous: previousProps[prop],
+        },
+      });
+      continue;
+    }
     changes.push(...setAttribute(prop, props[prop], vNode));
   }
 
@@ -144,10 +253,9 @@ export function compareAttributes(
       changes.push({
         [Props.Action]: Action.Delete,
         [Props.Type]: Type.Attribute,
-        [Props.Payload]: {
-          vNode,
-          name: prop,
-        },
+        [Props.Payload]: isMerged(prop)
+          ? { vNode, name: prop, previous: previousProps[prop] }
+          : { vNode, name: prop },
       });
     }
   }
@@ -206,7 +314,11 @@ export function setAttribute(
   }
   // createOrUpdate() decides how `false` is written: `"false"` for
   // `aria-*` and `data-*`, left out otherwise.
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return [
       {
         [Props.Action]: Action.Create,
