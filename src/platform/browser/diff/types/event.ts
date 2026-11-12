@@ -38,7 +38,11 @@ export function event(change: EventChangeSet): void {
 // batch. The same wrapper per listener, for removeEventListener().
 const batchedListeners = new WeakMap<() => void, EventListener>();
 
-function batched(listener: () => void): EventListener {
+// No listener for `on-click={enabled ? listener : undefined}` or
+// `{enabled && listener}`. An object with handleEvent() goes to the browser
+// as it is.
+function batched(listener: (() => void) | EventListenerObject): EventListenerOrEventListenerObject {
+  if (typeof listener !== "function") return listener;
   let wrapper = batchedListeners.get(listener);
   if (!wrapper) {
     wrapper = function (this: unknown, event: Event) {
@@ -50,6 +54,7 @@ function batched(listener: () => void): EventListener {
 }
 
 function create(payload: CreateEventPayload): void {
+  if (!payload.listener) return;
   (<HasVNodeRef<Node>>payload.vNode)[VNodeProps.NODE_REF]?.addEventListener(
     payload.name,
     batched(payload.listener),
@@ -57,6 +62,7 @@ function create(payload: CreateEventPayload): void {
 }
 
 function remove(payload: DeleteEventPayload): void {
+  if (!payload.listener) return;
   (<HasVNodeRef<Node>>payload.vNode)[VNodeProps.NODE_REF]?.removeEventListener(
     payload.name,
     batched(payload.listener),

@@ -113,6 +113,55 @@ describe("event listeners run in a batch", () => {
     expect(document.querySelector("input")).not.toBeNull();
   });
 
+  test.each([undefined, null, false])("no listener for on-click={%s}", async (none) => {
+    let clicks = 0;
+    let enable: (enabled: boolean) => void = () => {};
+    function Optional(): JSX.Element {
+      const enabled = hooks.$signal(false);
+      enable = (next) => enabled.set(next);
+      const listener = () => {
+        clicks++;
+      };
+      return (
+        <button on-click={enabled.get() ? listener : (none as undefined)}>
+          {enabled.get() ? "on" : "off"}
+        </button>
+      );
+    }
+    // Hydrates without a listener.
+    await hydrate(<Optional />, [Optional]);
+    const button = document.querySelector("button")!;
+    button.click();
+    expect(clicks).toBe(0);
+
+    enable(true);
+    button.click();
+    expect(button.textContent).toBe("on");
+    expect(clicks).toBe(1);
+
+    enable(false);
+    button.click();
+    expect(button.textContent).toBe("off");
+    expect(clicks).toBe(1);
+  });
+
+  test("an object with handleEvent() still listens", async () => {
+    const seen: string[] = [];
+    const listener = {
+      handleEvent(event: Event) {
+        seen.push(event.type);
+      },
+    };
+    function Button(): JSX.Element {
+      return <button on-click={listener as unknown as () => void}>click</button>;
+    }
+    await hydrate(<Button />, [Button]);
+
+    document.querySelector("button")!.click();
+
+    expect(seen).toStrictEqual(["click"]);
+  });
+
   test("the listener gets the event and the element, and is removed with its element's update", async () => {
     const seen: string[] = [];
     function Toggle(): JSX.Element {
