@@ -47,6 +47,42 @@ const EXTRA_FILES = {
       >themed</button>;
     }
   `,
+  "components/created.client.tsx": `
+    import { $signal } from "@huuma/ui/hooks/signal";
+    export default function Created() {
+      const on = $signal(false);
+      return <div>
+        <button on-click={() => on.set(!on.get())}>create</button>
+        {on.get() ? <select id="created" value="b"><option value="a">A</option><option value="b">B</option></select> : null}
+        <select id="updated" value={on.get() ? "c" : "b"}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          {on.get() ? <option value="c">C</option> : null}
+        </select>
+        <select id="loaded" value="b">
+          <option value="a">A</option>
+          {on.get() ? <option value="b">B</option> : null}
+        </select>
+        <select id="unknown" value={on.get() ? "x" : "c"}>
+          <option value="a" disabled>A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+        <p id="raw" dangerouslySetInnerHTML={{ __html: on.get() ? "" : "<b>raw</b>" }}></p>
+        <svg width="50" height="50">
+          <foreignObject width="50" height="50">
+            {on.get() ? <div id="html">html</div> : null}
+          </foreignObject>
+        </svg>
+      </div>;
+    }
+  `,
+  "app/created/page.tsx": `
+    import Created from "../../components/created.client.tsx";
+    export default function Page() {
+      return <main><Created /></main>;
+    }
+  `,
   "app/themed/page.tsx": `
     import Themed from "../../components/themed.client.tsx";
     export default function Page() {
@@ -235,6 +271,39 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
           await page.getByRole("button", { name: `${label}: 0`, exact: true }).click();
           await button(page, `${label}: 1`);
         }
+        expect(errors).toStrictEqual([]);
+      } finally {
+        await page.close();
+      }
+    });
+
+    test("created and updated elements are as the server renders them", async () => {
+      const { page, errors } = await open(browser, `${origin}/created`);
+      const value = (id: string) =>
+        page.evaluate((id) => document.querySelector<HTMLSelectElement>(id)!.value, id);
+      try {
+        expect(await value("#updated")).toStrictEqual("b");
+        expect(await value("#unknown")).toStrictEqual("c");
+        expect(await value("#loaded")).toStrictEqual("a");
+        await page.click("button");
+        await page.locator("#created").waitFor({ timeout: 5_000 });
+
+        // A select's value selects its option, which is added after it.
+        expect(await value("#created")).toStrictEqual("b");
+        expect(await value("#updated")).toStrictEqual("c");
+        // Also while the value stays: the option is added later.
+        expect(await value("#loaded")).toStrictEqual("b");
+        // No such option: the first one that isn't disabled, as on a
+        // page from the server.
+        expect(await value("#unknown")).toStrictEqual("b");
+        expect(await page.innerHTML("#raw")).toStrictEqual("");
+        // HTML inside an SVG's <foreignObject>, which shows only as HTML.
+        expect(
+          await page.evaluate(() => {
+            const html = document.querySelector("#html")!;
+            return [html.namespaceURI, html.getBoundingClientRect().height > 0];
+          }),
+        ).toStrictEqual(["http://www.w3.org/1999/xhtml", true]);
         expect(errors).toStrictEqual([]);
       } finally {
         await page.close();

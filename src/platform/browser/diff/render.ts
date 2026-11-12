@@ -10,7 +10,7 @@ import {
 } from "../../../v-node/mod.ts";
 import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./attachment-ref.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
-import type { CreateAttributeChangeSet } from "./types/attribute.ts";
+import { type CreateAttributeChangeSet, isSelectValue } from "./types/attribute.ts";
 import type { LinkComponentChangeSet, MountComponentChangeSet } from "./types/component.ts";
 import type { AttachElementChangeSet, CreateElementChangeSet } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
@@ -99,10 +99,11 @@ function element(vElement: VElement<Node>, attachmentRef: AttachmentRef): Change
     });
   });
 
-  // Add attributes
+  // Add attributes; a select's value after its options.
+  const afterChildren: ChangeSet<unknown>[] = [];
   for (const prop in vElement[VNodeProps.PROPS]) {
     if (prop === "children") continue;
-    changeSets.push(<CreateAttributeChangeSet>{
+    (isSelectValue(vElement, prop) ? afterChildren : changeSets).push(<CreateAttributeChangeSet>{
       [Props.Type]: Type.Attribute,
       [Props.Action]: Action.Create,
       [Props.Payload]: {
@@ -120,6 +121,7 @@ function element(vElement: VElement<Node>, attachmentRef: AttachmentRef): Change
   vElement[VNodeProps.CHILDREN]?.forEach((child) => {
     changeSets.push(...render(child, childrenAttachmentRef));
   });
+  changeSets.push(...afterChildren);
 
   return changeSets;
 }
