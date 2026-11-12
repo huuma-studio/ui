@@ -108,8 +108,8 @@ interface UIAppOption<T extends UIAppContext> extends AppOptions<T> {
   remote?: {
     /**
      * The largest request body a remote function accepts, in bytes: the
-     * JSON of its arguments. A larger request gets `413` and isn't read to
-     * its end. Defaults to 1 MiB; `Infinity` accepts any size.
+     * JSON of its arguments. A larger request gets `413`, and none of it
+     * is kept in memory. Defaults to 1 MiB; `Infinity` accepts any size.
      */
     maxBodySize?: number;
   };

@@ -263,15 +263,16 @@ describe("the body limit of remote functions", () => {
     expect(calls).toStrictEqual([1024 * 1024 - 100]);
   });
 
-  test("refuses a streamed body once it passes the limit, without reading the rest", async () => {
+  test("refuses a streamed body that passes the limit, and reads it to its end", async () => {
     calls.length = 0;
     const pulled = { count: 0 };
     const response = await serve()(streamed(64, 128 * 1024, pulled));
     expect(response.status).toStrictEqual(413);
     await response.body?.cancel();
     expect(calls).toStrictEqual([]);
-    // 8 MiB were on offer; it stopped right after the first MiB.
-    expect(pulled.count).toBeLessThan(12);
+    // All 8 MiB, discarded: the client gets its answer once it sent them
+    // (see `readRemoteBody()`).
+    expect(pulled.count).toStrictEqual(65);
   });
 
   test("accepts a streamed body within the limit", async () => {

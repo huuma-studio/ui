@@ -79,19 +79,18 @@ export function checkRemoteRequest(request: Request): void {
 
 /**
  * Reads the JSON body of a remote function's request, `limit` bytes at
- * most (`remote.maxBodySize` of the app): `request.json()` would buffer a
- * body of any size before the function's name is even checked. A larger
- * body gets `413`: by its `Content-Length` before any of it is read, and
- * one without that header, like a streamed body, once it passes the limit.
- * What's left of it stays unread, for the platform to discard.
+ * most (`remote.maxBodySize` of the app): `request.json()` would keep a
+ * body of any size in memory before the function's name is even checked.
+ * A larger body gets `413`: one with a larger `Content-Length`, and one
+ * without that header, like a streamed body, once it passes the limit.
+ *
+ * A body that's too large is still read to its end, but none of it is
+ * kept. Answering while the client still sends it leaves a connection
+ * that Node only closes after a timeout, and the client often sees a
+ * reset connection instead of the `413`.
  */
 export async function readRemoteBody(request: Request, limit: number): Promise<unknown> {
-  const tooLarge = () =>
-    new EntityTooLargeException(
-      `The request of a remote function can be ${limit} bytes at most (\`remote.maxBodySize\`).`,
-    );
-  if (Number(request.headers.get("content-length")) > limit) throw tooLarge();
-
+  let tooLarge = Number(request.headers.get("content-length")) > limit;
   const decoder = new TextDecoder();
   let text = "";
   let size = 0;
@@ -100,8 +99,16 @@ export async function readRemoteBody(request: Request, limit: number): Promise<u
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > limit) throw tooLarge();
-    text += decoder.decode(value, { stream: true });
+    if (size > limit) {
+      tooLarge = true;
+      text = "";
+    }
+    if (!tooLarge) text += decoder.decode(value, { stream: true });
+  }
+  if (tooLarge) {
+    throw new EntityTooLargeException(
+      `The request of a remote function can be ${limit} bytes at most (\`remote.maxBodySize\`).`,
+    );
   }
   return JSON.parse(text + decoder.decode());
 }
