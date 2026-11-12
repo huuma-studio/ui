@@ -6,7 +6,7 @@
 
 Huuma UI is a web framework for interactive websites: components render on the server, and islands come alive in the browser. It builds with [Vite 8](https://vite.dev) and runs on Node.js; Deno works too. Features remote server functions, reactive state management, and automatic code splitting.
 
-> Huuma UI 0.3, the Vite version described here, is a pre-release: `0.3.0-beta.2` on JSR, from the `next` branch. JSR's latest version is still 0.2, the Deno version, which [Huuma CLI](https://jsr.io/@huuma/cli) creates projects for; see [Migrating from the Deno setup](#migrating-from-the-deno-setup).
+> Huuma UI 0.3, the Vite version described here, is a pre-release: `0.3.0-beta.7` on JSR, from the `next` branch. JSR's latest version is still 0.2, the Deno version, which [Huuma CLI](https://jsr.io/@huuma/cli) creates projects for; see [Migrating from the Deno setup](#migrating-from-the-deno-setup).
 
 ## Features
 
@@ -26,14 +26,14 @@ Huuma UI is published on [JSR](https://jsr.io/@huuma/ui). It needs Node.js 24 or
 With pnpm 10.9+ (recommended) or Yarn 4.9+, which install JSR packages natively:
 
 ```sh
-pnpm add jsr:@huuma/ui@0.3.0-beta.2
+pnpm add jsr:@huuma/ui@0.3.0-beta.7
 pnpm add -D vite@^8
 ```
 
 With npm or Bun, through JSR's npm compatibility layer (`jsr add` also writes an `.npmrc` for it):
 
 ```sh
-npx jsr add @huuma/ui@0.3.0-beta.2
+npx jsr add @huuma/ui@0.3.0-beta.7
 npm install -D vite@^8
 ```
 
@@ -222,7 +222,7 @@ With a `package.json`, Deno takes the packages from `node_modules`, like Node.js
 `@huuma/cloudflare` runs the app as a [Cloudflare Worker](https://developers.cloudflare.com/workers/), with `dist/client/` as the Worker's [static assets](https://developers.cloudflare.com/workers/static-assets/). Its adapter brings [`@cloudflare/vite-plugin`](https://developers.cloudflare.com/workers/vite-plugin/) (tested with 1.64), so `vite` runs the app's server code in workerd too, with the Worker's runtime and bindings. It's a package of its own, so apps on Node don't install workerd:
 
 ```sh
-pnpm add -D jsr:@huuma/cloudflare@0.1.0-beta.1
+pnpm add -D jsr:@huuma/cloudflare@0.1.0-beta.2
 ```
 
 ```ts
