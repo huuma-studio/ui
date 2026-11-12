@@ -18,6 +18,8 @@ interface SubscriberScope {
   id: number;
   subscriber: Subscriber<never>;
   signals: Signal<unknown>[];
+  // The signals read so far in a retrack() run.
+  seen?: Set<Signal<unknown>>;
 }
 
 // The subscription of a computed signal to the signals it reads.
@@ -25,12 +27,15 @@ interface ComputedScope extends SubscriberScope {
   signal: Signal<unknown>;
   // The scopes that read the computed signal.
   readers: Set<SubscriberScope>;
-  // Runs the callback again and returns whether the value changed.
-  recompute: () => boolean;
+  // Runs the callback again, tracked, without storing the value.
+  run: () => unknown;
+  // Stores the value and returns whether it changed.
+  commit: (value: unknown) => boolean;
 }
 
 const subscriberScopes: SubscriberScope[] = [];
 let scopeCount = 0;
+const computedScopes = new WeakMap<Signal<unknown>, ComputedScope>();
 
 export function setSubscriber<T, S>(callback: () => T, subscriber: Subscriber<S>): T {
   return track({ id: scopeCount++, subscriber, signals: [] }, callback);
@@ -47,8 +52,41 @@ function track<T>(scope: SubscriberScope, callback: () => T): T {
   }
 }
 
+/*
+ * Runs a callback again under its scope: it subscribes to what it reads
+ * now, so a signal read only in a branch taken later is tracked too. Then
+ * it drops the signals it no longer reads. A throwing callback drops
+ * nothing, as it may not have reached all of its reads.
+ * A callback that sets a signal it reads runs again inside itself. The
+ * outer run keeps tracking after it, and keeps what the inner run read:
+ * the inner run saw the newer values, the outer run's earlier reads didn't.
+ */
+function retrack<T>(scope: SubscriberScope, callback: () => T): T {
+  const outer = scope.seen;
+  const seen = new Set<Signal<unknown>>();
+  scope.seen = seen;
+  try {
+    const value = track(scope, callback);
+    for (const signal of scope.signals) {
+      if (!seen.has(signal)) signal.unsubscribe(scope);
+    }
+    return value;
+  } finally {
+    seen.forEach((signal) => outer?.add(signal));
+    scope.seen = outer;
+  }
+}
+
+// Subscribes the running scope, if any, to a signal it reads.
+function subscribeRunning(signal: Signal<unknown>): void {
+  const scope = subscriberScopes[subscriberScopes.length - 1];
+  if (!scope) return;
+  scope.seen?.add(signal);
+  signal.subscribe(scope);
+}
+
 function isComputed(scope: SubscriberScope): scope is ComputedScope {
-  return "recompute" in scope;
+  return "run" in scope;
 }
 
 /*
@@ -59,9 +97,12 @@ function isComputed(scope: SubscriberScope): scope is ComputedScope {
  *   computed if a signal it reads changed, so it computes once and only
  *   from settled values. Then run each other scope once if it still reads
  *   a signal that changed.
- * Creation order puts a computed after the signals it reads, and a
- * component before the children it renders, so a parent re-render cancels
- * the old child scopes before they would run.
+ * Creation order puts a component before the children it renders, so a
+ * parent re-render cancels the old child scopes before they would run.
+ * A computed is settled after the computed signals it reads, which
+ * creation order alone can't promise: a retracked computed may start to
+ * read one created after it. So settle() first settles what a computed
+ * reads, and a computed read during a recompute settles on get().
  * A computed that throws keeps its old value and nothing that reads it is
  * updated. Every other scope still runs, then set() rethrows. The failed
  * and skipped scopes stay pending: the next set() that reaches them runs
@@ -69,29 +110,38 @@ function isComputed(scope: SubscriberScope): scope is ComputedScope {
  */
 const pending = new WeakSet<SubscriberScope>();
 
+interface Pass {
+  marked: Set<SubscriberScope>;
+  settled: Set<ComputedScope>;
+  changed: Set<Signal<unknown>>;
+  failed: Set<Signal<unknown>>;
+  errors: unknown[];
+}
+
+// The pass settling its computed signals; a set() inside starts a new one.
+let currentPass: Pass | undefined;
+
 function notify(source: Signal<unknown>, readers: Set<SubscriberScope>): void {
   const marked = new Set<SubscriberScope>();
   mark(marked, readers);
   const scopes = [...marked].sort((a, b) => a.id - b.id);
-  const changed = new Set<Signal<unknown>>([source]);
-  const failed = new Set<Signal<unknown>>();
-  const errors: unknown[] = [];
+  const pass: Pass = {
+    marked,
+    settled: new Set(),
+    changed: new Set([source]),
+    failed: new Set(),
+    errors: [],
+  };
+  const { changed, failed, errors } = pass;
 
-  for (const scope of scopes) {
-    if (!isComputed(scope)) continue;
-    if (reads(scope, failed)) {
-      failed.add(scope.signal);
-      pending.add(scope);
-    } else if (pending.has(scope) || reads(scope, changed)) {
-      try {
-        if (scope.recompute()) changed.add(scope.signal);
-        pending.delete(scope);
-      } catch (error) {
-        failed.add(scope.signal);
-        pending.add(scope);
-        errors.push(error);
-      }
+  const outerPass = currentPass;
+  currentPass = pass;
+  try {
+    for (const scope of scopes) {
+      if (isComputed(scope)) settle(pass, scope);
     }
+  } finally {
+    currentPass = outerPass;
   }
 
   for (const scope of scopes) {
@@ -120,6 +170,42 @@ function notify(source: Signal<unknown>, readers: Set<SubscriberScope>): void {
   }
 }
 
+function settle(pass: Pass, scope: ComputedScope): void {
+  if (pass.settled.has(scope)) return;
+  // Added first: a cycle reads the old value instead of recursing.
+  pass.settled.add(scope);
+
+  for (const signal of scope.signals) {
+    const upstream = computedScopes.get(signal);
+    if (upstream && pass.marked.has(upstream)) settle(pass, upstream);
+  }
+
+  if (reads(scope, pass.failed)) {
+    pass.failed.add(scope.signal);
+    pending.add(scope);
+    return;
+  }
+  if (!pending.has(scope) && !reads(scope, pass.changed)) return;
+
+  let value: unknown;
+  try {
+    value = scope.run();
+  } catch (error) {
+    pass.failed.add(scope.signal);
+    pending.add(scope);
+    pass.errors.push(error);
+    return;
+  }
+  // The run may have read a computed for the first time that failed.
+  if (reads(scope, pass.failed)) {
+    pass.failed.add(scope.signal);
+    pending.add(scope);
+    return;
+  }
+  if (scope.commit(value)) pass.changed.add(scope.signal);
+  pending.delete(scope);
+}
+
 function mark(marked: Set<SubscriberScope>, readers: Set<SubscriberScope>): void {
   for (const scope of readers) {
     if (marked.has(scope)) continue;
@@ -145,6 +231,7 @@ function reads(scope: SubscriberScope, signals: Set<Signal<unknown>>): boolean {
 export abstract class Signal<T> {
   abstract get(): T;
   abstract subscribe(subscriber: SubscriberScope): Cleanup;
+  abstract unsubscribe(subscriber: SubscriberScope): void;
 }
 
 export class WritableSignal<T> extends Signal<T> {
@@ -157,9 +244,7 @@ export class WritableSignal<T> extends Signal<T> {
   }
 
   get(): T {
-    if (subscriberScopes.length) {
-      this.subscribe(subscriberScopes[subscriberScopes.length - 1]);
-    }
+    subscribeRunning(this);
     return this.#value;
   }
 
@@ -181,13 +266,15 @@ export class WritableSignal<T> extends Signal<T> {
     return cleanup;
   }
 
+  unsubscribe(scope: SubscriberScope): void {
+    scope.signals = scope.signals.filter((signal) => signal !== this);
+    this.#scopes.delete(scope);
+  }
+
   #createCleanup(scope: SubscriberScope): Cleanup {
     return {
       signal: this,
-      cleanup: () => {
-        scope.signals = scope.signals.filter((signal) => signal !== this);
-        this.#scopes.delete(scope);
-      },
+      cleanup: () => this.unsubscribe(scope),
     };
   }
 }
@@ -195,29 +282,27 @@ export class WritableSignal<T> extends Signal<T> {
 export class ComputedSignal<T> extends Signal<T> {
   #value: T;
   #scopes = new Set<SubscriberScope>();
-  // Its subscriptions to the signals it reads, see dispose().
-  #cleanups: Cleanup[] = [];
+  #scope: ComputedScope;
 
   constructor(callbackFn: () => T) {
     super();
 
     const scope: ComputedScope = {
       id: 0,
-      subscriber: {
-        // Never called: notify() recomputes computed signals itself.
-        update: () => {},
-        cleanupCallback: (cleanup) => this.#cleanups.push(cleanup),
-      },
+      // Never called: notify() recomputes computed signals itself.
+      subscriber: { update: () => {} },
       signals: [],
       signal: this,
       readers: this.#scopes,
-      recompute: () => {
-        const value = untracked(callbackFn);
+      run: () => retrack(scope, callbackFn),
+      commit: (value) => {
         if (value === this.#value) return false;
-        this.#value = value;
+        this.#value = <T>value;
         return true;
       },
     };
+    this.#scope = scope;
+    computedScopes.set(this, scope);
     this.#value = track(scope, callbackFn);
     // Numbered after its callback, so it comes after every computed it
     // reads, even one created inside the callback.
@@ -225,19 +310,19 @@ export class ComputedSignal<T> extends Signal<T> {
   }
 
   get(): T {
-    if (subscriberScopes.length) {
-      this.subscribe(subscriberScopes[subscriberScopes.length - 1]);
-    }
+    // Read during a recompute, maybe for the first time: settle it first.
+    if (currentPass?.marked.has(this.#scope)) settle(currentPass, this.#scope);
+    subscribeRunning(this);
     return this.#value;
   }
 
   /**
-   * Stops computing: unsubscribes from the signals it reads, so they no
-   * longer keep it alive and run its callback. It keeps its last value.
+   * Stops computing: unsubscribes from the signals it reads now, so they
+   * no longer keep it alive and run its callback. It keeps its last value.
    * A component disposes its `$computed` signals when it's removed.
    */
   dispose(): void {
-    for (const cleanup of this.#cleanups.splice(0)) cleanup.cleanup();
+    for (const signal of this.#scope.signals) signal.unsubscribe(this.#scope);
   }
 
   subscribe(scope: SubscriberScope): Cleanup {
@@ -250,13 +335,15 @@ export class ComputedSignal<T> extends Signal<T> {
     return this.#createCleanup(scope);
   }
 
+  unsubscribe(scope: SubscriberScope): void {
+    this.#scopes.delete(scope);
+    scope.signals = scope.signals.filter((signal) => signal !== this);
+  }
+
   #createCleanup(scope: SubscriberScope): Cleanup {
     return {
       signal: this,
-      cleanup: () => {
-        this.#scopes.delete(scope);
-        scope.signals = scope.signals.filter((signal) => signal !== this);
-      },
+      cleanup: () => this.unsubscribe(scope),
     };
   }
 }
@@ -270,17 +357,14 @@ export function computed<T>(callback: () => T): ComputedSignal<T> {
 }
 
 export function effect(callback: () => void): () => void {
-  const cleanups: Cleanup[] = [];
-  setSubscriber(() => callback(), {
-    update: callback,
-    cleanupCallback: (cleanup) => {
-      cleanups.push(cleanup);
-    },
-  });
+  const scope: SubscriberScope = {
+    id: scopeCount++,
+    subscriber: { update: () => retrack(scope, callback) },
+    signals: [],
+  };
+  track(scope, callback);
   return () => {
-    cleanups.forEach((cleanup) => {
-      cleanup.cleanup();
-    });
+    for (const signal of scope.signals) signal.unsubscribe(scope);
   };
 }
 
