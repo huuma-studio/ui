@@ -888,6 +888,90 @@ describe(batch.name, () => {
     expect(seen).toStrictEqual(["hidden", "Grace", "Joan"]);
   });
 
+  test("puts the subscriptions of a computed back, that the batch read on another branch with an equal value", () => {
+    const flag = signal(false);
+    const left = signal(1);
+    const right = signal(1);
+    const selected = computed(() => (flag.get() ? right.get() : left.get()));
+    const seen: number[] = [];
+    effect(() => {
+      seen.push(selected.get());
+    });
+
+    batch(() => {
+      flag.set(true);
+      expect(selected.get()).toBe(1);
+      flag.set(false);
+    });
+    expect(seen).toStrictEqual([1]);
+
+    left.set(2);
+    expect(selected.get()).toBe(2);
+    expect(seen).toStrictEqual([1, 2]);
+  });
+
+  test("reads a chain of computeds anew after a set back and an unrelated set", () => {
+    const count = signal(1);
+    const other = signal(0);
+    const double = computed(() => count.get() * 2);
+    const label = computed(() => String(double.get()));
+
+    batch(() => {
+      count.set(2);
+      expect(label.get()).toBe("4");
+      count.set(1);
+      expect(double.get()).toBe(2);
+      other.set(1);
+      expect(label.get()).toBe("2");
+    });
+    expect(label.get()).toBe("2");
+  });
+
+  test("doesn't run a computed again that was disposed after the batch read it", () => {
+    const count = signal(1);
+    let runs = 0;
+    const double = computed(() => {
+      runs++;
+      return count.get() * 2;
+    });
+    const seen: number[] = [];
+    effect(() => {
+      seen.push(double.get());
+    });
+
+    batch(() => {
+      count.set(2);
+      expect(double.get()).toBe(4);
+      double.dispose();
+    });
+    const before = runs;
+    // It keeps its last value, and what reads it got it.
+    expect(seen).toStrictEqual([2, 4]);
+
+    count.set(3);
+    expect(runs).toBe(before);
+    expect(double.get()).toBe(4);
+  });
+
+  test("doesn't run a disposed computed when the batch reads it", () => {
+    const count = signal(1);
+    let runs = 0;
+    const double = computed(() => {
+      runs++;
+      return count.get() * 2;
+    });
+
+    batch(() => {
+      count.set(2);
+      double.get();
+      double.dispose();
+      const before = runs;
+      count.set(3);
+      expect(double.get()).toBe(4);
+      expect(runs).toBe(before);
+    });
+  });
+
   test("notifies about the signals a throwing callback set, and ends the batch", () => {
     const count = signal(0);
     const seen: number[] = [];
@@ -979,5 +1063,137 @@ describe(batch.name, () => {
 
     batch(() => trigger.set(1));
     expect(seen).toStrictEqual(["0 0", "1 1"]);
+  });
+});
+
+// Every sequence of set() and get() calls of a given length inside a batch,
+// on a small graph: a computed has its value from the signals as they are,
+// inside the batch and after it, effects run once or not at all, and the
+// subscriptions are right afterwards.
+describe("batch, every sequence of sets and reads", () => {
+  interface Graph {
+    sources: Record<string, ReturnType<typeof signal<number>>>;
+    computeds: Record<string, ReturnType<typeof computed<unknown>>>;
+    // The computed signals' values, from the sources' values.
+    expected: (values: Record<string, number>) => Record<string, unknown>;
+  }
+  type Op = { set: string; value: number } | { read: string };
+
+  function check(graph: () => Graph, ops: Op[], length: number): void {
+    const sequence: Op[] = [];
+    const run = (): void => {
+      const { sources, computeds, expected } = graph();
+      const values: Record<string, number> = {};
+      for (const name in sources) values[name] = sources[name].get();
+      const seen: Record<string, unknown[]> = {};
+      for (const name in computeds) {
+        seen[name] = [];
+        effect(() => {
+          seen[name].push(computeds[name].get());
+        });
+        seen[name].length = 0;
+      }
+      const before = expected(values);
+      const at = () =>
+        sequence.map((op) => ("set" in op ? `${op.set}=${op.value}` : op.read)).join(", ");
+
+      batch(() => {
+        for (const op of sequence) {
+          if ("set" in op) {
+            values[op.set] = op.value;
+            sources[op.set].set(op.value);
+          } else if (computeds[op.read].get() !== expected(values)[op.read]) {
+            assert.fail(`${op.read} inside the batch: ${at()}`);
+          }
+        }
+        for (const name in seen) if (seen[name].length) assert.fail(`effect in the batch: ${at()}`);
+      });
+      const after = expected(values);
+      for (const name in computeds) {
+        const runs = after[name] === before[name] ? [] : [after[name]];
+        if (computeds[name].get() !== after[name] || String(seen[name]) !== String(runs)) {
+          assert.fail(`${name} after the batch (effect: ${String(seen[name])}): ${at()}`);
+        }
+      }
+      // The subscriptions: every later set() reaches what reads it.
+      for (const name in sources) {
+        values[name] += 10;
+        sources[name].set(values[name]);
+        const now = expected(values);
+        for (const computedName in computeds) {
+          if (computeds[computedName].get() !== now[computedName]) {
+            assert.fail(`${computedName} after ${name} was set later: ${at()}`);
+          }
+        }
+      }
+    };
+    const extend = (): void => {
+      if (sequence.length === length) return run();
+      for (const op of ops) {
+        sequence.push(op);
+        extend();
+        sequence.pop();
+      }
+    };
+    extend();
+  }
+
+  test("a chain of computeds", () => {
+    check(
+      () => {
+        const count = signal(1);
+        const other = signal(0);
+        const double = computed(() => count.get() * 2);
+        const label = computed(() => String(double.get()));
+        const unrelated = computed(() => other.get() + 1);
+        return {
+          sources: { count, other },
+          computeds: { double, label, unrelated },
+          expected: ({ count, other }) => ({
+            double: count * 2,
+            label: String(count * 2),
+            unrelated: other + 1,
+          }),
+        };
+      },
+      [
+        { set: "count", value: 1 },
+        { set: "count", value: 2 },
+        { set: "other", value: 1 },
+        { read: "double" },
+        { read: "label" },
+      ],
+      6,
+    );
+  });
+
+  test("a computed that switches between signals", () => {
+    check(
+      () => {
+        const flag = signal(0);
+        const left = signal(1);
+        const right = signal(1);
+        const selected = computed(() => (flag.get() ? right.get() : left.get()));
+        const double = computed(() => selected.get() * 2);
+        return {
+          sources: { flag, left, right },
+          computeds: { selected, double },
+          expected: ({ flag, left, right }) => ({
+            selected: flag ? right : left,
+            double: (flag ? right : left) * 2,
+          }),
+        };
+      },
+      [
+        { set: "flag", value: 0 },
+        { set: "flag", value: 1 },
+        { set: "left", value: 2 },
+        { set: "right", value: 2 },
+        { set: "right", value: 1 },
+        { read: "selected" },
+        { read: "double" },
+      ],
+      5,
+    );
   });
 });
