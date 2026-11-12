@@ -14,7 +14,7 @@ import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { remove } from "./remove.ts";
-import { compareAttributes } from "./types/attribute.ts";
+import { compareAttributes, isSelectValue } from "./types/attribute.ts";
 import type { LinkComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet } from "./types/element.ts";
 import type { EventChangeSet } from "./types/event.ts";
@@ -101,6 +101,13 @@ function updateElement(
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   const changeSet: ChangeSet<unknown>[] = [];
+  // A select's value after its options: they may change in the same update.
+  const afterChildren: ChangeSet<unknown>[] = [];
+  const attributes: ChangeSet<unknown>[] = [];
+  for (const change of compareAttributes(vElement, previousVElement)) {
+    const { name } = <{ name: string }>change[Props.Payload];
+    (isSelectValue(vElement, name) ? afterChildren : attributes).push(change);
+  }
 
   changeSet.push(
     <LinkElementChangeSet>{
@@ -113,8 +120,9 @@ function updateElement(
       },
     },
     ...updateEvents(vElement, previousVElement),
-    ...compareAttributes(vElement, previousVElement),
+    ...attributes,
     ...updateChildren(vElement, previousVElement, { type: AttachmentType.Parent, vNode: vElement }),
+    ...afterChildren,
   );
 
   return changeSet;

@@ -19,7 +19,7 @@ import { type AttachmentRef, AttachmentType, type ParentAttachmentRef } from "./
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { render } from "./render.ts";
-import { setAttribute } from "./types/attribute.ts";
+import { isSelectValue, setAttribute } from "./types/attribute.ts";
 import type { LinkComponentChangeSet, MountComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet, ReplaceElementChangeSet } from "./types/element.ts";
 import type { CreateEventChangeSet } from "./types/event.ts";
@@ -155,10 +155,14 @@ function element(
   // extension or a script may have changed them before hydration (a class,
   // a style, a field the user edited). Only an element the client creates
   // instead gets the client's attributes.
+  // A select's value after its options.
+  const afterChildren: ChangeSet<unknown>[] = [];
   if (skipChildren) {
     for (const prop in vElement[VNodeProps.PROPS]) {
       if (prop === "children") continue;
-      changes.push(...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement));
+      (isSelectValue(vElement, prop) ? afterChildren : changes).push(
+        ...setAttribute(prop, vElement[VNodeProps.PROPS][prop], vElement),
+      );
     }
   } else if (!isProduction()) {
     warnAttributeMismatch(vElement, <Element>node);
@@ -187,6 +191,7 @@ function element(
     );
   });
   if (nodes) dropStale(nodes);
+  changes.push(...afterChildren);
 
   return changes;
 }

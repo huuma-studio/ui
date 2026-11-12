@@ -155,7 +155,8 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
   }
   if (typeof value === "object" && value !== null) {
     // Only dangerouslySetInnerHTML takes an object; never "[object Object]".
-    if (name === "dangerouslySetInnerHTML" && value.__html) {
+    // An empty string too: it clears the HTML set before.
+    if (name === "dangerouslySetInnerHTML") {
       (<HTMLElement>vNode[VNodeProps.NODE_REF]).innerHTML = `${value.__html}`;
     }
     return;
@@ -164,7 +165,7 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     // The field's current value, by the same rule as the attribute:
     // `false` clears it, like the server, which writes no value.
     const text = attributeValue(name, value);
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = text ?? "";
+    setValue(vNode, text);
     if (text === undefined) (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
     return;
   }
@@ -183,18 +184,43 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
   (<HTMLElement>vNode[VNodeProps.NODE_REF]).setAttribute(name, text);
 }
 
+/**
+ * Whether `name` is the `value` of a `<select>`. It selects among the
+ * select's options, so it's set after them: after the element's children.
+ */
+export function isSelectValue(vNode: VElement<Node>, name: string): boolean {
+  return name === "value" && vNode[VNodeProps.TAG].toLowerCase() === "select";
+}
+
+// Sets a field's current value. A `<select>` gets the options with that
+// value selected, as the server renders them (render.ts). With none, the
+// browser selects what it does without a value, as it does on the server's
+// page: `select.value = …` would leave the select empty instead.
+function setValue(vNode: VElement<Node>, text?: string): void {
+  const node = <HTMLSelectElement>vNode[VNodeProps.NODE_REF];
+  if (!isSelectValue(vNode, "value")) {
+    node.value = text ?? "";
+    return;
+  }
+  const options = node.options;
+  for (let i = 0; i < options.length; i++) options[i].selected = options[i].value === text;
+}
+
 function remove(payload: DeleteAttributePayload): void {
   const { name, vNode } = payload;
   if (!isValidAttributeName(name)) return;
   if (isMerged(name) && "previous" in payload) {
     return merge(vNode, name, payload.previous, undefined);
   }
+  if (name === "dangerouslySetInnerHTML") {
+    // No attribute: the HTML it set goes, before the children are added.
+    (<HTMLElement>vNode[VNodeProps.NODE_REF]).innerHTML = "";
+    return;
+  }
   if (name === "checked") {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF])[name] = false;
   }
-  if (name === "value") {
-    (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = "";
-  }
+  if (name === "value") setValue(vNode);
   (<HTMLElement>(<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]).removeAttribute(name);
 }
 

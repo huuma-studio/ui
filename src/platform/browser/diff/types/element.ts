@@ -198,6 +198,12 @@ function createElement(
   };
 }
 
+// Inside an SVG, except for the children of a <foreignObject>, which holds
+// HTML again (an <svg> in it starts a new SVG).
 function isSVG(tag: string, parentNode: Node): boolean {
-  return tag === "svg" || typeof (<SVGElement>parentNode).ownerSVGElement !== "undefined";
+  return (
+    tag === "svg" ||
+    (typeof (<SVGElement>parentNode).ownerSVGElement !== "undefined" &&
+      (<Element>parentNode).localName !== "foreignObject")
+  );
 }
