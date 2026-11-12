@@ -534,12 +534,15 @@ function Timer() {
 
 Huuma UI provides built-in i18n support:
 
-```tsx
-// Configure i18n
-import { setupI18n, T } from "@huuma/ui/i18n";
-import { useI18n } from "@huuma/ui/i18n/middleware";
+```ts
+// server.ts: configure i18n on the app
+import { createUIApp } from "@huuma/ui/server";
+import { setupI18n } from "@huuma/ui/i18n";
+import Root from "./app/root.tsx";
 
-const i18nConfig = setupI18n(app, {
+const app = createUIApp(Root);
+
+export const i18nConfig = setupI18n(app, {
   defaultLanguage: "en",
   languages: {
     en: {
@@ -557,7 +560,13 @@ const i18nConfig = setupI18n(app, {
   },
 });
 
+export default app;
+```
+
+```tsx
 // Use translations in components
+import { T } from "@huuma/ui/i18n";
+
 function Greeting() {
   return (
     <div>
@@ -568,10 +577,9 @@ function Greeting() {
     </div>
   );
 }
-
 ```
 
-Add the i18n middleware to the pages, in `app/middleware.ts`, with the config that `setupI18n()` returned (exported from `server.ts` here):
+The language is the first part of the path, so the pages go below `app/[lang]/`; `/` redirects to the default language. Add the i18n middleware to the pages, in `app/middleware.ts`, with the config that `setupI18n()` returned:
 
 ```ts
 // app/middleware.ts
