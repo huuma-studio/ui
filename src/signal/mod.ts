@@ -1,3 +1,7 @@
+import { batching, onBatchEnd } from "./batch.ts";
+
+export { batch } from "./batch.ts";
+
 export enum SubscriberProps {
   update,
   cleanupCallback,
@@ -116,21 +120,37 @@ interface Pass {
   changed: Set<Signal<unknown>>;
   failed: Set<Signal<unknown>>;
   errors: unknown[];
+  // Settles the computed signals read inside a batch, see settleInBatch().
+  early?: boolean;
+  // The computed signals a batch settled early, with their values before it.
+  before?: Map<Signal<unknown>, unknown>;
 }
 
 // The pass settling its computed signals; a set() inside starts a new one.
 let currentPass: Pass | undefined;
 
-function notify(source: Signal<unknown>, readers: Set<SubscriberScope>): void {
+// `sources`: the signals that changed, with the scopes that read them.
+// `early`: the computed signals a batch settled early, see settleInBatch().
+function notify(
+  sources: Map<Signal<unknown>, Set<SubscriberScope>>,
+  early?: Map<ComputedScope, unknown>,
+): void {
   const marked = new Set<SubscriberScope>();
-  mark(marked, readers);
+  for (const readers of sources.values()) mark(marked, readers);
+  const before = new Map<Signal<unknown>, unknown>();
+  early?.forEach((value, scope) => {
+    before.set(scope.signal, value);
+    marked.add(scope);
+    mark(marked, scope.readers);
+  });
   const scopes = [...marked].sort((a, b) => a.id - b.id);
   const pass: Pass = {
     marked,
     settled: new Set(),
-    changed: new Set([source]),
+    changed: new Set(sources.keys()),
     failed: new Set(),
     errors: [],
+    before,
   };
   const { changed, failed, errors } = pass;
 
@@ -185,7 +205,8 @@ function settle(pass: Pass, scope: ComputedScope): void {
     pending.add(scope);
     return;
   }
-  if (!pending.has(scope) && !reads(scope, pass.changed)) return;
+  const early = !!pass.before?.has(scope.signal);
+  if (!early && !pending.has(scope) && !reads(scope, pass.changed)) return;
 
   let value: unknown;
   try {
@@ -202,7 +223,9 @@ function settle(pass: Pass, scope: ComputedScope): void {
     pending.add(scope);
     return;
   }
-  if (scope.commit(value)) pass.changed.add(scope.signal);
+  const committed = scope.commit(value);
+  // One a batch settled early changed if it differs from before the batch.
+  if (early ? value !== pass.before!.get(scope.signal) : committed) pass.changed.add(scope.signal);
   pending.delete(scope);
 }
 
@@ -250,8 +273,18 @@ export class WritableSignal<T> extends Signal<T> {
 
   set(value: T): T {
     if (this.#value === value) return value;
+    const before = this.#value;
     this.#value = value;
-    notify(this, this.#scopes);
+    if (!batching()) {
+      notify(new Map([[this, this.#scopes]]));
+    } else {
+      // The computed signals the batch settled so far may be stale again.
+      earlyPass = undefined;
+      if (!batched.has(this)) {
+        if (!batched.size) onBatchEnd(notifyBatched);
+        batched.set(this, { before, readers: this.#scopes, current: () => this.#value });
+      }
+    }
     return value;
   }
 
@@ -297,6 +330,9 @@ export class ComputedSignal<T> extends Signal<T> {
       run: () => retrack(scope, callbackFn),
       commit: (value) => {
         if (value === this.#value) return false;
+        if (currentPass?.early && !settledEarly.has(scope)) {
+          settledEarly.set(scope, { before: this.#value, current: () => this.#value });
+        }
         this.#value = <T>value;
         return true;
       },
@@ -312,6 +348,8 @@ export class ComputedSignal<T> extends Signal<T> {
   get(): T {
     // Read during a recompute, maybe for the first time: settle it first.
     if (currentPass?.marked.has(this.#scope)) settle(currentPass, this.#scope);
+    // Read inside a batch that set a signal: likewise.
+    else if (batched.size && batching()) settleInBatch(this.#scope);
     subscribeRunning(this);
     return this.#value;
   }
@@ -366,6 +404,69 @@ export function effect(callback: () => void): () => void {
   return () => {
     for (const signal of scope.signals) signal.unsubscribe(scope);
   };
+}
+
+/*
+ * A batch notifies when it ends. Until then:
+ * - `batched` has the signals set in it: their value before the batch, and
+ *   the scopes that read them. One set back to that value doesn't notify.
+ * - A computed signal read inside the batch is settled on get(), so it has
+ *   its value from the signals as they are now, like outside a batch:
+ *   settleInBatch() settles it and the computed signals it reads, without
+ *   running any effect or component. `settledEarly` has the ones whose
+ *   value changed that way, and their values before the batch.
+ * When the batch ends, notify() recomputes the ones settled early (a
+ * signal may have been set after), and they count as changed if they
+ * differ from before the batch: what reads them runs once, at the end.
+ */
+interface Batched {
+  before: unknown;
+  current: () => unknown;
+}
+const batched = new Map<Signal<unknown>, Batched & { readers: Set<SubscriberScope> }>();
+const settledEarly = new Map<ComputedScope, Batched>();
+// Settles computed signals read inside the batch, until the next set().
+let earlyPass: Pass | undefined;
+
+function settleInBatch(scope: ComputedScope): void {
+  if (!earlyPass) {
+    const marked = new Set<SubscriberScope>();
+    const changed = new Set<Signal<unknown>>();
+    // Also a signal set back to its value before the batch: a computed
+    // settled between the two set() calls has to follow.
+    for (const [signal, { readers }] of batched) {
+      changed.add(signal);
+      mark(marked, readers);
+    }
+    // Settled before the last set(): changed for what reads them.
+    for (const [settled, { before, current }] of settledEarly) {
+      if (current() !== before) changed.add(settled.signal);
+    }
+    // Errors: the computed stays pending, and fails again when the batch
+    // ends, which throws.
+    earlyPass = { marked, settled: new Set(), changed, failed: new Set(), errors: [], early: true };
+  }
+  if (!earlyPass.marked.has(scope)) return;
+  const outerPass = currentPass;
+  currentPass = earlyPass;
+  try {
+    settle(earlyPass, scope);
+  } finally {
+    currentPass = outerPass;
+  }
+}
+
+function notifyBatched(): void {
+  const sources = new Map<Signal<unknown>, Set<SubscriberScope>>();
+  for (const [signal, { before, current, readers }] of batched) {
+    if (current() !== before) sources.set(signal, readers);
+  }
+  const early = new Map<ComputedScope, unknown>();
+  settledEarly.forEach(({ before }, scope) => early.set(scope, before));
+  batched.clear();
+  settledEarly.clear();
+  earlyPass = undefined;
+  if (sources.size || early.size) notify(sources, early);
 }
 
 export function untracked<T>(callbackFn: () => T): T {

@@ -1,5 +1,5 @@
 import { assert, describe, expect, test } from "vite-plus/test";
-import { type Cleanup, computed, effect, setSubscriber, signal } from "./mod.ts";
+import { batch, type Cleanup, computed, effect, setSubscriber, signal } from "./mod.ts";
 
 describe("computed dependencies that change", () => {
   test("follows a newly selected source and can switch back", () => {
@@ -614,5 +614,370 @@ describe("notify", () => {
 
     a.set(1);
     expect(seen).toStrictEqual([0, 10]);
+  });
+});
+
+describe(batch.name, () => {
+  test("runs an effect that reads several signals set in it once", () => {
+    const first = signal("Ada");
+    const last = signal("Lovelace");
+    const seen: string[] = [];
+    effect(() => {
+      seen.push(`${first.get()} ${last.get()}`);
+    });
+
+    batch(() => {
+      first.set("Grace");
+      expect(seen).toStrictEqual(["Ada Lovelace"]);
+      last.set("Hopper");
+    });
+    expect(seen).toStrictEqual(["Ada Lovelace", "Grace Hopper"]);
+  });
+
+  test("recomputes a computed once, and updates what reads it once", () => {
+    const a = signal(1);
+    const b = signal(2);
+    let runs = 0;
+    const sum = computed(() => {
+      runs++;
+      return a.get() + b.get();
+    });
+    const values: number[] = [];
+    setSubscriber(() => sum.get(), { update: (value: number) => values.push(value) });
+    runs = 0;
+
+    batch(() => {
+      a.set(10);
+      b.set(20);
+    });
+    expect(runs).toBe(1);
+    expect(values).toStrictEqual([30]);
+  });
+
+  test("notifies once about a signal set several times, with its last value", () => {
+    const count = signal(0);
+    const seen: number[] = [];
+    effect(() => {
+      seen.push(count.get());
+    });
+
+    batch(() => {
+      count.set(1);
+      count.set(2);
+      count.set(3);
+    });
+    expect(seen).toStrictEqual([0, 3]);
+  });
+
+  test("doesn't notify about a signal set back to its value", () => {
+    const count = signal(0);
+    const other = signal("a");
+    const seen: string[] = [];
+    effect(() => {
+      seen.push(`count ${count.get()}`);
+    });
+    effect(() => {
+      seen.push(`other ${other.get()}`);
+    });
+    seen.length = 0;
+
+    batch(() => {
+      count.set(1);
+      other.set("b");
+      count.set(0);
+    });
+    expect(seen).toStrictEqual(["other b"]);
+  });
+
+  test("notifies when the outermost batch ends", () => {
+    const count = signal(0);
+    const seen: number[] = [];
+    effect(() => {
+      seen.push(count.get());
+    });
+
+    batch(() => {
+      batch(() => count.set(1));
+      expect(seen).toStrictEqual([0]);
+      count.set(2);
+    });
+    expect(seen).toStrictEqual([0, 2]);
+  });
+
+  test("returns what the callback returns", () => {
+    expect(batch(() => "done")).toBe("done");
+  });
+
+  test("reads the new value of a signal and of a computed inside the batch", () => {
+    const count = signal(1);
+    const double = computed(() => count.get() * 2);
+    const quadruple = computed(() => double.get() * 2);
+
+    batch(() => {
+      count.set(2);
+      expect(count.get()).toBe(2);
+      expect(quadruple.get()).toBe(8);
+      expect(double.get()).toBe(4);
+    });
+    expect(quadruple.get()).toBe(8);
+  });
+
+  test("runs what reads a computed once, when the batch ends, though the batch read it", () => {
+    const count = signal(1);
+    const double = computed(() => count.get() * 2);
+    const quadruple = computed(() => double.get() * 2);
+    const seen: string[] = [];
+    effect(() => {
+      seen.push(`double ${double.get()}`);
+    });
+    effect(() => {
+      seen.push(`quadruple ${quadruple.get()}`);
+    });
+    effect(() => {
+      seen.push(`count ${count.get()}`);
+    });
+    seen.length = 0;
+
+    batch(() => {
+      count.set(2);
+      expect(double.get()).toBe(4);
+      expect(seen).toStrictEqual([]);
+    });
+    expect(seen).toStrictEqual(["double 4", "quadruple 8", "count 2"]);
+  });
+
+  test("reads a computed's new value again after another set", () => {
+    const count = signal(1);
+    const double = computed(() => count.get() * 2);
+    const seen: number[] = [];
+    effect(() => {
+      seen.push(double.get());
+    });
+
+    batch(() => {
+      count.set(2);
+      expect(double.get()).toBe(4);
+      count.set(3);
+      expect(double.get()).toBe(6);
+      count.set(4);
+    });
+    expect(double.get()).toBe(8);
+    expect(seen).toStrictEqual([2, 8]);
+  });
+
+  test("puts a computed the batch read back, when its signal is set back", () => {
+    const count = signal(1);
+    const double = computed(() => count.get() * 2);
+    const quadruple = computed(() => double.get() * 2);
+    const seen: string[] = [];
+    effect(() => {
+      seen.push(`double ${double.get()}`);
+    });
+    effect(() => {
+      seen.push(`quadruple ${quadruple.get()}`);
+    });
+    effect(() => {
+      seen.push(`count ${count.get()}`);
+    });
+    seen.length = 0;
+
+    batch(() => {
+      count.set(2);
+      expect(quadruple.get()).toBe(8);
+      count.set(1);
+    });
+    expect(double.get()).toBe(2);
+    expect(quadruple.get()).toBe(4);
+    expect(seen).toStrictEqual([]);
+  });
+
+  test("reads a computed set back inside the batch with its value from before", () => {
+    const count = signal(1);
+    const double = computed(() => count.get() * 2);
+
+    batch(() => {
+      count.set(2);
+      expect(double.get()).toBe(4);
+      count.set(1);
+      expect(double.get()).toBe(2);
+    });
+  });
+
+  test("updates a computed that reads one the batch read, after an unrelated set", () => {
+    const count = signal(1);
+    const other = signal("a");
+    const double = computed(() => count.get() * 2);
+    const label = computed(() => `${double.get()}`);
+
+    batch(() => {
+      count.set(2);
+      expect(double.get()).toBe(4);
+      other.set("b");
+      expect(label.get()).toBe("4");
+    });
+  });
+
+  test("recomputes a computed only for a read after a set of a signal it reads", () => {
+    const count = signal(1);
+    const other = signal(1);
+    let runs = 0;
+    const double = computed(() => {
+      runs++;
+      return count.get() * 2;
+    });
+    let otherRuns = 0;
+    const unrelated = computed(() => {
+      otherRuns++;
+      return other.get();
+    });
+    runs = 0;
+    otherRuns = 0;
+
+    batch(() => {
+      double.get();
+      expect(runs).toBe(0);
+      count.set(2);
+      double.get();
+      double.get();
+      unrelated.get();
+      expect(runs).toBe(1);
+    });
+    expect(otherRuns).toBe(0);
+  });
+
+  test("reads a throwing computed's value from before, and throws when the batch ends", () => {
+    const count = signal(0);
+    const safe = computed(() => {
+      if (count.get() === 1) throw new Error("computed failed");
+      return count.get();
+    });
+
+    assert.throws(
+      () =>
+        batch(() => {
+          count.set(1);
+          expect(safe.get()).toBe(0);
+        }),
+      Error,
+      "computed failed",
+    );
+
+    // It catches up.
+    count.set(2);
+    expect(safe.get()).toBe(2);
+  });
+
+  test("tracks a signal a computed reads first when the batch reads it", () => {
+    const visible = signal(false);
+    const name = signal("Ada");
+    const label = computed(() => (visible.get() ? name.get() : "hidden"));
+    const seen: string[] = [];
+    effect(() => {
+      seen.push(label.get());
+    });
+
+    batch(() => {
+      visible.set(true);
+      expect(label.get()).toBe("Ada");
+      name.set("Grace");
+      expect(label.get()).toBe("Grace");
+    });
+    expect(seen).toStrictEqual(["hidden", "Grace"]);
+
+    name.set("Joan");
+    expect(seen).toStrictEqual(["hidden", "Grace", "Joan"]);
+  });
+
+  test("notifies about the signals a throwing callback set, and ends the batch", () => {
+    const count = signal(0);
+    const seen: number[] = [];
+    effect(() => {
+      seen.push(count.get());
+    });
+
+    assert.throws(
+      () =>
+        batch(() => {
+          count.set(1);
+          throw new Error("callback failed");
+        }),
+      Error,
+      "callback failed",
+    );
+    expect(seen).toStrictEqual([0, 1]);
+
+    // No longer in a batch.
+    count.set(2);
+    expect(seen).toStrictEqual([0, 1, 2]);
+  });
+
+  test("throws both errors when the callback and a subscriber throw", () => {
+    const count = signal(0);
+    effect(() => {
+      if (count.get() === 1) throw new Error("effect failed");
+    });
+
+    let thrown: unknown;
+    try {
+      batch(() => {
+        count.set(1);
+        throw new Error("callback failed");
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    assert(thrown instanceof AggregateError);
+    expect(thrown.errors.map((error: Error) => error.message)).toStrictEqual([
+      "callback failed",
+      "effect failed",
+    ]);
+  });
+
+  test("throws a subscriber's error, and ends the batch", () => {
+    const count = signal(0);
+    const seen: number[] = [];
+    effect(() => {
+      if (count.get() === 1) throw new Error("effect failed");
+      seen.push(count.get());
+    });
+
+    assert.throws(() => batch(() => count.set(1)), Error, "effect failed");
+    count.set(2);
+    expect(seen).toStrictEqual([0, 2]);
+  });
+
+  test("notifies right away about a signal a subscriber sets while the batch ends", () => {
+    const count = signal(0);
+    const mirror = signal(0);
+    const seen: number[] = [];
+    effect(() => {
+      mirror.set(count.get());
+    });
+    effect(() => {
+      seen.push(mirror.get());
+    });
+
+    batch(() => count.set(1));
+    expect(seen).toStrictEqual([0, 1]);
+  });
+
+  test("batches again in a batch a subscriber starts while one ends", () => {
+    const trigger = signal(0);
+    const a = signal(0);
+    const b = signal(0);
+    const seen: string[] = [];
+    effect(() => {
+      const value = trigger.get();
+      batch(() => {
+        a.set(value);
+        b.set(value);
+      });
+    });
+    effect(() => {
+      seen.push(`${a.get()} ${b.get()}`);
+    });
+
+    batch(() => trigger.set(1));
+    expect(seen).toStrictEqual(["0 0", "1 1"]);
   });
 });
