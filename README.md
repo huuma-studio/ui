@@ -668,6 +668,10 @@ function NavigationLink({ href, children }) {
 
 The production build targets Vite's default, [Baseline Widely Available](https://vite.dev/config/build-options.html#build-target) browsers: Chrome/Edge 111+, Firefox 114+ and Safari 16.4+.
 
+## Changelog
+
+See the [changelog](https://github.com/huuma-studio/ui/blob/main/CHANGELOG.md) for what changed in each version.
+
 ## License
 
 MIT
