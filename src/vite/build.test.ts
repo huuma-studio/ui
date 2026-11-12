@@ -148,6 +148,30 @@ describe("node dist/server/server.js", () => {
     expect(await response.text()).toContain("<h1>Home</h1>");
   });
 
+  test("refuses a remote function's request over the body limit, and keeps serving", async () => {
+    const endpoint = `${origin}${await remoteEndpoint("app/sum.remote.ts")}`;
+    const call = (body: BodyInit, init?: RequestInit) =>
+      fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+        ...init,
+      });
+    const large = JSON.stringify({ remoteFunction: "add", args: [1, 2, "x".repeat(1024 * 1024)] });
+
+    // With a Content-Length, and streamed without one.
+    const sized = await call(large);
+    expect(sized.status).toStrictEqual(413);
+    await sized.body?.cancel();
+    const streamed = await call(new Blob([large]).stream(), { duplex: "half" } as RequestInit);
+    expect(streamed.status).toStrictEqual(413);
+    await streamed.body?.cancel();
+
+    const response = await call(JSON.stringify({ remoteFunction: "add", args: [1, 2] }));
+    expect(response.status).toStrictEqual(200);
+    expect(await response.json()).toStrictEqual(3);
+  });
+
   test("serves the client build's files", async () => {
     const counter = manifest["app/counter.client.tsx"]!;
     const response = await fetch(`${origin}/${counter.file}`);
