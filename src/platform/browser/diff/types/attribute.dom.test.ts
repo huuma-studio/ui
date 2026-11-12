@@ -135,8 +135,9 @@ describe("class and style in an update", () => {
   }
   const classes = (node: Element) => [...node.classList].sort();
   // By index: happy-dom's style isn't iterable.
-  const properties = ({ style }: HTMLElement) =>
-    Array.from({ length: style.length }, (_, i) => style[i]).sort();
+  const inOrder = ({ style }: HTMLElement) =>
+    Array.from({ length: style.length }, (_, i) => style[i]);
+  const properties = (node: HTMLElement) => inOrder(node).sort();
 
   test("keeps a class that was added, and changes the client's", () => {
     const node = document.createElement("button");
@@ -214,13 +215,22 @@ describe("class and style in an update", () => {
     },
   );
 
-  test("leaves a style property the client didn't change, that was changed", () => {
+  // Only the properties the client doesn't render are sure to stay: one of
+  // its own keeps a value set from outside up to the first one it changes.
+  test("writes its own style properties again from the first one that changed", () => {
     const node = document.createElement("button");
     update(node, { style: "color: red; top: 1px" }, { style: "color: red; top: 2px" }, () =>
       node.style.setProperty("color", "green"),
     );
     expect(node.style.color).toStrictEqual("green");
     expect(node.style.top).toStrictEqual("2px");
+
+    const after = document.createElement("button");
+    update(after, { style: "top: 1px; color: red" }, { style: "top: 2px; color: red" }, () =>
+      after.style.setProperty("color", "green"),
+    );
+    expect(after.style.color).toStrictEqual("red");
+    expect(after.style.top).toStrictEqual("2px");
   });
 
   test("keeps !important and custom properties", () => {
@@ -235,9 +245,44 @@ describe("class and style in an update", () => {
     expect(node.style.getPropertyValue("--gap")).toStrictEqual("");
   });
 
+  // The later of two properties for the same side wins, e.g. `margin-left`
+  // and `margin-inline-start`: the client's properties keep its order.
+  test.each([
+    ["margin-left: 8px; margin-inline-start: 5px", "margin-inline-start: 5px; margin-left: 8px"],
+    ["margin-inline-start: 5px", "margin-left: 8px; margin-inline-start: 5px"],
+    ["top: 1px; left: 2px; color: red", "left: 2px; color: red; top: 1px"],
+    ["top: 1px; left: 2px", "top: 3px; left: 2px"],
+  ])("writes the style properties of %o in the order of %o", (previous, style) => {
+    const node = document.createElement("button");
+    update(node, { style: previous }, { style }, () => node.style.setProperty("filter", "none"));
+    expect(inOrder(node).filter((property) => property !== "filter")).toStrictEqual(
+      inOrder(<HTMLElement>fromServer({ style })),
+    );
+    expect(node.style.filter).toStrictEqual("none");
+  });
+
+  test.each(["class", "style"])("writes an empty %s attribute that isn't there", (name) => {
+    for (const previous of [{}, { [name]: false }]) {
+      const node = document.createElement("button");
+      update(node, previous, { [name]: "" });
+      expect(node.getAttribute(name)).toStrictEqual("");
+    }
+    // And leaves the one that is there.
+    const node = document.createElement("button");
+    update(node, {}, { class: "", style: "" }, () => {
+      node.classList.add("dark");
+      node.style.setProperty("filter", "invert(1)");
+    });
+    expect(classes(node)).toStrictEqual(["dark"]);
+    expect(node.style.filter).toStrictEqual("invert(1)");
+  });
+
   test.each([
     [{ class: "a b" }, { class: "b c" }],
     [{ class: "a" }, { class: "" }],
+    [{}, { class: "" }],
+    [{}, { style: "" }],
+    [{ style: "color: red" }, { style: "" }],
     [{ style: "color: red; top: 1px" }, { style: "top: 2px; left: 0px" }],
   ])("from %o to %o is what the server renders, with nothing added", (previous, props) => {
     const node = document.createElement("button");
@@ -245,7 +290,8 @@ describe("class and style in an update", () => {
     const server = <HTMLElement>fromServer(props);
     expect(classes(node)).toStrictEqual(classes(server));
     expect(node.hasAttribute("class")).toStrictEqual(server.hasAttribute("class"));
-    expect(properties(node)).toStrictEqual(properties(server));
+    expect(node.hasAttribute("style")).toStrictEqual(server.hasAttribute("style"));
+    expect(inOrder(node)).toStrictEqual(inOrder(server));
     for (const property of properties(server)) {
       expect(node.style.getPropertyValue(property)).toStrictEqual(
         server.style.getPropertyValue(property),

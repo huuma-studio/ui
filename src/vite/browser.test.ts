@@ -40,7 +40,9 @@ const EXTRA_FILES = {
       const on = $signal(false);
       return <button
         class={on.get() ? "toggle on" : "toggle off"}
-        style={on.get() ? "color: rgb(0, 0, 255); margin: 2px" : "color: rgb(255, 0, 0); margin: 1px 2px"}
+        style={on.get()
+          ? "color: rgb(0, 0, 255); margin: 2px; padding-left: 8px; padding-inline-start: 5px"
+          : "color: rgb(255, 0, 0); margin: 1px 2px; padding-inline-start: 5px; padding-left: 8px"}
         on-click={() => on.set(!on.get())}
       >themed</button>;
     }
@@ -243,8 +245,16 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
       const { page, errors } = await open(browser, `${origin}/themed`);
       const state = () =>
         page.evaluate(() => {
-          const { classList, style } = document.querySelector("button")!;
-          return [[...classList].sort().join(" "), style.color, style.margin, style.filter];
+          const button = document.querySelector("button")!;
+          const { classList, style } = button;
+          return [
+            [...classList].sort().join(" "),
+            style.color,
+            style.margin,
+            style.filter,
+            // The later of padding-left and padding-inline-start.
+            getComputedStyle(button).paddingLeft,
+          ];
         });
       try {
         // As a browser extension or a script would.
@@ -260,6 +270,7 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
           "rgb(0, 0, 255)",
           "2px",
           "invert(1)",
+          "5px",
         ]);
 
         await page.click("button");
@@ -269,6 +280,7 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
           "rgb(255, 0, 0)",
           "1px 2px",
           "invert(1)",
+          "8px",
         ]);
         expect(errors).toStrictEqual([]);
       } finally {

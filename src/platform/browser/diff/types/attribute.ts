@@ -73,8 +73,8 @@ function isMerged(name: string): boolean {
 /**
  * Updates `class` or `style` from what the client rendered before
  * (`previous`) to `value`: only the class names and the style properties
- * that differ between the two change, so the ones an extension or a script
- * added stay. Hydration keeps them for the same reason (hydrate.ts). The
+ * in one of the two change, so the ones an extension or a script added
+ * stay. Hydration keeps them for the same reason (hydrate.ts). The
  * attribute goes once the client renders none and nothing else is left.
  */
 function merge(vNode: VElement<Node>, name: string, previous: unknown, value: unknown): void {
@@ -89,13 +89,27 @@ function merge(vNode: VElement<Node>, name: string, previous: unknown, value: un
     if (isClass) node.classList.remove(part);
     else node.style.removeProperty(part);
   }
+  // The order of style properties counts: the later of `margin-left` and
+  // `margin-inline-start` wins. From the first property that differs from
+  // the one at its place before, they're all written again, in order.
+  const order = [...was.keys()];
+  let index = 0;
+  let rewrite = false;
   for (const [part, declaration] of now) {
-    if (was.get(part) === declaration) continue;
-    if (isClass) node.classList.add(part);
-    else node.style.setProperty(part, ...(<[string, string]>declaration.split("\0")));
+    if (isClass) {
+      if (!was.has(part)) node.classList.add(part);
+      continue;
+    }
+    rewrite ||= order[index++] !== part || was.get(part) !== declaration;
+    if (!rewrite) continue;
+    node.style.removeProperty(part);
+    node.style.setProperty(part, ...(<[string, string]>declaration.split("\0")));
   }
-  if (after === undefined && !(isClass ? node.classList : node.style).length) {
-    node.removeAttribute(name);
+  if (after === undefined) {
+    if (!(isClass ? node.classList : node.style).length) node.removeAttribute(name);
+  } else if (!node.hasAttribute(name)) {
+    // An empty attribute, like the server writes for `class=""`.
+    node.setAttribute(name, "");
   }
 }
 

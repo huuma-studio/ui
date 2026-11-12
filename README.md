@@ -291,7 +291,7 @@ Warnings appear outside production, that is unless `NODE_ENV=production` or `HUU
 In the browser, a component only changes what it rendered itself, so what a browser extension or a script added to an element stays:
 
 - **Hydration** keeps the attributes the server sent, and warns in development if the component renders others.
-- **An update** changes the attributes whose value changed. For `class` and `style`, it changes the class names and the style properties that changed, and leaves the others on the element.
+- **An update** changes the attributes whose value changed. For `class` and `style`, it changes only the class names and the style properties the component renders, and leaves the ones it doesn't render on the element.
 
 ## Remote server functions
 
