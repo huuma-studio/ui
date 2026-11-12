@@ -1,13 +1,6 @@
-import {
-  type HasVNodeRef,
-  type VElement,
-  VNodeProps,
-} from "../../../../v-node/mod.ts";
+import { type HasVNodeRef, type VElement, VNodeProps } from "../../../../v-node/mod.ts";
 import { BOOLEAN_ATTRIBUTES } from "../../../../jsx-runtime/boolean-attributes.ts";
-import {
-  attributeValue,
-  isValidAttributeName,
-} from "../../../../jsx-runtime/attributes.ts";
+import { attributeValue, isValidAttributeName } from "../../../../jsx-runtime/attributes.ts";
 import { Action, type ChangeSet, Props, Type } from "../dispatch.ts";
 
 interface BaseAttributeChangeSet<T> extends ChangeSet<T> {
@@ -84,12 +77,7 @@ function isMerged(name: string): boolean {
  * added stay. Hydration keeps them for the same reason (hydrate.ts). The
  * attribute goes once the client renders none and nothing else is left.
  */
-function merge(
-  vNode: VElement<Node>,
-  name: string,
-  previous: unknown,
-  value: unknown,
-): void {
+function merge(vNode: VElement<Node>, name: string, previous: unknown, value: unknown): void {
   const node = <HTMLElement>vNode[VNodeProps.NODE_REF];
   const isClass = name.toLowerCase() === "class";
   const after = attributeValue(name, value);
@@ -104,11 +92,7 @@ function merge(
   for (const [part, declaration] of now) {
     if (was.get(part) === declaration) continue;
     if (isClass) node.classList.add(part);
-    else
-      node.style.setProperty(
-        part,
-        ...(<[string, string]>declaration.split("\0")),
-      );
+    else node.style.setProperty(part, ...(<[string, string]>declaration.split("\0")));
   }
   if (after === undefined && !(isClass ? node.classList : node.style).length) {
     node.removeAttribute(name);
@@ -123,8 +107,7 @@ let parser: CSSStyleDeclaration | undefined;
 function parts(isClass: boolean, value = ""): Map<string, string> {
   const map = new Map<string, string>();
   if (isClass) {
-    for (const token of value.split(/[\t\n\f\r ]+/))
-      if (token) map.set(token, "");
+    for (const token of value.split(/[\t\n\f\r ]+/)) if (token) map.set(token, "");
     return map;
   }
   parser ??= document.createElement("i").style;
@@ -168,8 +151,7 @@ function createOrUpdate({ vNode, name, value }: CreateAttributePayload): void {
     // `false` clears it, like the server, which writes no value.
     const text = attributeValue(name, value);
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = text ?? "";
-    if (text === undefined)
-      (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
+    if (text === undefined) (<HTMLElement>vNode[VNodeProps.NODE_REF]).removeAttribute(name);
     return;
   }
   // The same rules as the server renderer (attributes.ts): invalid names,
@@ -199,9 +181,7 @@ function remove(payload: DeleteAttributePayload): void {
   if (name === "value") {
     (<HTMLFormElement>vNode[VNodeProps.NODE_REF]).value = "";
   }
-  (<HTMLElement>(
-    (<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]
-  )).removeAttribute(name);
+  (<HTMLElement>(<HasVNodeRef<Node>>vNode)[VNodeProps.NODE_REF]).removeAttribute(name);
 }
 
 export function compareAttributes(
@@ -314,11 +294,7 @@ export function setAttribute(
   }
   // createOrUpdate() decides how `false` is written: `"false"` for
   // `aria-*` and `data-*`, left out otherwise.
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return [
       {
         [Props.Action]: Action.Create,
