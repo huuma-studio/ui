@@ -59,6 +59,10 @@ const EXTRA_FILES = {
           <option value="b">B</option>
           {on.get() ? <option value="c">C</option> : null}
         </select>
+        <select id="loaded" value="b">
+          <option value="a">A</option>
+          {on.get() ? <option value="b">B</option> : null}
+        </select>
         <select id="unknown" value={on.get() ? "x" : "c"}>
           <option value="a" disabled>A</option>
           <option value="b">B</option>
@@ -280,12 +284,15 @@ describe.skipIf(chromium === undefined)("in a browser", () => {
       try {
         expect(await value("#updated")).toStrictEqual("b");
         expect(await value("#unknown")).toStrictEqual("c");
+        expect(await value("#loaded")).toStrictEqual("a");
         await page.click("button");
         await page.locator("#created").waitFor({ timeout: 5_000 });
 
         // A select's value selects its option, which is added after it.
         expect(await value("#created")).toStrictEqual("b");
         expect(await value("#updated")).toStrictEqual("c");
+        // Also while the value stays: the option is added later.
+        expect(await value("#loaded")).toStrictEqual("b");
         // No such option: the first one that isn't disabled, as on a
         // page from the server.
         expect(await value("#unknown")).toStrictEqual("b");

@@ -103,6 +103,62 @@ describe("a select's value", () => {
     expect(select().value).toBe("c");
   });
 
+  test("selects an option added later, while the value stays", async () => {
+    const step = await island((s) => (
+      <select value="b">
+        <option value="a">A</option>
+        {s ? <option value="b">B</option> : null}
+      </select>
+    ));
+    expect(select().value).toBe("a");
+    step.set(1);
+    expect(select().value).toBe("b");
+  });
+
+  test("stays with its option when the options before it change", async () => {
+    // Without keys, the options are updated in place: the selected element
+    // gets another value.
+    const step = await island((s) => (
+      <select value="b">
+        {(s ? ["b", "c"] : ["a", "b", "c"]).map((value) => (
+          <option value={value}>{value}</option>
+        ))}
+      </select>
+    ));
+    expect(select().value).toBe("b");
+    step.set(1);
+    expect(select().value).toBe("b");
+    expect(selected()).toStrictEqual(["b"]);
+  });
+
+  test("keeps what the user chose in an update that leaves the options as they are", async () => {
+    const step = await island((s) => (
+      <label title={`step ${s}`}>
+        <select value="b" on-change={() => {}}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+        </select>
+      </label>
+    ));
+    select().value = "a";
+    step.set(1);
+    expect(document.querySelector("label")!.title).toBe("step 1");
+    expect(select().value).toBe("a");
+  });
+
+  test("leaves a select without a value alone when its options change", async () => {
+    const step = await island((s) => (
+      <select>
+        <option value="a">A</option>
+        <option value="b">B</option>
+        {s ? <option value="c">C</option> : null}
+      </select>
+    ));
+    select().value = "b";
+    step.set(1);
+    expect(select().value).toBe("b");
+  });
+
   test("changes the selection in an update", async () => {
     const step = await island((s) => (
       <select value={s ? "b" : "a"}>

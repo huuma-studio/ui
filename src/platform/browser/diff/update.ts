@@ -14,7 +14,7 @@ import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { remove } from "./remove.ts";
-import { compareAttributes, isSelectValue } from "./types/attribute.ts";
+import { compareAttributes, isSelectValue, setAttribute } from "./types/attribute.ts";
 import type { LinkComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet } from "./types/element.ts";
 import type { EventChangeSet } from "./types/event.ts";
@@ -108,6 +108,25 @@ function updateElement(
     const { name } = <{ name: string }>change[Props.Payload];
     (isSelectValue(vElement, name) ? afterChildren : attributes).push(change);
   }
+  const children = updateChildren(vElement, previousVElement, {
+    type: AttachmentType.Parent,
+    vNode: vElement,
+  });
+  // Its options changed, its value didn't: the value is set again, so it
+  // selects among the options there are now. An update that leaves the
+  // options as they are (they're only linked) keeps what the user chose.
+  if (
+    !afterChildren.length &&
+    isSelectValue(vElement, "value") &&
+    children.some(
+      (change) =>
+        change[Props.Action] !== Action.Link &&
+        change[Props.Type] !== Type.Event &&
+        change[Props.Type] !== Type.Component,
+    )
+  ) {
+    afterChildren.push(...setAttribute("value", vElement[VNodeProps.PROPS].value, vElement));
+  }
 
   changeSet.push(
     <LinkElementChangeSet>{
@@ -121,7 +140,7 @@ function updateElement(
     },
     ...updateEvents(vElement, previousVElement),
     ...attributes,
-    ...updateChildren(vElement, previousVElement, { type: AttachmentType.Parent, vNode: vElement }),
+    ...children,
     ...afterChildren,
   );
 
