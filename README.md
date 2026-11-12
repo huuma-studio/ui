@@ -474,6 +474,27 @@ function Counter() {
 
 A signal passed as a child (`<p>{count}</p>`, without `.get()`) binds just that text to it, so it updates without re-rendering the component. Like static values, `null`, `undefined`, `true` and `false` render as nothing: `{error}` with `$signal<string | null>(null)` shows no text until an error is set. Numbers show as text, `0`, `NaN` and `Infinity` too.
 
+### Batching updates
+
+Each `set()` updates what reads the signal right away. `batch()` holds the updates back until its callback returns, so an effect, a computed signal or a component that reads several of the signals runs once:
+
+```tsx
+import { batch } from "@huuma/ui/signal";
+
+batch(() => {
+  first.set("Grace");
+  last.set("Hopper");
+}); // One update, with both values.
+```
+
+- **Event listeners batch by themselves:** an `on-click` (or any other `on-…`) listener that sets several signals renders its component once. `batch()` is for everywhere else: a timer, a `fetch` callback, an effect.
+- **The page updates when the listener returns**, not after each `set()`: inside the listener, an element the update adds isn't there yet. Focus, measure or scroll to it in an `$effect`, which runs after the update.
+- **Only the synchronous part:** what follows an `await` in the callback or in a listener isn't batched. Wrap it in its own `batch()`.
+- **Values are current inside the batch:** `count.get()` after `count.set(1)` returns `1`, and a computed signal read after it has its new value too. Only what reacts is held back: effects and components run when the batch ends.
+- **A signal set back to the value it had** before the batch updates nothing.
+- **Batches nest:** the outermost one updates.
+- **If the callback throws**, the signals it set still update, and `batch()` rethrows the error.
+
 ## Lifecycle Hooks
 
 Control component lifecycle with hooks:
