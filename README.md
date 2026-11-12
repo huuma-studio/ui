@@ -479,6 +479,8 @@ function Counter() {
 
 A signal passed as a child (`<p>{count}</p>`, without `.get()`) binds just that text to it, so it updates without re-rendering the component. Like static values, `null`, `undefined`, `true` and `false` render as nothing: `{error}` with `$signal<string | null>(null)` shows no text until an error is set. Numbers show as text, `0`, `NaN` and `Infinity` too.
 
+On the server, an island renders once: `$effect` doesn't run there, and a `$computed` signal isn't kept up to date but runs its function each time it's read. Keep that function free of side effects.
+
 ### Batching updates
 
 Each `set()` updates what reads the signal right away. `batch()` holds the updates back until its callback returns, so an effect, a computed signal or a component that reads several of the signals runs once:
