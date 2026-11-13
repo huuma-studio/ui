@@ -26,18 +26,17 @@
     "./vite/node": "./src/vite/node.ts"
   },
   "dependencies": {
-    "@huuma/route": "npm:@jsr/huuma__route@^0.3.1",
-    "@huuma/validate": "npm:@jsr/huuma__validate@^0.2.1"
+    "@huuma/route": "jsr:^0.3.1",
+    "@huuma/validate": "jsr:^0.2.1"
   },
   "devDependencies": {
     "@babel/core": "^8.1.2",
     "@babel/plugin-proposal-decorators": "^8.0.2",
-    "@huuma/inject": "npm:@jsr/huuma__inject@^0.0.1",
+    "@huuma/inject": "jsr:^0.0.1",
     "@types/node": "^24.19.2",
     "happy-dom": "^20.14.6",
-    "jsr": "0.14.3",
     "playwright-core": "^1.65.0",
-    "vite": "catalog:",
+    "vite": "^8",
     "vite-plus": "catalog:",
     "vite-upstream": "npm:vite@^8.3.8"
   },

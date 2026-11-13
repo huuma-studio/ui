@@ -15,11 +15,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Installs the dependencies: JSR publish resolves npm packages
-      # through node_modules.
+      # Installs the dependencies: `deno publish` resolves the ones in
+      # package.json through node_modules.
       - uses: voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af # v1.21.2
         with:
           node-version: "24"
 
+      # Publishes with Deno itself: the jsr CLI brings an older Deno that
+      # rejects `jsr:` dependencies in package.json.
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+
+      # Without Deno's type check, like the dry run (vite.config.ts).
       - name: Publish package
-        run: vp exec jsr publish
+        run: deno publish --no-check

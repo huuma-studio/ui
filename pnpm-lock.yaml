@@ -164,9 +164,6 @@ settings:
 
 catalogs:
   default:
-    vite:
-      specifier: npm:@voidzero-dev/vite-plus-core@1.6.0
-      version: 1.6.0
     vite-plus:
       specifier: 1.6.0
       version: 1.6.0
@@ -179,10 +176,10 @@ importers:
   .:
     dependencies:
       '@huuma/route':
-        specifier: npm:@jsr/huuma__route@^0.3.1
+        specifier: jsr:^0.3.1
         version: '@jsr/huuma__route@0.3.1'
       '@huuma/validate':
-        specifier: npm:@jsr/huuma__validate@^0.2.1
+        specifier: jsr:^0.2.1
         version: '@jsr/huuma__validate@0.2.1'
     devDependencies:
       '@babel/core':
@@ -192,7 +189,7 @@ importers:
         specifier: ^8.0.2
         version: 8.0.2(@babel/core@8.1.2)
       '@huuma/inject':
-        specifier: npm:@jsr/huuma__inject@^0.0.1
+        specifier: jsr:^0.0.1
         version: '@jsr/huuma__inject@0.0.1'
       '@types/node':
         specifier: ^24.19.2
@@ -200,14 +197,11 @@ importers:
       happy-dom:
         specifier: ^20.14.6
         version: 20.14.6
-      jsr:
-        specifier: 0.14.3
-        version: 0.14.3
       playwright-core:
         specifier: ^1.65.0
         version: 1.65.0
       vite:
-        specifier: 'catalog:'
+        specifier: npm:@voidzero-dev/vite-plus-core@1.6.0
         version: '@voidzero-dev/vite-plus-core@1.6.0(@types/node@24.19.2)'
       vite-plus:
         specifier: 'catalog:'
@@ -1172,10 +1166,6 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
-  jsr@0.14.3:
-    resolution: {integrity: sha512-PGxnDepx7vwJoZQe2SHbyBiFfpGwsOKmX4kn/wZZqfMafV7fjXqTxSaX6lp9QHYkSTLKkER+P/wmrZY3gVJNzg==}
-    hasBin: true
-
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
     engines: {node: '>= 12.0.0'}
@@ -1270,10 +1260,6 @@ packages:
     resolution: {integrity: sha512-6li2QanLsAXpIH2R6j77MzRyvOyrvdTqlKtO4CgBdHGNvN99ZZfyxszHc5o5+IZBWD5u6Hzwg83JoGXmqZNG9Q==}
     engines: {node: '>=18'}
 
-  node-stream-zip@1.16.0:
-    resolution: {integrity: sha512-ObaRrRoR8T68wF6suxHd7R4XQNamij6ZQHrwG7Dx1D2zeHcDNLsIOBcWrIwtDm7AsCXBguaPHgXhcjxDa2szrg==}
-    engines: {node: '>=0.12.0'}
-
   obug@3.0.0:
     resolution: {integrity: sha512-5vvB5+W7ePv+p3uqxi+RcW1XAzLW0/hxt3/4X4Lc4qHudzOhmBiBwOY6DRob4WnanAEGvNcLjF+KNOufrUoEQw==}
     engines: {node: '>=12.20.0'}
@@ -1345,10 +1331,6 @@ packages:
     resolution: {integrity: sha512-QIiV1J9d0pzN4jeeTH4sjPy0AZ6cAy2cG0ExeoE1+U8Rvj+hR3gYkokx0YbeUNGlZqiQJJ2utcETe0oKXwzsuA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
-
-  semiver@1.1.0:
-    resolution: {integrity: sha512-QNI2ChmuioGC1/xjyYwyZYADILWyW6AmS1UH6gDj/SFUUUS4MBAWs/7mxnkRPc/F4iHezDP+O8t0dO8WHiEOdg==}
-    engines: {node: '>=6'}
 
   sirv@3.0.2:
     resolution: {integrity: sha512-2wcC/oGxHis/BoHkkPwldgiPSYcpZK3JU28WoMVv55yHJgcZ8rlXvuG9iZggz+sU1d4bRgIGASwyWqjxu3FM0g==}
@@ -2213,11 +2195,6 @@ snapshots:
 
   json5@2.2.3: {}
 
-  jsr@0.14.3:
-    dependencies:
-      node-stream-zip: 1.16.0
-      semiver: 1.1.0
-
   lightningcss-android-arm64@1.33.0:
     optional: true
 
@@ -2278,8 +2255,6 @@ snapshots:
   nanoid@3.3.20: {}
 
   node-releases@2.0.63: {}
-
-  node-stream-zip@1.16.0: {}
 
   obug@3.0.0: {}
 
@@ -2386,8 +2361,6 @@ snapshots:
       '@rolldown/binding-wasm32-wasi': 1.2.19
       '@rolldown/binding-win32-arm64-msvc': 1.2.19
       '@rolldown/binding-win32-x64-msvc': 1.2.19
-
-  semiver@1.1.0: {}
 
   sirv@3.0.2:
     dependencies:
