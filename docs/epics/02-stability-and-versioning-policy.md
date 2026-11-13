@@ -102,7 +102,7 @@ and trust that minor version bumps won't silently delete their code.
 ### Task 3 — Stability annotations on public exports
 
 - **Deliverable:** JSDoc tags on every export listed in
-  [`deno.json`](../../deno.json) `"exports"`
+  [`jsr.json`](../../jsr.json) `"exports"`
 - **Convention:**
   ```ts
   /**
@@ -210,7 +210,7 @@ and trust that minor version bumps won't silently delete their code.
 
 - [ ] `docs/versioning.md` exists and is linked from README + JSR
 - [ ] `CHANGELOG.md` exists at repo root with an `Unreleased` section
-- [ ] All exports in `deno.json` have `@stable` or `@experimental` JSDoc tags
+- [ ] All exports in `jsr.json` have `@stable` or `@experimental` JSDoc tags
 - [ ] Deprecation policy documented; example deprecation in code
 - [ ] Conventional-commits CI check active and documented
 - [ ] `publish.yml` triggers only on tag push

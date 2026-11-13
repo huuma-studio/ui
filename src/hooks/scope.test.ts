@@ -1,4 +1,4 @@
-import { assert, assertThrows } from "@std/assert";
+import { assert, describe, test } from "vite-plus/test";
 import { $scope, type Scope, scopedFn } from "./scope.ts";
 import { VNodeProps, VType } from "../v-node/mod.ts";
 
@@ -7,14 +7,14 @@ const createScope = (): Scope => ({
   [VNodeProps.OPTIONS]: { _GLOBAL: {} },
 });
 
-Deno.test(scopedFn.name, async (t) => {
-  await t.step("provide the scope to the wrapped function", () => {
+describe(scopedFn.name, () => {
+  test("provide the scope to the wrapped function", () => {
     const scope = createScope();
     assert(scopedFn(scope, () => $scope()) === scope);
-    assertThrows(() => $scope(), Error, "No sync vnode scope found");
+    assert.throws(() => $scope(), Error, "No sync vnode scope found");
   });
 
-  await t.step("restore the outer scope after a nested call", () => {
+  test("restore the outer scope after a nested call", () => {
     const outer = createScope();
     const inner = createScope();
 
@@ -27,8 +27,8 @@ Deno.test(scopedFn.name, async (t) => {
     assert(result === outer);
   });
 
-  await t.step("clear the scope when the wrapped function throws", () => {
-    assertThrows(
+  test("clear the scope when the wrapped function throws", () => {
+    assert.throws(
       () =>
         scopedFn(createScope(), () => {
           throw new Error("render failed");
@@ -38,6 +38,6 @@ Deno.test(scopedFn.name, async (t) => {
     );
 
     // The stale scope must not leak out of the failed call.
-    assertThrows(() => $scope(), Error, "No sync vnode scope found");
+    assert.throws(() => $scope(), Error, "No sync vnode scope found");
   });
 });

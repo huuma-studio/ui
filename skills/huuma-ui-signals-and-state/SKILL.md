@@ -14,6 +14,7 @@ Use this skill when the agent is managing reactive state, computed values, side 
 - Write with `.set(newValue)`.
 - `.set()` short-circuits when the new value is `===` to the current value (behavior of `@huuma/ui/signal`).
 - Signals work only in sync island scope (see `huuma-ui-islands-interactivity`).
+- Pass the signal itself as a JSX child (`<p>{error}</p>`, not `{error.get()}`) to bind just that text to it: it updates without re-rendering the component. `null`, `undefined`, `true` and `false` show as nothing, like the same values written statically; numbers show as text, `0`, `NaN` and `Infinity` too.
 - Read a signal _without_ subscribing to it by wrapping the read in `untracked(() => s.get())` from `@huuma/ui/signal`. Use it inside effects/computed when you need the current value of a signal without creating a dependency (e.g. logging, conditional bookkeeping, reading a ref-like value that shouldn't trigger re-runs).
 
 ## Computed

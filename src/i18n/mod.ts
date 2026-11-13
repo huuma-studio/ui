@@ -43,8 +43,7 @@ export function setupI18n<T extends UIAppContext>(
     const root = new URL(request.url);
     return Response.redirect(
       new URL(
-        [config.defaultLanguage ?? defaultLanguage, root.search, root.hash]
-          .join(""),
+        [config.defaultLanguage ?? defaultLanguage, root.search, root.hash].join(""),
         root.origin,
       ),
       HttpStatus.MOVED_PERMANENTLY,
@@ -67,9 +66,7 @@ export interface TProps extends JSX.ComponentProps {
   };
 }
 
-export function T(
-  props: TProps,
-): JSX.Element {
+export function T(props: TProps): JSX.Element {
   const { name, props: _p, dangerouslyInnerHTML } = props;
   const i18n = $config();
 
@@ -82,8 +79,8 @@ export function T(
   return jsx(Fragment, { children: [t(i18n, name, _p)] });
 }
 
-export const Translation = T;
-export const I18n = T;
+export const Translation: typeof T = T;
+export const I18n: typeof T = T;
 
 export class LanguageNotSupportedException extends NotFoundException {
   constructor() {
@@ -99,18 +96,17 @@ export class NoLanguageSpecifiedException extends NotFoundException {
 
 export function $activeLang(): string {
   const { url, i18n } = $config();
-  return langFrom(url.pathname, i18n.config.pattern) ??
-    i18n.config.defaultLanguage;
+  return langFrom(url.pathname, i18n.config.pattern) ?? i18n.config.defaultLanguage;
 }
 /** @deprecated Use $activeLang */
-export const getActiveLang = $activeLang;
+export const getActiveLang: typeof $activeLang = $activeLang;
 
 export function $languages(): string[] {
   return $config().i18n.availableLanguages;
 }
 
 /** @deprecated Use $languages */
-export const getLanguages = $languages;
+export const getLanguages: typeof $languages = $languages;
 
 export function langFrom(
   url: string,
@@ -119,14 +115,13 @@ export function langFrom(
   return new RegExp(pattern.source, pattern.flags).exec(url)?.[1];
 }
 
-export function t(
-  state: unknown,
-  key: string,
-  params?: Record<string, string>,
-): string {
+export function t(state: unknown, key: string, params?: Record<string, string>): string {
   if (
-    state != null && typeof state === "object" && "i18n" in state &&
-    state.i18n != null && typeof state.i18n === "object" &&
+    state != null &&
+    typeof state === "object" &&
+    "i18n" in state &&
+    state.i18n != null &&
+    typeof state.i18n === "object" &&
     "activeLanguage" in state.i18n
   ) {
     // TODO: Validate language schema
@@ -161,11 +156,7 @@ function $config(): { url: URL; i18n: I18nTransferState } {
   throw new Error("Could not find I18N config. Is I18N correctly setup?");
 }
 
-function unnest(
-  keys: string[],
-  language: Language,
-  path: string,
-): string | undefined {
+function unnest(keys: string[], language: Language, path: string): string | undefined {
   const key = keys.shift();
 
   if (typeof key === "undefined") {
@@ -182,11 +173,9 @@ function unnest(
       if (keys.length) {
         console.info(
           "I18n",
-          `Key "${path}${key}" does not seems to be a final translation value. More nesting expected ${path}${key}(.${
-            keys.join(
-              ".",
-            )
-          })`,
+          `Key "${path}${key}" does not seems to be a final translation value. More nesting expected ${path}${key}(.${keys.join(
+            ".",
+          )})`,
         );
       }
       return translation;

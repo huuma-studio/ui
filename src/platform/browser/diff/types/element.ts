@@ -1,13 +1,10 @@
-import {
-  flushSubtreeCleanups,
-  type VElement,
-  VNodeProps,
-} from "../../../../v-node/mod.ts";
+import { flushSubtreeCleanups, type VElement, VNodeProps } from "../../../../v-node/mod.ts";
 import {
   type AttachmentRef,
   AttachmentType,
   moveAttachmentRef,
   parentFromAttachmentRef,
+  skipCommentNodes,
 } from "../attachment-ref.ts";
 
 import { Action, type ChangeSet, Props, type Type } from "../dispatch.ts";
@@ -48,33 +45,27 @@ export interface DeleteElementPayload {
   vElement: VElement<Node>;
 }
 
-export interface CreateElementChangeSet
-  extends BaseElementChangeSet<CreateElementPayload> {
+export interface CreateElementChangeSet extends BaseElementChangeSet<CreateElementPayload> {
   [Props.Action]: Action.Create;
 }
 
-export interface LinkElementChangeSet
-  extends BaseElementChangeSet<LinkElementPayload> {
+export interface LinkElementChangeSet extends BaseElementChangeSet<LinkElementPayload> {
   [Props.Action]: Action.Link;
 }
 
-export interface AttachElementChangeSet
-  extends BaseElementChangeSet<AttachElementPayload> {
+export interface AttachElementChangeSet extends BaseElementChangeSet<AttachElementPayload> {
   [Props.Action]: Action.Attach;
 }
 
-export interface ReplaceElementChangeSet
-  extends BaseElementChangeSet<ReplaceElementPayload> {
+export interface ReplaceElementChangeSet extends BaseElementChangeSet<ReplaceElementPayload> {
   [Props.Action]: Action.Replace;
 }
 
-export interface UpdateElementChangeSet
-  extends BaseElementChangeSet<UpdateElementPayload> {
+export interface UpdateElementChangeSet extends BaseElementChangeSet<UpdateElementPayload> {
   [Props.Action]: Action.Update;
 }
 
-export interface DeleteElementChangeSet
-  extends BaseElementChangeSet<DeleteElementPayload> {
+export interface DeleteElementChangeSet extends BaseElementChangeSet<DeleteElementPayload> {
   [Props.Action]: Action.Delete;
 }
 
@@ -89,25 +80,22 @@ export type ElementChangeSet =
 export function element(change: ElementChangeSet): void {
   switch (change[Props.Action]) {
     case Action.Create:
-      return create(<CreateElementPayload> change[Props.Payload]);
+      return create(<CreateElementPayload>change[Props.Payload]);
     case Action.Link:
-      return link(<LinkElementPayload> change[Props.Payload]);
+      return link(<LinkElementPayload>change[Props.Payload]);
     case Action.Attach:
-      return attach(<AttachElementPayload> change[Props.Payload]);
+      return attach(<AttachElementPayload>change[Props.Payload]);
     case Action.Replace:
-      return replace(<ReplaceElementPayload> change[Props.Payload]);
+      return replace(<ReplaceElementPayload>change[Props.Payload]);
     case Action.Update:
-      return update(<UpdateElementPayload> change[Props.Payload]);
+      return update(<UpdateElementPayload>change[Props.Payload]);
     case Action.Delete:
-      return remove(<DeleteElementPayload> change[Props.Payload]);
+      return remove(<DeleteElementPayload>change[Props.Payload]);
   }
 }
 
 function create({ vElement, attachmentRef }: CreateElementPayload): void {
-  const node = createElement(
-    vElement,
-    attachmentRef,
-  ).node;
+  const node = createElement(vElement, attachmentRef).node;
   if (vElement[VNodeProps.BIND]) {
     vElement[VNodeProps.BIND].set = node;
   }
@@ -137,15 +125,13 @@ function link({ vElement, node, attachmentRef }: LinkElementPayload): void {
 
   if (
     attachmentRef.type === AttachmentType.Sibling &&
-    attachmentRef.node !== node.previousSibling
+    // Island markers can still sit between an island's anchor and its node.
+    attachmentRef.node !== skipCommentNodes(node.previousSibling)
   ) {
     // Remove current node
     node.parentNode?.removeChild(node);
     // Move current node to attachment node
-    attachmentRef.node.parentNode?.insertBefore(
-      node,
-      attachmentRef.node.nextSibling,
-    );
+    attachmentRef.node.parentNode?.insertBefore(node, attachmentRef.node.nextSibling);
   }
 
   moveAttachmentRef(attachmentRef, node);
@@ -161,21 +147,13 @@ function attach({ vElement, attachmentRef }: AttachElementPayload): void {
     );
   }
   if (attachmentRef.type === AttachmentType.Sibling) {
-    attachmentRef.node.parentNode?.insertBefore(
-      node,
-      attachmentRef.node.nextSibling,
-    );
+    attachmentRef.node.parentNode?.insertBefore(node, attachmentRef.node.nextSibling);
   }
   moveAttachmentRef(attachmentRef, node);
 }
 
-function replace(
-  { vElement, node, attachmentRef }: ReplaceElementPayload,
-): void {
-  const { node: newNode, parentNode } = createElement(
-    vElement,
-    attachmentRef,
-  );
+function replace({ vElement, node, attachmentRef }: ReplaceElementPayload): void {
+  const { node: newNode, parentNode } = createElement(vElement, attachmentRef);
 
   parentNode.replaceChild(newNode, node);
 
@@ -189,10 +167,7 @@ function replace(
 
 function update({ vElement, node, attachmentRef }: UpdateElementPayload): void {
   if (vElement[VNodeProps.NODE_REF]) {
-    parentFromAttachmentRef(attachmentRef).replaceChild(
-      vElement[VNodeProps.NODE_REF],
-      node,
-    );
+    parentFromAttachmentRef(attachmentRef).replaceChild(vElement[VNodeProps.NODE_REF], node);
     moveAttachmentRef(attachmentRef, vElement[VNodeProps.NODE_REF]);
   }
 }
@@ -200,7 +175,7 @@ function update({ vElement, node, attachmentRef }: UpdateElementPayload): void {
 function remove({ vElement }: DeleteElementPayload): void {
   // Optional call: an update pass aborted mid-walk can expose vNodes
   // whose changesets never dispatched, leaving NODE_REF unset.
-  (<HTMLElement | undefined> vElement[VNodeProps.NODE_REF])?.remove();
+  (<HTMLElement | undefined>vElement[VNodeProps.NODE_REF])?.remove();
   vElement[VNodeProps.NODE_REF] = undefined;
   // The Delete changeset stops at this element - drain the signal
   // subscriptions of every text nested below it, or they keep writing
@@ -213,14 +188,8 @@ function createElement(
   attachmentRef: AttachmentRef,
 ): { node: Node; parentNode: Node } {
   const parentNode = parentFromAttachmentRef(attachmentRef);
-  const node = isSVG(
-      vElement[VNodeProps.TAG],
-      parentNode,
-    )
-    ? document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      vElement[VNodeProps.TAG],
-    )
+  const node = isSVG(vElement[VNodeProps.TAG], parentNode)
+    ? document.createElementNS("http://www.w3.org/2000/svg", vElement[VNodeProps.TAG])
     : document.createElement(vElement[VNodeProps.TAG]);
 
   return {
@@ -229,9 +198,12 @@ function createElement(
   };
 }
 
+// Inside an SVG, except for the children of a <foreignObject>, which holds
+// HTML again (an <svg> in it starts a new SVG).
 function isSVG(tag: string, parentNode: Node): boolean {
   return (
     tag === "svg" ||
-    typeof (<SVGElement> parentNode).ownerSVGElement !== "undefined"
+    (typeof (<SVGElement>parentNode).ownerSVGElement !== "undefined" &&
+      (<Element>parentNode).localName !== "foreignObject")
   );
 }

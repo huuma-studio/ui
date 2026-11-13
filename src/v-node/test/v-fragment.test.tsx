@@ -1,14 +1,14 @@
-import { assertEquals } from "@std/assert/equals";
+import { expect, test } from "vite-plus/test";
 import { create } from "../sync.ts";
 import { create as createAsync } from "../async.ts";
 import { type VNode, VNodeProps, VType } from "../mod.ts";
 import type { JSX } from "../../jsx-runtime/mod.ts";
 
-Deno.test("should create vFragment", () => {
+test("should create vFragment", () => {
   const text1 = "Hello World";
 
   const vFragement = create(<>{text1}</>);
-  assertEquals(vFragement, {
+  expect(vFragement).toStrictEqual({
     type: VType.FRAGMENT,
     [VNodeProps.KEY]: undefined,
     [VNodeProps.CHILDREN]: [
@@ -25,7 +25,7 @@ Deno.test("should create vFragment", () => {
   });
 
   const vFragmentArrayLike = create(["Hello", "World"]);
-  assertEquals(vFragmentArrayLike, {
+  expect(vFragmentArrayLike).toStrictEqual({
     type: VType.FRAGMENT,
     [VNodeProps.KEY]: undefined,
     [VNodeProps.CHILDREN]: [
@@ -48,7 +48,7 @@ Deno.test("should create vFragment", () => {
   });
 });
 
-Deno.test("should not consume TemplateNode nodes on create", () => {
+test("should not consume TemplateNode nodes on create", () => {
   const templateNode: JSX.TemplateNode = {
     templates: ["<div>", "</div>"],
     nodes: ["Hello"],
@@ -58,8 +58,8 @@ Deno.test("should not consume TemplateNode nodes on create", () => {
 
   // Creating from a TemplateNode must not consume its nodes -
   // a second create from the same input yields the same result.
-  assertEquals(templateNode.nodes, ["Hello"]);
-  assertEquals(create(templateNode), vFragmentFromTemplate);
+  expect(templateNode.nodes).toStrictEqual(["Hello"]);
+  expect(create(templateNode)).toStrictEqual(vFragmentFromTemplate);
 });
 
 // isTemplateNode only requires `templates`, so untyped callers can pass
@@ -83,19 +83,12 @@ const expectedVFragmentWithoutNodes: VNode<unknown> = {
   },
 };
 
-Deno.test("should create vFragment from a TemplateNode without nodes", () => {
-  assertEquals(
-    create(templateNodeWithoutNodes),
+test("should create vFragment from a TemplateNode without nodes", () => {
+  expect(create(templateNodeWithoutNodes)).toStrictEqual(expectedVFragmentWithoutNodes);
+});
+
+test("should create async vFragment from a TemplateNode without nodes", async () => {
+  expect(await createAsync(templateNodeWithoutNodes, {})).toStrictEqual(
     expectedVFragmentWithoutNodes,
   );
 });
-
-Deno.test(
-  "should create async vFragment from a TemplateNode without nodes",
-  async () => {
-    assertEquals(
-      await createAsync(templateNodeWithoutNodes, {}),
-      expectedVFragmentWithoutNodes,
-    );
-  },
-);
