@@ -90,6 +90,7 @@ Coming from 0.2, follow [Migrating from the Deno Setup](README.md#migrating-from
 - The children of an SVG `<foreignObject>` are HTML elements.
 - Numeric attributes update, and `value={false}` clears an input.
 - An object is never written as the attribute value `"[object Object]"`.
+- A keyed element replaced by one without a key, next to siblings without one, no longer shows a sibling twice in its place.
 
 **Server**
 

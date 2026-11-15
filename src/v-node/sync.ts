@@ -398,8 +398,12 @@ function track<T>(
      * Key matches, this happens in the following cases:
      * - keys are the same (update)
      * - both values are undefined (update)
+     * Unless an earlier child took this vNode already: a child without a
+     * key that met a keyed vNode takes the first vNode without a key left,
+     * which can be this one. Updating it again would put the same vNode in
+     * the list twice.
      */
-    if (nodeKey === vNodeKey) {
+    if (nodeKey === vNodeKey && vNodes.includes(vNode)) {
       removeByVNode(vNode, vNodes);
       _children.push(update(node, vNode, globalOptions, false));
       i++;

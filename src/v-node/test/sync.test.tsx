@@ -1,6 +1,6 @@
 import { assert, describe, test } from "vite-plus/test";
 import { create, update } from "../sync.ts";
-import { isVElement, type VElement, VNodeProps } from "../mod.ts";
+import { isVElement, isVText, type VElement, type VNode, VNodeProps } from "../mod.ts";
 
 describe("Update vNode", () => {
   test("should update appended additional node", () => {
@@ -232,4 +232,35 @@ describe("Update vNode", () => {
     assert(vNode[VNodeProps.CHILDREN]?.[4] !== control?.[4]);
     assert(vNode[VNodeProps.CHILDREN]?.[5] !== control?.[5]);
   });
+
+  test("should give each child its own node when a keyed node is replaced by one without key", () => {
+    const vNode = create(
+      <div>
+        <b key="editor">editor</b>
+        <span>footer</span>
+      </div>,
+    ) as VElement<unknown>;
+
+    // The first <span> takes the only node without a key, the footer's:
+    // the footer must not take it again.
+    const updatedVNode = update(
+      <div>
+        <span>view</span>
+        <span>footer</span>
+      </div>,
+      vNode,
+      {},
+    );
+    assert(isVElement(updatedVNode));
+    const children = updatedVNode[VNodeProps.CHILDREN] ?? [];
+    assert.strictEqual(children.length, 2);
+    assert(children[0] !== children[1]);
+    assert.deepStrictEqual(children.map(textOf), ["view", "footer"]);
+  });
 });
+
+// The text of an element with one text child.
+function textOf(vNode: VNode<unknown>): unknown {
+  const child = isVElement(vNode) ? vNode[VNodeProps.CHILDREN]?.[0] : undefined;
+  return isVText(child) ? child[VNodeProps.TEXT] : undefined;
+}
