@@ -15,6 +15,7 @@ import { type ContentSecurityPolicy, generateCSP } from "./content-security-poli
 import { DEFAULT_STYLES_PATH, type Stylesheet } from "./stylesheet.ts";
 import type { Metadata, MetadataGenerator } from "./metadata.ts";
 import { renderToString, vNodeToString } from "./render.ts";
+import { isProduction } from "../../utils/dev.ts";
 import { type Env, provideRequestContext } from "./request-context.ts";
 
 export type Resolver<T> = (ctx: RequestContext) => Record<string, T> | Promise<Record<string, T>>;
@@ -338,7 +339,7 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
               ...(contentSecurityPolicy
                 ? { "Content-Security-Policy": contentSecurityPolicy }
                 : {}),
-              ...(isProd() ? metadata?.headers : {}),
+              ...pageHeaders(metadata?.headers),
             },
           },
         );
@@ -479,4 +480,20 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
       }),
     );
   }
+}
+
+// Headers that let the browser reuse a page without asking the server.
+const CACHE_HEADERS = new Set(["cache-control", "expires"]);
+
+/**
+ * The headers a page sets with `metadata.headers`. Outside production, all
+ * but the caching ones: while you develop, those would show a page from the
+ * browser's cache instead of the page you just changed. Production is
+ * `NODE_ENV=production` or `HUUMA_ENV=PROD` (`isProduction()`).
+ */
+function pageHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+  if (!headers || isProduction()) return headers ?? {};
+  return Object.fromEntries(
+    Object.entries(headers).filter(([name]) => !CACHE_HEADERS.has(name.toLowerCase())),
+  );
 }

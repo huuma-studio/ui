@@ -664,6 +664,20 @@ function NavigationLink({ href, children }) {
 }
 ```
 
+### Page Headers
+
+A page sets response headers with `headers` in its `metadata`, or in what its `metadata()` function returns:
+
+```tsx
+// app/account/page.tsx
+export const metadata = {
+  title: "Account",
+  headers: { "X-Frame-Options": "DENY", "Cache-Control": "private, max-age=60" },
+};
+```
+
+They're sent in development too, except `Cache-Control` and `Expires`: those would show a page from the browser's cache instead of the one you just changed. They're sent in production, with `NODE_ENV=production` or `HUUMA_ENV=PROD`.
+
 ## Browser Support
 
 The production build targets Vite's default, [Baseline Widely Available](https://vite.dev/config/build-options.html#build-target) browsers: Chrome/Edge 111+, Firefox 114+ and Safari 16.4+.
