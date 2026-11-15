@@ -155,12 +155,12 @@ describe(serveRemoteFunctions.name, () => {
     },
   });
   const handle = app.deliver();
-  const call = (headers: Record<string, string>) =>
+  const call = (headers: Record<string, string>, remoteFunction = "add") =>
     handle(
       new Request("http://localhost/_huuma/remote/1a2b3c4d/math.remote", {
         method: "POST",
         headers,
-        body: JSON.stringify({ remoteFunction: "add", args: [1, 2] }),
+        body: JSON.stringify({ remoteFunction, args: [1, 2] }),
       }),
       { remoteAddr: { transport: "tcp", hostname: "127.0.0.1", port: 1 } },
     );
@@ -199,6 +199,26 @@ describe(serveRemoteFunctions.name, () => {
     expect(response.status).toStrictEqual(403);
     await response.body?.cancel();
     expect(calls).toStrictEqual([]);
+  });
+
+  test("only calls the module's own functions, not what every object inherits", async () => {
+    // `valueOf` would answer with the module itself: every export that
+    // isn't a function, e.g. a constant.
+    for (const name of [
+      "valueOf",
+      "toString",
+      "toLocaleString",
+      "constructor",
+      "hasOwnProperty",
+      "isPrototypeOf",
+      "propertyIsEnumerable",
+      "__lookupGetter__",
+      "__proto__",
+    ]) {
+      const response = await call({ "content-type": "application/json" }, name);
+      expect(response.status, name).toStrictEqual(404);
+      await response.body?.cancel();
+    }
   });
 });
 

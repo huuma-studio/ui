@@ -94,6 +94,7 @@ Coming from 0.2, follow [Migrating from the Deno Setup](README.md#migrating-from
 **Server**
 
 - `<script>` and `<style>` content, attributes from untrusted data and tag names are rendered safely.
+- A remote function's request can only call the functions its module exports. In a built app, a name every object has, like `valueOf`, answered with the module's other exports.
 - A generated CSP nonce stays local to its request.
 - Layouts and middlewares apply only to pages in their own directory and below. `/admin`'s also applied to `/administrator`.
 - A remote function's request whose body isn't JSON, or not in the shape the browser stub sends, gets `400` instead of `500`.

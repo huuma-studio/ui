@@ -197,6 +197,22 @@ describe("node dist/server/server.js", () => {
   test("doesn't serve the client manifest", async () => {
     expect((await fetch(`${origin}/.vite/manifest.json`)).status).toStrictEqual(404);
   });
+
+  test("only calls a remote module's own functions", async () => {
+    // The build makes a remote module a plain object, which inherits
+    // `valueOf` and friends: `valueOf` would answer with the module's
+    // exports that aren't functions.
+    const endpoint = `${origin}${await remoteEndpoint("app/sum.remote.ts")}`;
+    for (const remoteFunction of ["valueOf", "toString", "constructor", "hasOwnProperty"]) {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ remoteFunction, args: [] }),
+      });
+      expect(response.status, remoteFunction).toStrictEqual(404);
+      await response.body?.cancel();
+    }
+  });
 });
 
 describe("a build with a URL base, e.g. a CDN", () => {

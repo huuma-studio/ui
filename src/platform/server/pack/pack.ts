@@ -157,7 +157,7 @@ export function serveRemoteFunctions<T extends UIAppContext>(
     checkRemoteRequest(request);
     const { remoteFunction, args } = await readRemoteCall(request, app.remoteMaxBodySize);
     if (
-      remoteFunction in remoteFunctions &&
+      isOwn(remoteFunctions, remoteFunction) &&
       typeof remoteFunctions[remoteFunction] === "function"
     ) {
       return await executeRemoteFunction(remoteFunctions, remoteFunction, args);
@@ -246,4 +246,14 @@ export async function executeRemoteFunction(
   return new Response(serialized, {
     headers: { "content-type": "application/json" },
   });
+}
+
+/**
+ * Whether `name` is one of `object`'s own properties. The build makes a
+ * remote module a plain object, so `in` would also find what every object
+ * inherits: `valueOf` would answer with the module's other exports. Not
+ * `Object.hasOwn()`, which the ES2021 target doesn't have.
+ */
+function isOwn(object: object, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, name);
 }
