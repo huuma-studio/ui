@@ -171,6 +171,8 @@ HUUMA_ENV=PROD PORT=3000 node dist/server/server.js
 
 `PORT` (default `8000`) and `HOST` (default: all interfaces) set where it listens; `HUUMA_ENV=PROD` is `@huuma/route`'s production mode. Set `build.outDir` to build somewhere else than `dist/`.
 
+On `SIGTERM` (e.g. a deploy or a restart) or Ctrl+C, `server.js` stops gracefully: it takes no new connections, lets the running requests finish and exits with code 0. After 10 seconds, or on a second signal, it exits right away with code 1. Work passed to `waitUntil()` that still runs then is cut off. A server of your own can do the same with `stopOnSignals()` from `@huuma/ui/vite/node`.
+
 With a [`base`](https://vite.dev/config/shared-options.html#base) other than `/`, e.g. `/shop/`, the app lives below it, in the dev server and with `server.js` alike: `/shop/about` renders the page `app/about/page.tsx`, `/` redirects to `/shop/`, and other paths outside of it are not found. Remote functions are called below the base too. Links in your pages need the base themselves, e.g. from `import.meta.env.BASE_URL`. With a URL as the base, e.g. `https://cdn.example/shop/` for a CDN, built pages load their scripts from that URL, while the app lives below its path, `/shop/`, and remote functions are called there. The client files are then in `dist/client/shop/`, so you upload `dist/client/` to the CDN's root as it is.
 
 Not there yet: CSS imported by islands or pages. Put stylesheets in `public/` and link them in `root.tsx`, or add them with `app.addStylesheet()`.
