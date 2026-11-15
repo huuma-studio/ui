@@ -590,3 +590,56 @@ describe(moveServerAssets.name, () => {
     expect(await readFile(join(client, "assets/logo.svg"), "utf8")).toStrictEqual("public");
   });
 });
+
+describe("server.js on SIGTERM", () => {
+  // A remote function that takes a while, called by an island so the build
+  // serves it.
+  let root: string;
+  beforeAll(async () => {
+    root = await buildFixture(
+      ".tmp-build-shutdown-",
+      {},
+      {
+        "app/slow.remote.ts":
+          "export async function slow(): Promise<string> {\n" +
+          "  await new Promise((resolve) => setTimeout(resolve, 500));\n" +
+          '  return "done";\n' +
+          "}\n",
+        "app/slow.client.tsx":
+          'import { slow } from "./slow.remote.ts";\n' +
+          "export default function Slow() {\n" +
+          "  return <button on-click={() => slow()}>slow</button>;\n" +
+          "}\n",
+        "app/slow/page.tsx":
+          'import Slow from "../slow.client.tsx";\n' +
+          "export default function Page() {\n" +
+          "  return <Slow />;\n" +
+          "}\n",
+      },
+    );
+  });
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("answers the running request, then exits with 0", async () => {
+    const { origin, server } = await startServer(root);
+    const exited = new Promise<number | null>((resolve) => server.once("exit", resolve));
+    try {
+      const call = fetch(`${origin}${await remoteEndpoint("app/slow.remote.ts")}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ remoteFunction: "slow", args: [] }),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      server.kill("SIGTERM");
+
+      const response = await call;
+      expect(response.status).toStrictEqual(200);
+      expect(await response.json()).toStrictEqual("done");
+      expect(await exited).toStrictEqual(0);
+    } finally {
+      server.kill("SIGKILL");
+    }
+  });
+});

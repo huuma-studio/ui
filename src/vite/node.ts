@@ -1,10 +1,11 @@
 /*
  * Starts a built Huuma app on Node: `dist/server/server.js`, which the
- * production build generates, calls `start()`. It runs in the app's
+ * production build generates, calls `start()` and `stopOnSignals()`. It runs in the app's
  * server, not in the Vite config. Kept apart from `@huuma/ui/vite/runtime`
  * because it uses `node:fs`, which `app.js` must not need.
  */
 import { type FetchHandler, type NodeServer, serve } from "@huuma/route/node";
+import { info, warn } from "@huuma/route/utils/logger";
 import { mimeTypeByExtension } from "@huuma/route/utils/mime-types";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
@@ -60,6 +61,47 @@ export function start(app: FetchHandler, options: StartOptions): Promise<NodeSer
       signal: options.signal,
     },
   );
+}
+
+export interface StopOptions {
+  /**
+   * How long the running requests may take to finish after the first
+   * signal, in milliseconds. Defaults to 10 seconds.
+   */
+  timeout?: number;
+}
+
+/**
+ * Stops `server` gracefully on `SIGTERM` (a deploy or a restart) and
+ * `SIGINT` (Ctrl+C): it accepts no new connections, lets the running
+ * requests finish, then exits with code 0. If they take longer than
+ * `timeout`, or a second signal comes, it exits right away with code 1,
+ * cutting off what still runs. `server.js` calls it.
+ */
+export function stopOnSignals(server: NodeServer, options: StopOptions = {}): void {
+  const timeout = options.timeout ?? 10_000;
+  let stopping = false;
+  const stop = (signal: string) => {
+    if (stopping) {
+      warn("NODE", `${signal} again: stopping without waiting for the running requests.`);
+      process.exit(1);
+    }
+    stopping = true;
+    info("NODE", `${signal}: finishing the running requests, then stopping.`);
+    // Unref'd: the timer alone doesn't keep the process running.
+    setTimeout(() => {
+      warn("NODE", `The running requests didn't finish in ${timeout} ms: stopping anyway.`);
+      process.exit(1);
+    }, timeout).unref();
+    void server.shutdown().then(() => process.exit(0));
+  };
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    try {
+      process.on(signal, stop);
+    } catch {
+      // A signal the platform can't listen to, e.g. SIGTERM in Deno on Windows.
+    }
+  }
 }
 
 function port(value: string | undefined): number | undefined {

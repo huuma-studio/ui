@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { type ChildProcess, spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { clientFiles, start } from "./node.ts";
+import { clientFiles, start, stopOnSignals } from "./node.ts";
 
 describe(clientFiles.name, () => {
   let client: string;
@@ -134,5 +135,105 @@ describe(start.name, () => {
       controller.abort();
       await server.finished;
     }
+  });
+});
+
+describe(stopOnSignals.name, () => {
+  // Runs in a Node process of its own, as it exits the process: a server
+  // with `stopOnSignals()`, whose `/slow` answers after 300 ms and whose
+  // `/hang` never does. Node runs this module's TypeScript itself.
+  const script = (timeout: number) => `
+    import { start, stopOnSignals } from ${JSON.stringify(pathToFileURL(join(import.meta.dirname, "node.ts")).href)};
+    const server = await start(
+      {
+        async fetch(request) {
+          const { pathname } = new URL(request.url);
+          if (pathname === "/slow") {
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            return new Response("slow");
+          }
+          if (pathname === "/hang") return new Promise(() => {});
+          return new Response("ok");
+        },
+      },
+      { client: ${JSON.stringify(tmpdir())}, port: 0, hostname: "127.0.0.1" },
+    );
+    stopOnSignals(server, { timeout: ${timeout} });
+    console.log("ready " + server.port);
+  `;
+
+  // Starts the server; `output()` waits for a line of its output.
+  async function serve(timeout: number) {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", script(timeout)], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    const waiting: [string, () => void][] = [];
+    const read = (chunk: Buffer) => {
+      output += chunk.toString();
+      for (const [text, resolve] of waiting) if (output.includes(text)) resolve();
+    };
+    child.stdout!.on("data", read);
+    child.stderr!.on("data", read);
+    const exited = new Promise<number | null>((resolve) => child.once("exit", resolve));
+    const printed = (text: string) =>
+      new Promise<void>((resolve, reject) => {
+        if (output.includes(text)) return resolve();
+        waiting.push([text, resolve]);
+        void exited.then(() => reject(new Error(`Exited before "${text}": ${output}`)));
+      });
+    await printed("ready ");
+    const origin = `http://127.0.0.1:${/ready (\d+)/.exec(output)![1]}`;
+    return { child, origin, exited, printed };
+  }
+
+  const stopped: ChildProcess[] = [];
+  afterAll(() => {
+    for (const child of stopped) child.kill("SIGKILL");
+  });
+
+  test("lets the running requests finish, then exits with 0", async () => {
+    const { child, origin, exited, printed } = await serve(30_000);
+    stopped.push(child);
+    // A connection kept alive after its request must not hold the server open.
+    expect(await (await fetch(`${origin}/`)).text()).toStrictEqual("ok");
+    const slow = fetch(`${origin}/slow`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const started = Date.now();
+    child.kill("SIGTERM");
+    await printed("finishing the running requests");
+
+    // Refuses new connections meanwhile.
+    await expect(fetch(`${origin}/`, { headers: { connection: "close" } })).rejects.toThrow();
+    const response = await slow;
+    expect(response.status).toStrictEqual(200);
+    expect(await response.text()).toStrictEqual("slow");
+    expect(await exited).toStrictEqual(0);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  test("exits with 1 once the requests take longer than the timeout", async () => {
+    const { child, origin, exited, printed } = await serve(300);
+    stopped.push(child);
+    const hanging = fetch(`${origin}/hang`).catch(() => "cut off");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    child.kill("SIGTERM");
+    await printed("didn't finish in 300 ms");
+    expect(await exited).toStrictEqual(1);
+    expect(await hanging).toStrictEqual("cut off");
+  });
+
+  test("exits with 1 right away on a second signal, e.g. Ctrl+C twice", async () => {
+    const { child, origin, exited, printed } = await serve(30_000);
+    stopped.push(child);
+    const hanging = fetch(`${origin}/hang`).catch(() => "cut off");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const started = Date.now();
+    child.kill("SIGINT");
+    await printed("finishing the running requests");
+    child.kill("SIGINT");
+    expect(await exited).toStrictEqual(1);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(await hanging).toStrictEqual("cut off");
   });
 });

@@ -70,13 +70,14 @@ function nodePlugin(): Plugin {
 export function nodeModule(options: { client: string; base: string; hashed: string[] }): string {
   return [
     `import app from ${JSON.stringify(SERVER_ID)};`,
-    'import { start } from "@huuma/ui/vite/node";',
+    'import { start, stopOnSignals } from "@huuma/ui/vite/node";',
     "",
-    "await start(app, {",
+    "const server = await start(app, {",
     `  client: new URL(${JSON.stringify(options.client)}, import.meta.url),`,
     `  base: ${JSON.stringify(options.base)},`,
     `  hashed: ${JSON.stringify(options.hashed)},`,
     "});",
+    "stopOnSignals(server);",
     "",
   ].join("\n");
 }
