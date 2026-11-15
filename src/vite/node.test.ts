@@ -140,8 +140,9 @@ describe(start.name, () => {
 
 describe(stopOnSignals.name, () => {
   // Runs in a Node process of its own, as it exits the process: a server
-  // with `stopOnSignals()`, whose `/slow` answers after 300 ms and whose
-  // `/hang` never does. Node runs this module's TypeScript itself.
+  // with `stopOnSignals()`, whose `/slow` answers 200 ms after the SIGTERM
+  // and whose `/hang` never does. Both print once they run, so a test sends
+  // its signal only then. Node runs this module's TypeScript itself.
   const script = (timeout: number) => `
     import { start, stopOnSignals } from ${JSON.stringify(pathToFileURL(join(import.meta.dirname, "node.ts")).href)};
     const server = await start(
@@ -149,10 +150,16 @@ describe(stopOnSignals.name, () => {
         async fetch(request) {
           const { pathname } = new URL(request.url);
           if (pathname === "/slow") {
-            await new Promise((resolve) => setTimeout(resolve, 300));
+            console.log("running /slow");
+            await new Promise((resolve) =>
+              process.once("SIGTERM", () => setTimeout(resolve, 200)),
+            );
             return new Response("slow");
           }
-          if (pathname === "/hang") return new Promise(() => {});
+          if (pathname === "/hang") {
+            console.log("running /hang");
+            return new Promise(() => {});
+          }
           return new Response("ok");
         },
       },
@@ -198,7 +205,7 @@ describe(stopOnSignals.name, () => {
     // A connection kept alive after its request must not hold the server open.
     expect(await (await fetch(`${origin}/`)).text()).toStrictEqual("ok");
     const slow = fetch(`${origin}/slow`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await printed("running /slow");
     const started = Date.now();
     child.kill("SIGTERM");
     await printed("finishing the running requests");
@@ -216,7 +223,7 @@ describe(stopOnSignals.name, () => {
     const { child, origin, exited, printed } = await serve(300);
     stopped.push(child);
     const hanging = fetch(`${origin}/hang`).catch(() => "cut off");
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await printed("running /hang");
     child.kill("SIGTERM");
     await printed("didn't finish in 300 ms");
     expect(await exited).toStrictEqual(1);
@@ -227,7 +234,7 @@ describe(stopOnSignals.name, () => {
     const { child, origin, exited, printed } = await serve(30_000);
     stopped.push(child);
     const hanging = fetch(`${origin}/hang`).catch(() => "cut off");
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await printed("running /hang");
     const started = Date.now();
     child.kill("SIGINT");
     await printed("finishing the running requests");
