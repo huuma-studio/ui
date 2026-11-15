@@ -21,7 +21,7 @@ Use this skill when the agent is adding server-side mutations, form submissions,
 - Arguments must be JSON-serializable.
 - The return value is JSON-deserialized on the client.
 - A function that returns `void` / `undefined` resolves to `undefined` on the client (the server responds `204 No Content`). This is the correct way to express "fire and forget" or "acknowledged mutation" — do **not** return `undefined` accidentally.
-- A function that throws, or that returns a value JSON cannot represent (see below), rejects the client-side promise with a reconstructed `Error` carrying `name` and `message` from the server. Wrap calls in `try/catch`.
+- A function that throws, or that returns a value JSON cannot represent (see below), rejects the client-side promise with an `Error`. Wrap calls in `try/catch`. Only an `HttpException` from `@huuma/route` sends its message to the client: a plain `Error` arrives as `"Internal Server Error"` (see [Error handling](#error-handling-and-wire-format)).
 
 ## Return value rules
 
@@ -39,18 +39,25 @@ The void/null distinction is preserved end-to-end: `void` → `undefined`, expli
 
 ## Error handling and wire format
 
-Current behavior (the success path is raw JSON; the error path uses HTTP status + a small JSON body):
+The success path is raw JSON; the error path is an HTTP status and a small JSON body.
 
-- **Success** (`2xx`): the client stub parses the body as JSON and resolves. The success body shape is **not** enveloped — `JSON.stringify(res)` is sent directly. Backward compatible.
+- **Success** (`2xx`): the client stub parses the body as JSON and resolves. `JSON.stringify(res)` is sent as is, without an envelope.
 - **`204`**: the client stub resolves `undefined` without parsing.
-- **Non-`2xx`** (including `500` from a thrown remote function or an unserializable return): the client stub reads the JSON body and throws a reconstructed `Error` with:
-  - `err.name` ← `body.name` (e.g. `"RemoteFunctionSerializationError"`), falling back to `"RemoteFunctionError"`.
-  - `err.message` ← `body.message`, falling back to `"Remote function \"<name>\" failed (HTTP <status>)"`.
-  - If the error body is not JSON (proxy `502`, HTML error page), the fallback message still carries the status code.
-- **Important asymmetry — `name` only survives for serialization errors.** The only server path that emits a `name` field is the unserializable-return `500` produced inside `executeRemoteFunction`. Every other error — a user-thrown error inside the remote function, `NotFoundException` (function not found), and `@huuma/validate` body-schema failures — propagates to the framework's global `handleException` (`@huuma/route`), which emits `{ status, message, error? }` with **no `name`**. So for all real application errors the client's `err.name` falls back to the generic `"RemoteFunctionError"`; only `err.message` carries useful information. Closing this gap (wrapping user-thrown errors with a structured `{ name, message, ... }` body before they reach `handleException`) is the first Round 1 work item.
-- **Network failures** (fetch rejects): currently surface as `TypeError: Failed to fetch` and are **not** wrapped into a `RemoteFunctionError` yet. This is a known gap.
+- **Non-`2xx`**: the client stub reads the JSON body and throws an `Error` with:
+  - `err.name` ← `body.name`, falling back to `"RemoteFunctionError"`.
+  - `err.message` ← `body.message`, falling back to `"Remote function <name> failed (HTTP <status>)"`, e.g. for a proxy's `502` or an HTML error page.
 
-The error body today carries only `{ name, message }`. Fields like `stack`, `cause`, `code`, or validation `fields` are **not** yet transported. Treat the body shape as provisional.
+What the client gets for each error on the server:
+
+| On the server                                                                                    | Response                | `err.name`                           | `err.message`             |
+| ------------------------------------------------------------------------------------------------ | ----------------------- | ------------------------------------ | ------------------------- |
+| A return value JSON cannot represent                                                             | `500`                   | `"RemoteFunctionSerializationError"` | what failed               |
+| `throw new BadRequestException("Name taken")`, or another `HttpException` from `@huuma/route`    | its status, e.g. `400`  | `"RemoteFunctionError"`              | `"Name taken"`            |
+| `throw new Error("Name taken")`, or any other error                                              | `500`                   | `"RemoteFunctionError"`              | `"Internal Server Error"` |
+
+- A thrown error goes to the global error handler of `@huuma/route` (`handleException`), which logs it and answers `{ status, message }`. Only an `HttpException` keeps its status and message. Any other error's message stays on the server, so internal details never reach the browser.
+- To tell the client what went wrong, throw an `HttpException`, e.g. `BadRequestException` from `@huuma/route/http/exception/bad-request-exception`. Add `@huuma/route` to the app's dependencies for it.
+- **Network failures** (fetch rejects): surface as `TypeError: Failed to fetch`, not wrapped into a `RemoteFunctionError`.
 
 ## Server-side validation
 
@@ -59,7 +66,7 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 - Schema: `{ remoteFunction: string, args?: unknown[] }`.
 - The server looks up `remoteFunction` on the imported module and invokes it with the args.
 - A body that isn't JSON, or fails schema validation, gets `400`; an unknown function name gets `404` ("Remote function not found"). Both bodies are `{ status, message }` from the framework's global error handler, without a `name`, so the client sees `err.name === "RemoteFunctionError"`.
-- Validate **business** input inside the remote function itself and throw a descriptive `Error` — its `name` and `message` will reach the client.
+- Validate **business** input inside the remote function itself and throw a `BadRequestException` with a message for the user. A plain `Error` reaches the client as `500` `"Internal Server Error"`.
 
 ## The request: auth, headers, bindings
 
@@ -75,9 +82,9 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 
 ## Known limitations
 
-- **`name` asymmetry**: the only server path that emits a `name` field is the unserializable-return `500` from `executeRemoteFunction`. Every other error (user-thrown, `NotFoundException`, `@huuma/validate` schema failure) goes through the framework's global `handleException` in `@huuma/route`, which emits `{ status, message, error? }` with no `name`. So all real application errors collapse to the generic `"RemoteFunctionError"` on the client; only `message` survives. Wrapping user-thrown errors with `{ name, message, ... }` is the first Round 1 work item.
+- **No `name` from thrown errors**: every thrown error reaches the client as `"RemoteFunctionError"`, and only an `HttpException` keeps its message. A custom error class's `name` can't be sent yet; only a return value JSON can't represent gets its own `name`.
 - The client stub does not yet wrap network-level fetch failures (`TypeError: Failed to fetch`) into `RemoteFunctionError`; callers see the raw browser error.
-- The error body carries only `name` and `message` (and only `name` on the serialization-error path). `stack`, `cause`, custom subclass properties, and validation `fields` are not yet transported. Dev/prod redaction policy for `stack` is not yet defined.
+- The client's `Error` gets only `name` and `message`. `stack`, `cause`, custom properties and an `HttpException`'s `error` field don't reach it.
 - Errors are rehydrated on the client as a plain `Error` with `name`/`message` set — there is no `instanceof`-checkable `RemoteFunctionError` class exported from `@huuma/ui` yet.
 
 ## Things to check
@@ -87,5 +94,6 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 - Only JSON-serializable arguments are passed.
 - Return values are JSON-serializable, or `void`/`undefined` intentionally. Watch for accidental `BigInt`, `function`, `Symbol`, or circular references — they produce a `500 RemoteFunctionSerializationError`.
 - The `.remote.ts` file is imported only from islands (or server-safe code), not from server components that will ship to the client.
-- Client call sites have a `try/catch` that handles the reconstructed `Error` (use `error.name` to distinguish `RemoteFunctionSerializationError` from your own thrown errors).
+- Errors meant for the user are thrown as an `HttpException` (e.g. `BadRequestException`), not as a plain `Error`, which arrives as `"Internal Server Error"`.
+- Client call sites have a `try/catch`. `error.name` tells a `RemoteFunctionSerializationError` from the rest; `error.message` holds an `HttpException`'s message.
 - If you rely on the void/null distinction, confirm the client code expects `undefined` for `void` returns, not `null`.

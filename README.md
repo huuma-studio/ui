@@ -303,12 +303,15 @@ Remote server functions provide a type-safe way to handle form submissions and s
 
 ```tsx
 // src/user.remote.ts
+import { BadRequestException } from "@huuma/route/http/exception/bad-request-exception";
+
 export async function createUser(data: { name: string; email: string }) {
   const { name, email } = data;
 
-  // Validate input
+  // Validate input. An HttpException's message reaches the client; a plain
+  // Error's message doesn't (see below).
   if (!name || !email) {
-    throw new Error("Name and email are required");
+    throw new BadRequestException("Name and email are required");
   }
 
   // Save to database
@@ -379,7 +382,16 @@ On the client, the generated stub checks the HTTP status:
 
 - `2xx` resolves with the deserialized JSON body.
 - `204` resolves `undefined`.
-- Non-`2xx` responses reject the promise with a reconstructed `Error` whose `name` and `message` come from the server's JSON error body (falling back to `"Remote function \"<name>\" failed (HTTP <status>)"` if the body is not JSON). Inspect `error.name` to distinguish `RemoteFunctionSerializationError` (a programmer error in the return value) from errors thrown by the remote function itself.
+- Non-`2xx` responses reject the promise with an `Error` whose `name` and `message` come from the server's JSON error body, falling back to `"RemoteFunctionError"` and `"Remote function <name> failed (HTTP <status>)"`. Inspect `error.name` to tell `RemoteFunctionSerializationError` (a programmer error in the return value) from errors thrown by the remote function itself.
+
+An error the remote function throws goes to the error handler of `@huuma/route`, which logs it. Only an `HttpException` sends its status and message to the client; any other error's message stays on the server, so internal details never reach the browser:
+
+| Thrown in the remote function                                     | Response | `error.name`            | `error.message`           |
+| ----------------------------------------------------------------- | -------- | ----------------------- | ------------------------- |
+| `new BadRequestException("Name taken")`, or another `HttpException` | `400`, or its status | `"RemoteFunctionError"` | `"Name taken"`            |
+| `new Error("Name taken")`, or any other error                     | `500`    | `"RemoteFunctionError"` | `"Internal Server Error"` |
+
+`HttpException` and its subclasses, like `BadRequestException`, come from `@huuma/route`: add it to the app's dependencies, as described in [Installation](#installation).
 
 ```tsx
 const handleSubmit = async (event: Event) => {
@@ -388,9 +400,9 @@ const handleSubmit = async (event: Event) => {
     const result = await createUser(data);
     // result is the deserialized JSON return value, or undefined for void returns
   } catch (error) {
-    // error.name may be "RemoteFunctionSerializationError", the name of an
-    // error thrown inside the remote function, or "RemoteFunctionError"
-    // (fallback when the server's error body was not JSON).
+    // error.name is "RemoteFunctionSerializationError" for a return value
+    // JSON can't represent, otherwise "RemoteFunctionError". error.message
+    // is an HttpException's message, or "Internal Server Error".
     console.error(error.name, error.message);
   }
 };
