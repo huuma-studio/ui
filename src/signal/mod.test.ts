@@ -1197,3 +1197,32 @@ describe("batch, every sequence of sets and reads", () => {
     );
   });
 });
+
+describe("a subscriber that sets the signal it reads", () => {
+  test("settles when the written value stops changing", () => {
+    const count = signal(0);
+    effect(() => {
+      if (count.get() < 3) count.set(count.get() + 1);
+    });
+
+    expect(count.get()).toBe(3);
+  });
+
+  test("a recursion that never converge throws a descriptive error", () => {
+    const count = signal(0);
+
+    expect(() => {
+      effect(() => count.set(count.get() + 1));
+    }).toThrow("Maximum update depth exceeded");
+  });
+
+  test("a recursion through batches throws too", () => {
+    const count = signal(0);
+
+    expect(() => {
+      effect(() => {
+        batch(() => count.set(count.get() + 1));
+      });
+    }).toThrow("Maximum update depth exceeded");
+  });
+});

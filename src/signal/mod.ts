@@ -140,6 +140,31 @@ function notify(
   sources: Map<Signal<unknown>, Set<SubscriberScope>>,
   early?: Map<ComputedScope, unknown>,
 ): void {
+  if (notifyDepth >= MAX_NOTIFY_DEPTH) {
+    throw new Error(
+      "Maximum update depth exceeded: a signal is set from inside the update it triggers, and the written value never stops changing, so the recursion never ends. A set() whose value stays equal ends this loop, as it doesn't notify again.",
+    );
+  }
+  notifyDepth++;
+  try {
+    runNotify(sources, early);
+  } finally {
+    notifyDepth--;
+  }
+}
+
+// The nesting of notify(): a set() inside a running subscriber notifies
+// nested, and the subscriber runs again with the newer value. That recursion
+// is meant to converge - the written value stops changing - or nothing ever
+// settles. Matches React's "Maximum update depth exceeded": deep enough for
+// a long cascade, low enough that an endless recursion stops soon.
+let notifyDepth = 0;
+const MAX_NOTIFY_DEPTH = 50;
+
+function runNotify(
+  sources: Map<Signal<unknown>, Set<SubscriberScope>>,
+  early?: Map<ComputedScope, unknown>,
+): void {
   const marked = new Set<SubscriberScope>();
   for (const readers of sources.values()) mark(marked, readers);
   const before = new Map<Signal<unknown>, unknown>();
@@ -301,7 +326,11 @@ export class WritableSignal<T> extends Signal<T> {
       earlyPass = undefined;
       if (!batched.has(this)) {
         if (!batched.size) onBatchEnd(notifyBatched);
-        batched.set(this, { before, readers: this.#scopes, current: () => this.#value });
+        batched.set(this, {
+          before,
+          readers: this.#scopes,
+          current: () => this.#value,
+        });
       }
     }
     return value;
@@ -464,7 +493,14 @@ function settleInBatch(scope: ComputedScope): void {
     }
     // Errors: the computed stays pending, and fails again when the batch
     // ends, which throws.
-    earlyPass = { marked, settled: new Set(), changed, failed: new Set(), errors: [], early: true };
+    earlyPass = {
+      marked,
+      settled: new Set(),
+      changed,
+      failed: new Set(),
+      errors: [],
+      early: true,
+    };
   }
   if (!earlyPass.marked.has(scope)) return;
   const outerPass = currentPass;
