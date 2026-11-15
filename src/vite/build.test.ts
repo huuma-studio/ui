@@ -629,19 +629,41 @@ describe("server.js on SIGTERM", () => {
     const { origin, server } = await startServer(root);
     const exited = new Promise<number | null>((resolve) => server.once("exit", resolve));
     let output = "";
-    const running = new Promise<void>((resolve) =>
-      server.stdout!.on("data", (chunk: Buffer) => {
-        output += chunk.toString();
-        if (output.includes("running slow")) resolve();
-      }),
-    );
+    const read = (chunk: Buffer) => (output += chunk.toString());
+    server.stdout!.on("data", read);
+    server.stderr!.on("data", read);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const call = fetch(`${origin}${await remoteEndpoint("app/slow.remote.ts")}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ remoteFunction: "slow", args: [] }),
       });
-      await running;
+      // Waits until `slow()` runs. Fails with the server's output, before
+      // the test's timeout and so through `finally`, if the server exits,
+      // the call is answered first, or `slow()` doesn't run in 10 s.
+      await Promise.race([
+        new Promise<void>((resolve, reject) => {
+          const check = () => output.includes("running slow") && resolve();
+          server.stdout!.on("data", check);
+          check();
+          timer = setTimeout(
+            () => reject(new Error(`slow() didn't run in 10 s: ${output}`)),
+            10_000,
+          );
+        }),
+        exited.then((code) => {
+          throw new Error(`server.js exited (${code}) before slow() ran: ${output}`);
+        }),
+        call.then(
+          (response) => {
+            throw new Error(`The call got ${response.status} before slow() ran: ${output}`);
+          },
+          (error: unknown) => {
+            throw new Error(`The call failed before slow() ran (${String(error)}): ${output}`);
+          },
+        ),
+      ]);
       server.kill("SIGTERM");
 
       const response = await call;
@@ -649,6 +671,7 @@ describe("server.js on SIGTERM", () => {
       expect(await response.json()).toStrictEqual("done");
       expect(await exited).toStrictEqual(0);
     } finally {
+      clearTimeout(timer);
       server.kill("SIGKILL");
     }
   });
