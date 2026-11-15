@@ -36,7 +36,7 @@ export function packPages<T extends UIAppContext>(pages: List["pages"], app: UIA
       .flat();
 
     const path = mapPath(route);
-    app.addPage(path.path, {
+    const props = {
       page,
       layouts,
       middleware,
@@ -44,7 +44,9 @@ export function packPages<T extends UIAppContext>(pages: List["pages"], app: UIA
       metadata,
       contentSecurityPolicy,
       resolvers,
-    });
+    };
+    if (path.notFound) app.addNotFoundPage(path.path, props);
+    else app.addPage(path.path, props);
   }
   return app;
 }

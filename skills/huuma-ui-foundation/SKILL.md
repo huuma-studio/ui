@@ -25,7 +25,7 @@ Clients consume it as `@huuma/ui` from JSR (`jsr:@huuma/ui` with pnpm/Yarn, `@js
 - `app/middleware.ts` — route middleware.
 - `app/[param]/page.tsx` — dynamic parameter.
 - `app/(group)/` — grouping directory, stripped from URL.
-- `app/!404/page.tsx` — catch-all 404 route, mapped to `/*`.
+- `app/!404/page.tsx` — the page for `GET` and `HEAD` requests no route answers, with status 404 (also when a page throws `NotFoundException`). Not a route: other methods get `404`. `app/blog/!404/page.tsx` answers below `/blog/`; the deepest one wins.
 - `app/root.tsx` (or anywhere) — root shell component, passed to `createUIApp()`.
 - `server.ts` — exports the app as default (the `server` option of `huuma()`).
 - `*.client.tsx` anywhere — islands; `*.remote.ts` — remote functions; `*.server.*` — server-only modules.

@@ -176,9 +176,10 @@ export async function listRemoteFunctions(path: string): Promise<FileImport[]> {
 
 /**
  * Sorts pages so the root page (filePath === basePath) is registered first
- * and the `!404` catch-all is registered last. The router resolves
- * first-match-wins, so registration order determines which route wins
- * when patterns overlap (e.g. `/` vs `/*`).
+ * and the `!404` pages last. The router resolves first-match-wins, so
+ * registration order determines which route wins when patterns overlap.
+ * (`!404` pages aren't routes any more, see `UIApp.addNotFoundPage()`, so
+ * their place no longer matters to the router.)
  */
 export function sortPages(imports: FileImport[], basePath?: string): FileImport[] {
   // Compared with the lowercased paths below: a routes path with capitals

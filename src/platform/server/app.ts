@@ -4,7 +4,13 @@ import type { Route } from "@huuma/route/http/route";
 import { App, type AppOptions } from "@huuma/route";
 import { info } from "@huuma/route/utils/logger";
 import { parse } from "node:path";
-import type { Handler, RequestContext, SearchParams } from "@huuma/route/http/request";
+import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
+import {
+  decodeUrlParams,
+  type Handler,
+  type RequestContext,
+  type SearchParams,
+} from "@huuma/route/http/request";
 
 import { type Island, markIslands } from "../../islands/islands.ts";
 import { type JSX, jsx } from "../../jsx-runtime/mod.ts";
@@ -131,6 +137,8 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
   #transferState: TransferState = {};
   #entryPoints?: [string, string][];
   #contentSecurityPolicy?: ContentSecurityPolicy;
+  // The deepest directory first, see `addNotFoundPage()`.
+  #notFoundPages: { pattern: URLPattern; depth: number; handler: Handler<T> }[] = [];
   /** The largest request body a remote function accepts, in bytes. */
   readonly remoteMaxBodySize: number;
 
@@ -154,6 +162,48 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
   addPage(path: string, props: PageProps<D>): Route<T> {
     return this.get(path, this.#pageHandler({ root: this.#root, ...props }));
   }
+
+  /**
+   * Adds a not-found page, like `app/!404/page.tsx`: the page for the `GET`
+   * and `HEAD` requests below `path` that no route answers, e.g. `/*` or
+   * `/blog/*`. Where several match, the one for the deepest directory
+   * answers. It also answers when a route throws a `NotFoundException`.
+   *
+   * It isn't a route: the router answers requests with other methods as
+   * before, `404` for a path without routes and `405` for a path whose
+   * routes don't allow the method. A `GET /*` route would make that `405`
+   * for every path. The app's middleware runs around the page, as long as
+   * it's added first.
+   */
+  addNotFoundPage(path: string, props: PageProps<D>): void {
+    if (!this.#notFoundPages.length) this.use(this.#notFound);
+    this.#notFoundPages.push({
+      pattern: new URLPattern({ pathname: path }),
+      depth: path.split("/").length,
+      handler: this.#pageHandler({ root: this.#root, ...props }),
+    });
+    // Stable: pages of the same depth keep their order.
+    this.#notFoundPages.sort((a, b) => b.depth - a.depth);
+  }
+
+  #notFound: Middleware<T> = async (ctx, next) => {
+    try {
+      return await next();
+    } catch (error) {
+      const { method, url } = ctx.request;
+      if (!(error instanceof NotFoundException) || (method !== "GET" && method !== "HEAD")) {
+        throw error;
+      }
+      const { pathname } = new URL(url);
+      for (const page of this.#notFoundPages) {
+        const params = page.pattern.exec({ pathname })?.pathname.groups;
+        if (!params) continue;
+        ctx.params = decodeUrlParams(params, pathname);
+        return page.handler(ctx);
+      }
+      throw error;
+    }
+  };
 
   addEntryPoint(name: string, path: string): void {
     if (!this.#entryPoints) {

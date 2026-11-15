@@ -99,6 +99,7 @@ Coming from 0.2, follow [Migrating from the Deno Setup](README.md#migrating-from
 
 - `<script>` and `<style>` content, attributes from untrusted data and tag names are rendered safely.
 - Pages answer `HEAD` like `GET`, without a body, instead of `404`.
+- A `!404` page is no longer a `GET` route for every path below its directory, which made `@huuma/route` 0.3.2 answer other methods there with `405`: a `POST` to an unknown path, or to the endpoint of a remote module from an earlier deploy, gets `404` again. The `!404` page answers the `GET` and `HEAD` requests no route answers, also when a page or middleware throws `NotFoundException`, and the deepest `!404` directory wins.
 - A remote function's request can only call the functions its module exports. In a built app, a name every object has, like `valueOf`, answered with the module's other exports.
 - A generated CSP nonce stays local to its request.
 - A page's `metadata.headers` are sent outside production too, except `Cache-Control` and `Expires`. They were all left out unless `HUUMA_ENV=PROD` was set, also security headers like `X-Frame-Options`, and `NODE_ENV=production` didn't count.

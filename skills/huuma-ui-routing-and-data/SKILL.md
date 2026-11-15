@@ -14,7 +14,7 @@ Routes are files under `app/`:
 - `app/page.tsx` — route at `/`.
 - `app/[param]/page.tsx` — dynamic route mapped to `/:param`.
 - `app/(group)/page.tsx` — grouping directory, stripped from the URL.
-- `app/!404/page.tsx` — catch-all 404 route, mapped to `/*` (the Vite plugin maps file paths to routes).
+- `app/!404/page.tsx` — the page for `GET` and `HEAD` requests no route answers, with status 404 (also when a page throws `NotFoundException`). Not a route: other methods get `404`. `app/blog/!404/page.tsx` answers below `/blog/`; the deepest one wins.
 - `app/layout.tsx` — applies to all nested pages under its directory.
 - `app/middleware.ts` — middleware for nested routes.
 
@@ -64,4 +64,4 @@ Inside islands, `$url` and `$route` give access to URL/route state (exported fro
 - No `async` default exports in `.client.tsx`.
 - `$`-hooks are only used in sync island scope.
 - Route paths use `app/`, not `pages/`.
-- `(group)` does not appear in the URL; `[param]` becomes `:param`; `!404` becomes `/*`.
+- `(group)` does not appear in the URL; `[param]` becomes `:param`; `!404` is a not-found page for its directory, not a route.

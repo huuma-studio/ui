@@ -125,7 +125,7 @@ my-app/
 │   ├── middleware.ts       # Middlewares for the pages below it
 │   ├── page.tsx            # The page at /
 │   ├── about/page.tsx      # The page at /about
-│   ├── !404/page.tsx       # The page for paths that aren't found
+│   ├── !404/page.tsx       # The page for paths that aren't found (404)
 │   └── counter.client.tsx  # An island
 ├── src/                    # Application code
 │   ├── user.remote.ts      # Remote server functions

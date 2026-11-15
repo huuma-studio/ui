@@ -213,6 +213,28 @@ describe("node dist/server/server.js", () => {
       await response.body?.cancel();
     }
   });
+
+  test("answers unknown paths with the !404 page, and 404 for every method", async () => {
+    const page = await fetch(`${origin}/nope`);
+    expect(page.status).toStrictEqual(404);
+    expect(await page.text()).toContain("<h1>Not found</h1>");
+
+    const head = await fetch(`${origin}/nope`, { method: "HEAD" });
+    expect(head.status).toStrictEqual(404);
+    expect(await head.text()).toStrictEqual("");
+
+    // Not 405: the !404 page isn't a GET route for every path. E.g. a
+    // browser with the stubs of an earlier deploy calls an old endpoint.
+    for (const path of ["/nope", "/_huuma/remote/ffff0000/sum.remote"]) {
+      const response = await fetch(`${origin}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ remoteFunction: "add", args: [1, 2] }),
+      });
+      expect(response.status, path).toStrictEqual(404);
+      await response.body?.cancel();
+    }
+  });
 });
 
 describe("a build with a URL base, e.g. a CDN", () => {
