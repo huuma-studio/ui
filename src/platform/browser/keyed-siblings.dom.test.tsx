@@ -100,9 +100,16 @@ describe("a list updated at random", () => {
       const first = randomList(next, POOL);
       const items = signals.signal(first);
 
+      // Each component's signal, by id, so the test can change it, and the
+      // ids whose signal it changed. A recreated component starts again at
+      // `item ${id}`, so it loses the change and fails the check.
+      const texts = new Map<number, { set(text: string): void }>();
+      const edited = new Set<number>();
+
       // `key` is for the list: the component doesn't read it.
       function Stateful({ id }: { id: number; key?: number }): JSX.Element {
         const text = hooks.$signal(`item ${id}`);
+        texts.set(id, text);
         return <li data-id={id}>{text.get()}</li>;
       }
       function List(): JSX.Element {
@@ -127,7 +134,7 @@ describe("a list updated at random", () => {
       // Each <li>'s id and text, as the list should show them.
       const expected = (list: number[]) => [
         ...(item === "mixed" ? ["head: head"] : []),
-        ...list.map((id) => `${id}: item ${id}`),
+        ...list.map((id) => `${id}: ${edited.has(id) ? "edited" : "item"} ${id}`),
         ...(item === "mixed" ? ["tail: tail"] : []),
       ];
       const shown = () =>
@@ -140,14 +147,32 @@ describe("a list updated at random", () => {
         expected(first),
       );
 
+      // Stateful: change the signal of about half the items, which the
+      // components that stay in the list have to keep.
+      const edit = (list: number[]) => {
+        if (item !== "stateful") return;
+        for (const id of list) {
+          if (next() < 0.5) continue;
+          texts.get(id)?.set(`edited ${id}`);
+          edited.add(id);
+        }
+        expect(shown(), `seed ${seed}, edited in ${JSON.stringify(list)}`).toStrictEqual(
+          expected(list),
+        );
+      };
+
+      edit(first);
       let previous = first;
       for (let update = 0; update < UPDATES; update++) {
         const list = randomList(next, POOL);
         items.set(list);
+        // The removed components are gone, with their changed signal.
+        for (const id of edited) if (!list.includes(id)) edited.delete(id);
         expect(
           shown(),
           `seed ${seed}: ${JSON.stringify(previous)} to ${JSON.stringify(list)}`,
         ).toStrictEqual(expected(list));
+        edit(list);
         previous = list;
       }
     }
