@@ -46,6 +46,7 @@ See the `PageLikeProps` type exported from `@huuma/ui/server` (inspect with `den
 - Export `metadata` or a `MetadataGenerator` from `page.tsx`/`layout.tsx`.
 - Type definitions live in `@huuma/ui/server` (the `Metadata` types are re-exported there; inspect with `deno doc jsr:@huuma/ui/server`).
 - Use `<Meta>` (from `@huuma/ui/server`) inside `root.tsx` to render metadata.
+- `metadata.headers` sets the page's response headers. Outside production (`NODE_ENV=production` or `HUUMA_ENV=PROD`), `Cache-Control` and `Expires` are left out, so the browser doesn't show a stale page while developing; the others are always sent.
 
 ## Middleware
 
