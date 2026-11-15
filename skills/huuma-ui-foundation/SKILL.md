@@ -9,7 +9,7 @@ Use this skill when the agent is working anywhere in a Huuma UI project. It is t
 
 ## Mental model
 
-Huuma UI is a file-convention web framework: server-side rendering + selective hydration ("islands") + type-safe remote server functions + signal-based reactivity + built-in i18n. Apps build with Vite 8 through the `@huuma/ui/vite` plugin and run on Node.js 24+; Deno works too (best effort). Status is Developer Preview (`v0.3`); APIs change.
+Huuma UI is a file-convention web framework: server-side rendering + selective hydration ("islands") + type-safe remote server functions + signal-based reactivity + built-in i18n. Apps build with Vite 8 through the `@huuma/ui/vite` plugin and run on Node.js 24+; Deno works too (best effort). Version 0.3 is before 1.0: a minor version can change APIs (see the changelog, https://github.com/huuma-studio/ui/blob/main/CHANGELOG.md).
 
 Version check: a project with `vite.config.ts` and `huuma()` uses 0.3 (this skill set). A project with `dev.ts`/`app.ts` calling `prepare()`/`pack()` and `deno task dev` is on 0.2, the Deno setup; the README's "Migrating from the Deno Setup" section moves it to Vite.
 
