@@ -3,7 +3,7 @@ allowBuilds:
   workerd: true
 minimumReleaseAgeExclude:
   - happy-dom@21.0.0
-  - "@jsr/huuma__route@0.3.1"
+  - "@jsr/huuma__route@0.3.2"
 overrides:
   vite@*: "catalog:"
 catalog:

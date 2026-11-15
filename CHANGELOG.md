@@ -17,6 +17,7 @@ Coming from 0.2, follow [Migrating from the Deno Setup](README.md#migrating-from
 - Precompiled JSX (`"jsx": "precompile"`) isn't supported. Vite compiles JSX with the automatic runtime.
 - Static files move from `static/` and `loadStaticFiles(app)` to Vite's `public/` directory.
 - `PUBLIC_*` environment variables are read from `import.meta.env`. `Deno.env.get()` keeps working for one more minor version, with a deprecation warning.
+- `@huuma/route` 0.3.2 or later is required. Route parameters are percent-decoded once, so `/blog/caf%C3%A9` gives `params.slug` as `café`: an app that decodes them itself now decodes twice. A malformed escape, like `%E0%A4%A`, answers `400`. See the [`@huuma/route` changelog](https://github.com/huuma-studio/route/blob/main/CHANGELOG.md) for its other changes.
 
 **Remote functions**
 
@@ -97,6 +98,7 @@ Coming from 0.2, follow [Migrating from the Deno Setup](README.md#migrating-from
 **Server**
 
 - `<script>` and `<style>` content, attributes from untrusted data and tag names are rendered safely.
+- Pages answer `HEAD` like `GET`, without a body, instead of `404`.
 - A remote function's request can only call the functions its module exports. In a built app, a name every object has, like `valueOf`, answered with the module's other exports.
 - A generated CSP nonce stays local to its request.
 - A page's `metadata.headers` are sent outside production too, except `Cache-Control` and `Expires`. They were all left out unless `HUUMA_ENV=PROD` was set, also security headers like `X-Frame-Options`, and `NODE_ENV=production` didn't count.
