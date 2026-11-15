@@ -2,7 +2,7 @@
 
 Notable changes to `@huuma/ui`, newest first. Versions before 0.3.0 have no entry here.
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-11-15)
 
 Huuma UI now builds with [Vite 8](https://vite.dev) and runs on Node.js. Deno still works, and Cloudflare Workers are supported through [`@huuma/cloudflare`](https://jsr.io/@huuma/cloudflare).
 
