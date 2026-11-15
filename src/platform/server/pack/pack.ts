@@ -186,8 +186,8 @@ export function serveRemoteFunctions<T extends UIAppContext>(
  *
  * Errors thrown by the remote function itself are NOT caught here — they
  * propagate to the framework's global `handleException`, which emits
- * `{ status, message, error? }` (no `name`). Wrapping user-thrown errors
- * with a structured `{ name, message, ... }` body is a Round 1 concern.
+ * `{ status, message, error? }` (no `name`): an `HttpException`'s status
+ * and message, otherwise `500` "Internal Server Error".
  */
 export async function executeRemoteFunction(
   remoteFunctions: Record<string, (...args: unknown[]) => Promise<unknown>>,
@@ -211,7 +211,6 @@ export async function executeRemoteFunction(
   // response shape is independent of the framework's global error handler.
   // We still log so these failures are debuggable server-side, mirroring
   // the `console.error(error)` that `handleException` would have done.
-  // Body shape is provisional pending the Round 1 wire-format decision.
   let serialized: string | undefined;
   try {
     serialized = JSON.stringify(res);

@@ -1,4 +1,5 @@
-import { assert, describe, expect, test } from "vite-plus/test";
+import { BadRequestException } from "@huuma/route/http/exception/bad-request-exception";
+import { assert, describe, expect, test, vi } from "vite-plus/test";
 
 import { createUIApp } from "../app.ts";
 import { executeRemoteFunction, readRemoteBody, serveRemoteFunctions } from "./pack.ts";
@@ -122,7 +123,7 @@ test("executeRemoteFunction: Symbol return (silent JSON.stringify failure) → 5
   );
 });
 
-test("executeRemoteFunction: user-thrown error propagates (NOT wrapped) — locks in current Round-1-pending behavior", async () => {
+test("executeRemoteFunction: user-thrown error propagates (NOT wrapped)", async () => {
   class ValidationError extends Error {
     constructor(message: string) {
       super(message);
@@ -133,8 +134,8 @@ test("executeRemoteFunction: user-thrown error propagates (NOT wrapped) — lock
     save: () => Promise.reject(new ValidationError("email is required")),
   };
   // The helper does not catch user-thrown errors; they propagate to the
-  // framework's handleException. This test pins that behavior so a future
-  // Round 1 change (wrapping with { name, message }) is a deliberate,
+  // framework's handleException (see "an error a remote function throws").
+  // This test pins that behavior so a change to it is a deliberate,
   // visible diff rather than an accidental regression.
   const error = await executeRemoteFunction(fns, "save", undefined).catch(
     (thrown: unknown) => thrown,
@@ -393,5 +394,50 @@ describe("a remote function's request the stub doesn't send", () => {
     const response = await send(JSON.stringify({ remoteFunction: "add", args: [1, 2] }));
     expect(response.status).toStrictEqual(200);
     expect(await response.json()).toStrictEqual(3);
+  });
+});
+
+describe("an error a remote function throws", () => {
+  const endpoint = "http://localhost/_huuma/remote/1a2b3c4d/users.remote";
+  const app = createUIApp(({ children }) => children);
+  serveRemoteFunctions(app, new URL(endpoint).pathname, {
+    plain: () => Promise.reject(new Error("Name taken")),
+    http: () => Promise.reject(new BadRequestException("Name taken")),
+  });
+  const handle = app.deliver();
+  const call = (remoteFunction: string) =>
+    handle(
+      new Request(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ remoteFunction, args: [] }),
+      }),
+      { remoteAddr: { transport: "tcp", hostname: "127.0.0.1", port: 1 } },
+    );
+
+  test("answers 500 without its message, which stays in the server's log", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("plain");
+      expect(response.status).toStrictEqual(500);
+      expect(await response.json()).toStrictEqual({
+        status: 500,
+        message: "Internal Server Error",
+      });
+      expect(log).toHaveBeenCalledWith(expect.objectContaining({ message: "Name taken" }));
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  test("answers an HttpException's status and message", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await call("http");
+      expect(response.status).toStrictEqual(400);
+      expect(await response.json()).toMatchObject({ status: 400, message: "Name taken" });
+    } finally {
+      log.mockRestore();
+    }
   });
 });
