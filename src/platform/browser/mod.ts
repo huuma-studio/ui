@@ -51,8 +51,6 @@ export function launch(islands: Island[], transferState: TransferState): void {
         if (hydrationDone) {
           runUpdate();
         } else {
-          // TODO: Remove after validation.
-          console.warn("Dom update requested before hydration has finished. Queue it!");
           queuedUpdates.push(runUpdate);
         }
       },
