@@ -334,7 +334,9 @@ export class UIApp<T extends UIAppContext<D>, D = unknown> extends App<T> {
           {
             status: props.statusCode,
             headers: {
-              "Content-Type": "text/html",
+              // Not left to the page: a root without <meta charset> would
+              // leave the browser to guess, and garble text that isn't ASCII.
+              "Content-Type": "text/html; charset=utf-8",
               ...(contentSecurityPolicy
                 ? { "Content-Security-Policy": contentSecurityPolicy }
                 : {}),

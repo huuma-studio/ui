@@ -73,3 +73,24 @@ describe("scripts served elsewhere", () => {
     expect(await response.text()).toStrictEqual("export {};");
   });
 });
+
+describe("pages", () => {
+  test("are sent as UTF-8, also without a <meta charset>", async () => {
+    const app = createUIApp(({ children }) => (
+      <html>
+        <body>{children}</body>
+      </html>
+    ));
+    app.addPage("/", {
+      page: () => <p>Zürich — ✓</p>,
+      layouts: [],
+      middleware: [],
+      resolvers: [],
+      statusCode: 200,
+    });
+    const response = await app.deliver()(new Request("http://localhost/"), connection);
+
+    expect(response.headers.get("content-type")).toStrictEqual("text/html; charset=utf-8");
+    expect(await response.text()).toContain("<p>Zürich — ✓</p>");
+  });
+});

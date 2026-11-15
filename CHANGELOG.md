@@ -97,6 +97,7 @@ Coming from 0.2, follow [Migrating from the Deno Setup](README.md#migrating-from
 - A generated CSP nonce stays local to its request.
 - Layouts and middlewares apply only to pages in their own directory and below. `/admin`'s also applied to `/administrator`.
 - The root page is found when the routes path has capital letters, and `node_modules` and hidden directories aren't searched for pages.
+- Pages are sent as `text/html; charset=utf-8`, so their text shows right also when the root component renders no `<meta charset>`.
 
 **Documentation**
 
