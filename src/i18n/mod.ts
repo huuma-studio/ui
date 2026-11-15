@@ -191,6 +191,9 @@ function replaceParams(label: string, params?: Record<string, string>): string {
     return label;
   }
   return Object.entries(params).reduce((label, [key, value]) => {
-    return label.replace(new RegExp(`{{${key}}}`, "g"), value);
+    // A replacer function, not a replacement string: a value like "$&"
+    // would otherwise end up as the match itself, and "$`" as what comes
+    // before it.
+    return label.replace(new RegExp(`{{${key}}}`, "g"), () => value);
   }, label);
 }

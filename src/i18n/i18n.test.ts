@@ -32,6 +32,26 @@ describe(t.name, () => {
     expect(value).toStrictEqual("hello.huuma");
   });
 
+  test("interpolates a value literally, even one with $ patterns", () => {
+    const value = t(
+      {
+        i18n: {
+          activeLanguage: {
+            price: "Cost: {{amount}} today, {{amount}} tomorrow",
+          },
+        },
+      },
+      "price",
+      { amount: "10 > $& / $` / $' / $$" },
+    );
+    // Previously "$&" became the match itself, "$`" the label before it,
+    // "$'" what follows it, and "$$" a single "$": ordinary values
+    // corrupted the label.
+    expect(value).toStrictEqual(
+      "Cost: 10 > $& / $` / $' / $$ today, 10 > $& / $` / $' / $$ tomorrow",
+    );
+  });
+
   test("should throw error", () => {
     assert.throws(() => {
       t({ some: "random" }, "hello.huuma");
