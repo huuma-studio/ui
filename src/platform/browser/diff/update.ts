@@ -14,15 +14,11 @@ import { type AttachmentRef, AttachmentType } from "./attachment-ref.ts";
 import { diff } from "./diff.ts";
 import { Action, type ChangeSet, Props, Type } from "./dispatch.ts";
 import { remove } from "./remove.ts";
-import { compareAttributes } from "./types/attribute.ts";
+import { compareAttributes, isSelectValue, setAttribute } from "./types/attribute.ts";
 import type { LinkComponentChangeSet } from "./types/component.ts";
 import type { LinkElementChangeSet } from "./types/element.ts";
 import type { EventChangeSet } from "./types/event.ts";
-import type {
-  LinkTextChangeSet,
-  ReplaceTextChangeSet,
-  UpdateTextChangeSet,
-} from "./types/text.ts";
+import type { LinkTextChangeSet, ReplaceTextChangeSet, UpdateTextChangeSet } from "./types/text.ts";
 
 export function update(
   vNode: VNode<Node>,
@@ -42,7 +38,8 @@ export function update(
   }
 
   if (
-    vNode?.type === VType.ELEMENT && previousVNode?.type === VType.ELEMENT &&
+    vNode?.type === VType.ELEMENT &&
+    previousVNode?.type === VType.ELEMENT &&
     vNode[VNodeProps.TAG] === previousVNode[VNodeProps.TAG] &&
     vNode[VNodeProps.KEY] === previousVNode[VNodeProps.KEY]
   ) {
@@ -59,7 +56,8 @@ export function update(
   }
 
   if (
-    vNode?.type === VType.FRAGMENT && previousVNode?.type === VType.FRAGMENT &&
+    vNode?.type === VType.FRAGMENT &&
+    previousVNode?.type === VType.FRAGMENT &&
     vNode[VNodeProps.KEY] === previousVNode[VNodeProps.KEY]
   ) {
     return updateFragment(vNode, previousVNode, attachmentRef);
@@ -74,7 +72,7 @@ function updateComponent(
   attachmentRef: AttachmentRef,
 ) {
   return [
-    <LinkComponentChangeSet> {
+    <LinkComponentChangeSet>{
       [Props.Type]: Type.Component,
       [Props.Action]: Action.Link,
       [Props.Payload]: {
@@ -82,11 +80,7 @@ function updateComponent(
         attachmentRef,
       },
     },
-    ...update(
-      vComponent[VNodeProps.AST],
-      previousVComponent[VNodeProps.AST],
-      attachmentRef,
-    ),
+    ...update(vComponent[VNodeProps.AST], previousVComponent[VNodeProps.AST], attachmentRef),
   ];
 }
 
@@ -96,13 +90,7 @@ function updateFragment(
   attachmentRef: AttachmentRef,
 ) {
   const changeSet: ChangeSet<unknown>[] = [];
-  changeSet.push(
-    ...updateChildren(
-      vFragement,
-      previousVFragment,
-      attachmentRef,
-    ),
-  );
+  changeSet.push(...updateChildren(vFragement, previousVFragment, attachmentRef));
 
   return changeSet;
 }
@@ -113,9 +101,35 @@ function updateElement(
   attachmentRef: AttachmentRef,
 ): ChangeSet<unknown>[] {
   const changeSet: ChangeSet<unknown>[] = [];
+  // A select's value after its options: they may change in the same update.
+  const afterChildren: ChangeSet<unknown>[] = [];
+  const attributes: ChangeSet<unknown>[] = [];
+  for (const change of compareAttributes(vElement, previousVElement)) {
+    const { name } = <{ name: string }>change[Props.Payload];
+    (isSelectValue(vElement, name) ? afterChildren : attributes).push(change);
+  }
+  const children = updateChildren(vElement, previousVElement, {
+    type: AttachmentType.Parent,
+    vNode: vElement,
+  });
+  // Its options changed, its value didn't: the value is set again, so it
+  // selects among the options there are now. An update that leaves the
+  // options as they are (they're only linked) keeps what the user chose.
+  if (
+    !afterChildren.length &&
+    isSelectValue(vElement, "value") &&
+    children.some(
+      (change) =>
+        change[Props.Action] !== Action.Link &&
+        change[Props.Type] !== Type.Event &&
+        change[Props.Type] !== Type.Component,
+    )
+  ) {
+    afterChildren.push(...setAttribute("value", vElement[VNodeProps.PROPS].value, vElement));
+  }
 
   changeSet.push(
-    <LinkElementChangeSet> {
+    <LinkElementChangeSet>{
       [Props.Type]: Type.Element,
       [Props.Action]: Action.Link,
       [Props.Payload]: {
@@ -125,12 +139,9 @@ function updateElement(
       },
     },
     ...updateEvents(vElement, previousVElement),
-    ...compareAttributes(vElement, previousVElement),
-    ...updateChildren(
-      vElement,
-      previousVElement,
-      { type: AttachmentType.Parent, vNode: vElement },
-    ),
+    ...attributes,
+    ...children,
+    ...afterChildren,
   );
 
   return changeSet;
@@ -145,20 +156,17 @@ function updateText(
    * The committed subscription must match the current binding - the
    * Cleanup entries record which signal they belong to, so compare
    * against those instead of the previous snapshot. A snapshot delta
-   * misses two cases: a pass that aborted after the vNode walk already
-   * recorded the new signal (the retry sees no change), and a text whose
-   * hydration linked it without ever subscribing.
+   * misses a pass that aborted after the vNode walk already recorded the
+   * new signal: the retry sees no change.
    */
   const needsRebind = isSignal(vText)
-    ? !vText[VNodeProps.CLEANUP].some(
-      (cleanup) => cleanup.signal === vText[VNodeProps.TEXT],
-    )
+    ? !vText[VNodeProps.CLEANUP].some((cleanup) => cleanup.signal === vText[VNodeProps.TEXT])
     : vText[VNodeProps.CLEANUP].length > 0;
 
   if (needsRebind) {
     vText[VNodeProps.NODE_REF] = previousVNode[VNodeProps.NODE_REF];
     return [
-      <ReplaceTextChangeSet> {
+      <ReplaceTextChangeSet>{
         [Props.Type]: Type.Text,
         [Props.Action]: Action.Replace,
         [Props.Payload]: {
@@ -171,35 +179,29 @@ function updateText(
 
   const changeSets: ChangeSet<unknown>[] = [];
 
-  changeSets.push(
-    <LinkTextChangeSet> {
-      [Props.Type]: Type.Text,
-      [Props.Action]: Action.Link,
-      [Props.Payload]: {
-        vText,
-        node: previousVNode[VNodeProps.NODE_REF],
-        attachmentRef,
-      },
+  changeSets.push(<LinkTextChangeSet>{
+    [Props.Type]: Type.Text,
+    [Props.Action]: Action.Link,
+    [Props.Payload]: {
+      vText,
+      node: previousVNode[VNodeProps.NODE_REF],
+      attachmentRef,
     },
-  );
+  });
 
-  const text = isSignal(vText)
-    ? vText[VNodeProps.TEXT].get()
-    : vText[VNodeProps.TEXT];
+  const text = isSignal(vText) ? vText[VNodeProps.TEXT].get() : vText[VNodeProps.TEXT];
   const previousText = isSignal(previousVNode)
     ? previousVNode[VNodeProps.TEXT].get()
     : previousVNode[VNodeProps.TEXT];
 
   if (text !== previousText) {
-    changeSets.push(
-      <UpdateTextChangeSet> {
-        [Props.Type]: Type.Text,
-        [Props.Action]: Action.Update,
-        [Props.Payload]: {
-          vText,
-        },
+    changeSets.push(<UpdateTextChangeSet>{
+      [Props.Type]: Type.Text,
+      [Props.Action]: Action.Update,
+      [Props.Payload]: {
+        vText,
       },
-    );
+    });
   }
   return changeSets;
 }
@@ -252,17 +254,13 @@ export function updateChildren(
   // No previous
   if (!previousVNode[VNodeProps.CHILDREN]?.length) {
     vNode[VNodeProps.CHILDREN]?.forEach((vChild) =>
-      changeSet.push(...diff({ attachmentRef, vNode: vChild }))
+      changeSet.push(...diff({ attachmentRef, vNode: vChild })),
     );
     return changeSet;
   }
 
-  const vChildren: VNode<Node>[] = [
-    ...(vNode[VNodeProps.CHILDREN] ?? []),
-  ];
-  const previousVChildren: VNode<Node>[] = [
-    ...(previousVNode[VNodeProps.CHILDREN] ?? []),
-  ];
+  const vChildren: VNode<Node>[] = [...(vNode[VNodeProps.CHILDREN] ?? [])];
+  const previousVChildren: VNode<Node>[] = [...(previousVNode[VNodeProps.CHILDREN] ?? [])];
 
   for (const vChild of vChildren) {
     // check if we have a previous vNode with a related key
@@ -280,13 +278,10 @@ export function updateChildren(
   return changeSet;
 }
 
-function removePreviousVNode(
-  vNode: VNode<Node>,
-  previousVNodes: VNode<Node>[],
-): VNode<Node> {
+function removePreviousVNode(vNode: VNode<Node>, previousVNodes: VNode<Node>[]): VNode<Node> {
   const key = keyFromVNode(vNode);
-  const existingIndex = previousVNodes.findIndex((previousVNode) =>
-    keyFromVNode(previousVNode) === key
+  const existingIndex = previousVNodes.findIndex(
+    (previousVNode) => keyFromVNode(previousVNode) === key,
   );
   if (existingIndex < 0) {
     return undefined;

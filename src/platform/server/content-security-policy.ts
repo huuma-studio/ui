@@ -20,20 +20,16 @@ export type ContentSecurityPolicyType =
   | "form-action"
   | "frame-ancestors";
 
-export type ContentSecurityPolicy =
-  & {
-    [Key in ContentSecurityPolicyType]?: string[];
-  }
-  & { nonce?: boolean };
+export type ContentSecurityPolicy = {
+  [Key in ContentSecurityPolicyType]?: string[];
+} & { nonce?: boolean };
 
 type ContentSecurityPolicyResult = {
   nonce: string | undefined;
   contentSecurityPolicy: string;
 };
 
-export function generateCSP(
-  policy?: ContentSecurityPolicy,
-): ContentSecurityPolicyResult {
+export function generateCSP(policy?: ContentSecurityPolicy): ContentSecurityPolicyResult {
   // Default to nonce=true if not provided
   const { nonce = true, ..._policy } = policy ?? {};
 
@@ -46,7 +42,9 @@ export function generateCSP(
     const _nonce = crypto.randomUUID();
 
     if (Array.isArray(_policy["script-src-elem"])) {
-      _policy["script-src-elem"].push(`'nonce-${_nonce}'`);
+      // The policy copy still shares its arrays with the app's configuration.
+      // Add this request's nonce to a new array so later requests cannot reuse it.
+      _policy["script-src-elem"] = [..._policy["script-src-elem"], `'nonce-${_nonce}'`];
     } else {
       _policy["script-src-elem"] = [`'nonce-${_nonce}'`];
     }
@@ -58,9 +56,9 @@ export function generateCSP(
     result.nonce = _nonce;
   }
 
-  result.contentSecurityPolicy = Object.entries(_policy).map(([key, value]) =>
-    `${key} ${value.join(" ")}`
-  ).join("; ");
+  result.contentSecurityPolicy = Object.entries(_policy)
+    .map(([key, value]) => `${key} ${value.join(" ")}`)
+    .join("; ");
 
   return result;
 }

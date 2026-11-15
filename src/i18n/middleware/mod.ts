@@ -9,9 +9,7 @@ import {
   NoLanguageSpecifiedException,
 } from "../mod.ts";
 
-export function useI18n(
-  config: Required<I18nConfig>,
-): Middleware {
+export function useI18n(config: Required<I18nConfig>): Middleware {
   return (ctx, next) => {
     const lang = langFrom(new URL(ctx.request.url).pathname, config.pattern);
 
@@ -26,7 +24,7 @@ export function useI18n(
     }
 
     const transferState = ctx.get("transferState");
-    transferState.i18n = <I18nTransferState> {
+    transferState.i18n = <I18nTransferState>{
       activeLanguage: config.languages[lang],
       availableLanguages,
       config: {
@@ -42,23 +40,22 @@ export function useI18n(
   };
 }
 
-export function redirectNoLanguageSpecifiedExceptionTo(
-  config: { defaultLanguage: string; redirectTo?: string },
-): Middleware {
+export function redirectNoLanguageSpecifiedExceptionTo(config: {
+  defaultLanguage: string;
+  redirectTo?: string;
+}): Middleware {
   return async (ctx, next) => {
     try {
       return await next();
     } catch (e) {
-      if (
-        e instanceof NoLanguageSpecifiedException
-      ) {
+      if (e instanceof NoLanguageSpecifiedException) {
         return Response.redirect(
           `${new URL(ctx.request.url).origin}/${
             config.redirectTo
               ? [config.defaultLanguage, config.redirectTo].join("/")
               : config.defaultLanguage
           }`,
-          HttpStatus.TEMORARY_REDIRECTED,
+          HttpStatus.TEMPORARY_REDIRECT,
         );
       }
       throw e;
@@ -66,23 +63,22 @@ export function redirectNoLanguageSpecifiedExceptionTo(
   };
 }
 
-export function redirectLanguageNotSupportedExceptionTo(
-  config: { defaultLanguage: string; redirectTo?: string },
-): Middleware {
+export function redirectLanguageNotSupportedExceptionTo(config: {
+  defaultLanguage: string;
+  redirectTo?: string;
+}): Middleware {
   return async (ctx, next) => {
     try {
       return await next();
     } catch (e) {
-      if (
-        e instanceof LanguageNotSupportedException
-      ) {
+      if (e instanceof LanguageNotSupportedException) {
         return Response.redirect(
           `${new URL(ctx.request.url).origin}/${
             config.redirectTo
               ? [config.defaultLanguage, config.redirectTo].join("/")
               : config.defaultLanguage
           }`,
-          HttpStatus.TEMORARY_REDIRECTED,
+          HttpStatus.TEMPORARY_REDIRECT,
         );
       }
       throw e;

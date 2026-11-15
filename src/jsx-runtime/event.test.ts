@@ -1,16 +1,16 @@
+import { expect, test } from "vite-plus/test";
 import { eventName, isEventName } from "./event.ts";
-import { assertEquals } from "@std/assert/equals";
 
-Deno.test("Event: isEventName", () => {
-  assertEquals(isEventName(""), false);
-  assertEquals(isEventName(""), false);
-  assertEquals(isEventName("on-click is is"), false);
-  assertEquals(isEventName("on-click"), true);
+test("Event: isEventName", () => {
+  expect(isEventName("")).toStrictEqual(false);
+  expect(isEventName("")).toStrictEqual(false);
+  expect(isEventName("on-click is is")).toStrictEqual(false);
+  expect(isEventName("on-click")).toStrictEqual(true);
 });
 
-Deno.test("Event: eventName", () => {
-  assertEquals(eventName(""), "");
-  assertEquals(eventName("On-click"), "On-click");
-  assertEquals(eventName("on-click is is"), "click is is");
-  assertEquals(eventName("on-click"), "click");
+test("Event: eventName", () => {
+  expect(eventName("")).toStrictEqual("");
+  expect(eventName("On-click")).toStrictEqual("On-click");
+  expect(eventName("on-click is is")).toStrictEqual("click is is");
+  expect(eventName("on-click")).toStrictEqual("click");
 });

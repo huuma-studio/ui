@@ -18,6 +18,6 @@ export function Stylesheets({ stylesheets }: StylesheetsProps): JSX.Element {
     jsx("link", {
       href: `${DEFAULT_STYLES_PATH}/${stylesheet.name}`,
       rel: "stylesheet",
-    })
+    }),
   );
 }

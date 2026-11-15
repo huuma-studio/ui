@@ -1,21 +1,16 @@
+import { BadRequestException } from "@huuma/route/http/exception/bad-request-exception";
+import { EntityTooLargeException } from "@huuma/route/http/exception/entity-too-large-exception";
+import { HttpException } from "@huuma/route/http/exception/http-exception";
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
-import { array, object, string, unknown } from "@huuma/validate";
-import { info } from "@huuma/route/utils/logger";
-import { parse } from "@std/path/parse";
-import { join } from "@std/path/join";
-import { readFile } from "node:fs/promises";
-import process from "node:process";
+import { UnsupportedMediaTypeException } from "@huuma/route/http/exception/unsupported-media-type-exception";
+import { array, object, string, unknown, ValidationException } from "@huuma/validate";
 
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 
-import { generateHash, toCanonicalPath } from "./list/utils.ts";
 import { mapPath } from "./path-mapping.ts";
 import type { List } from "./mod.ts";
 
-export function packPages<T extends UIAppContext>(
-  pages: List["pages"],
-  app: UIApp<T>,
-) {
+export function packPages<T extends UIAppContext>(pages: List["pages"], app: UIApp<T>): UIApp<T> {
   for (const route in pages) {
     const _route = pages[route];
     const resolvers: Resolver<unknown>[] = [];
@@ -27,14 +22,12 @@ export function packPages<T extends UIAppContext>(
       resolvers.push(_route.page.resolver);
     }
 
-    const layouts: PageLike<unknown>[] = _route.layouts.map(
-      (layout) => {
-        if (typeof layout.resolver === "function") {
-          resolvers.push(layout.resolver);
-        }
-        return layout.default;
-      },
-    );
+    const layouts: PageLike<unknown>[] = _route.layouts.map((layout) => {
+      if (typeof layout.resolver === "function") {
+        resolvers.push(layout.resolver);
+      }
+      return layout.default;
+    });
 
     const middleware = _route.middleware
       .map((module) => {
@@ -43,7 +36,7 @@ export function packPages<T extends UIAppContext>(
       .flat();
 
     const path = mapPath(route);
-    app.addPage(path.path, {
+    const props = {
       page,
       layouts,
       middleware,
@@ -51,114 +44,135 @@ export function packPages<T extends UIAppContext>(
       metadata,
       contentSecurityPolicy,
       resolvers,
-    });
+    };
+    if (path.notFound) app.addNotFoundPage(path.path, props);
+    else app.addPage(path.path, props);
   }
   return app;
 }
 
-export async function packIslands<T extends UIAppContext>(
-  islands: List["islands"],
-  scripts: List["scripts"],
-  scriptsDirectory: string,
-  app: UIApp<T>,
-) {
-  if (islands) {
-    for (const [islandPath, island] of Object.entries(islands)) {
-      const islandHash = await generateHash(islandPath);
-      const script = scripts.find((s) =>
-        parse(s[1]).name === `${islandHash}-${parse(islandPath).name}`
-      );
-      if (script) {
-        app.addIsland(island.default, {
-          path: join(
-            "_huuma",
-            script[0],
-            script[1],
-          ),
-          contents: await readScript(
-            join(scriptsDirectory, script[1]),
-          ),
-          imports: script[2].imports,
-        });
-      } else {
-        info(
-          "PACK",
-          `Frontend script for island "${islandPath}" not found. Island was not added to Huuma UI`,
-        );
-      }
+const remoteFunctionsSchema = object({
+  remoteFunction: string(),
+  args: array(unknown()).optional(),
+});
+
+/**
+ * Refuses requests that the app's own browser stubs don't send, so other
+ * sites can't call remote functions with a visitor's cookies (cross-site
+ * request forgery):
+ *
+ * - Only `application/json` bodies. A cross-origin request with that type
+ *   needs a CORS preflight, which the app doesn't answer unless it allows
+ *   other origins itself. Forms and `text/plain` requests need none, so
+ *   they could otherwise run a remote function from any site. `415`.
+ * - Never `Sec-Fetch-Site: cross-site`, which current browsers send for
+ *   requests from other sites. `403`.
+ */
+export function checkRemoteRequest(request: Request): void {
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    throw new HttpException("Remote functions can't be called from other sites.", 403);
+  }
+  const type = request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  if (type !== "application/json") {
+    throw new UnsupportedMediaTypeException(
+      "Remote functions accept application/json requests only.",
+    );
+  }
+}
+
+/**
+ * Reads the JSON body of a remote function's request, `limit` bytes at
+ * most (`remote.maxBodySize` of the app): `request.json()` would keep a
+ * body of any size in memory before the function's name is even checked.
+ * A larger body gets `413`: one with a larger `Content-Length`, and one
+ * without that header, like a streamed body, once it passes the limit.
+ *
+ * A body that's too large is still read to its end, but none of it is
+ * kept. Answering while the client still sends it leaves a connection
+ * that Node only closes after a timeout, and the client often sees a
+ * reset connection instead of the `413`.
+ */
+export async function readRemoteBody(request: Request, limit: number): Promise<unknown> {
+  let tooLarge = Number(request.headers.get("content-length")) > limit;
+  const decoder = new TextDecoder();
+  let text = "";
+  let size = 0;
+  const reader = request.body?.getReader();
+  while (reader) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      tooLarge = true;
+      text = "";
     }
+    if (!tooLarge) text += decoder.decode(value, { stream: true });
   }
-  return app;
+  if (tooLarge) {
+    throw new EntityTooLargeException(
+      `The request of a remote function can be ${limit} bytes at most (\`remote.maxBodySize\`).`,
+    );
+  }
+  return JSON.parse(text + decoder.decode());
 }
 
-export async function packScripts<T extends UIAppContext>(
-  scripts: List["scripts"],
-  scriptsDirectory: string,
-  app: UIApp<T>,
-): Promise<UIApp<T>> {
-  if (scripts?.length) {
-    for (const script of scripts) {
-      app.addScript(
-        join("_huuma", script[0], script[1]),
-        await readScript(join(
-          scriptsDirectory,
-          script[1],
-        )),
-        script[2],
+/**
+ * The function's name and arguments from a remote function's request. A
+ * body that isn't JSON, or not in the stub's shape, gets `400`: it's the
+ * client's mistake, not a failure of the server.
+ */
+async function readRemoteCall(request: Request, limit: number) {
+  let body: unknown;
+  try {
+    body = await readRemoteBody(request, limit);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new BadRequestException("The request of a remote function must be JSON.");
+    }
+    throw error;
+  }
+  try {
+    return remoteFunctionsSchema.parse(body);
+  } catch (error) {
+    if (error instanceof ValidationException) {
+      throw new BadRequestException(
+        'The request of a remote function must be `{ "remoteFunction": string, "args"?: unknown[] }`.',
       );
     }
+    throw error;
   }
-  return app;
 }
 
-export async function packRemoteFunctions<
-  T extends UIAppContext,
->(
-  _remoteFunctions: List["remoteFunctions"],
+/**
+ * Serves the functions of one remote module at `endpoint`: the browser
+ * stub posts the function's name and arguments as JSON. Other requests are
+ * refused (`checkRemoteRequest()`), and so are bodies over the app's limit
+ * (`readRemoteBody()`) and bodies the stub doesn't send (`readRemoteCall()`).
+ */
+export function serveRemoteFunctions<T extends UIAppContext>(
   app: UIApp<T>,
-): Promise<UIApp<T>> {
-  const remoteFunctionsSchema = object({
-    remoteFunction: string(),
-    args: array(unknown()).optional(),
+  endpoint: string,
+  // deno-lint-ignore no-explicit-any
+  remoteFunctions: Record<string, (...args: any[]) => Promise<any>>,
+): UIApp<T> {
+  app.post(endpoint, async ({ request }) => {
+    checkRemoteRequest(request);
+    const { remoteFunction, args } = await readRemoteCall(request, app.remoteMaxBodySize);
+    if (
+      isOwn(remoteFunctions, remoteFunction) &&
+      typeof remoteFunctions[remoteFunction] === "function"
+    ) {
+      return await executeRemoteFunction(remoteFunctions, remoteFunction, args);
+    }
+    throw new NotFoundException(`Remote function "${remoteFunction}" not found`);
   });
-  if (_remoteFunctions) {
-    for (const [key, remoteFunctions] of Object.entries(_remoteFunctions)) {
-      const fileName = parse(key).name;
-      const fileHash = await generateHash(toCanonicalPath(key));
-      app.post(`/_huuma/remote/${fileHash}/${fileName}`, async ({ request }) => {
-        const { remoteFunction, args } = remoteFunctionsSchema.parse(await request.json());
-        if (
-          remoteFunction in remoteFunctions &&
-          typeof remoteFunctions[remoteFunction] === "function"
-        ) {
-          return await executeRemoteFunction(
-            remoteFunctions,
-            remoteFunction,
-            args,
-          );
-        }
-        throw new NotFoundException(
-          `Remote function "${remoteFunction}" not found`,
-        );
-      });
-    }
-  }
   return app;
-}
-
-async function readScript(path: string): Promise<Uint8Array<ArrayBuffer>> {
-  return new Uint8Array(
-    await readFile(join(
-      process.cwd(),
-      path,
-    )),
-  );
 }
 
 /**
  * @internal Not part of the public `@huuma/ui` API. Exported only so it can
  * be unit-tested directly; `mod.ts` does not re-export it and `pack.ts` is
- * not an entry point in `deno.json`'s exports map.
+ * not an entry point in `jsr.json`'s exports map.
  *
  * Invokes a single remote function and produces the HTTP response. Extracted
  * from the route handler so the return-value normalization and serialization
@@ -174,17 +188,15 @@ async function readScript(path: string): Promise<Uint8Array<ArrayBuffer>> {
  *
  * Errors thrown by the remote function itself are NOT caught here — they
  * propagate to the framework's global `handleException`, which emits
- * `{ status, message, error? }` (no `name`). Wrapping user-thrown errors
- * with a structured `{ name, message, ... }` body is a Round 1 concern.
+ * `{ status, message, error? }` (no `name`): an `HttpException`'s status
+ * and message, otherwise `500` "Internal Server Error".
  */
 export async function executeRemoteFunction(
   remoteFunctions: Record<string, (...args: unknown[]) => Promise<unknown>>,
   remoteFunction: string,
   args: unknown[] | undefined,
 ): Promise<Response> {
-  const res = await remoteFunctions[remoteFunction](
-    ...(args?.length ? args : []),
-  );
+  const res = await remoteFunctions[remoteFunction](...(args?.length ? args : []));
 
   // void / undefined return → 204 No Content. JSON has no `undefined`, so
   // an empty 204 body lets the client resolve to a real `undefined` instead
@@ -201,7 +213,6 @@ export async function executeRemoteFunction(
   // response shape is independent of the framework's global error handler.
   // We still log so these failures are debuggable server-side, mirroring
   // the `console.error(error)` that `handleException` would have done.
-  // Body shape is provisional pending the Round 1 wire-format decision.
   let serialized: string | undefined;
   try {
     serialized = JSON.stringify(res);
@@ -210,10 +221,9 @@ export async function executeRemoteFunction(
     return new Response(
       JSON.stringify({
         name: "RemoteFunctionSerializationError",
-        message:
-          `Remote function "${remoteFunction}" returned a value that cannot be JSON-serialized: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+        message: `Remote function "${remoteFunction}" returned a value that cannot be JSON-serialized: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
       }),
       { status: 500, headers: { "content-type": "application/json" } },
     );
@@ -237,4 +247,14 @@ export async function executeRemoteFunction(
   return new Response(serialized, {
     headers: { "content-type": "application/json" },
   });
+}
+
+/**
+ * Whether `name` is one of `object`'s own properties. The build makes a
+ * remote module a plain object, so `in` would also find what every object
+ * inherits: `valueOf` would answer with the module's other exports. Not
+ * `Object.hasOwn()`, which the ES2021 target doesn't have.
+ */
+function isOwn(object: object, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, name);
 }

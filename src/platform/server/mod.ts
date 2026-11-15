@@ -8,6 +8,13 @@ export {
   createUIApp,
   type PageLike,
   type PageLikeProps,
+  type RootPageProps,
   UIApp,
   type UIAppContext,
 } from "./app.ts";
+export {
+  type Env,
+  hasRequestContext,
+  type RequestContext,
+  requestContext,
+} from "./request-context.ts";

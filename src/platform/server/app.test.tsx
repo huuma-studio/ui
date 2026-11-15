@@ -1,0 +1,130 @@
+import { describe, expect, test } from "vite-plus/test";
+
+import type { JSX } from "../../jsx-runtime/mod.ts";
+import { createUIApp, type PageLike, type RootPageProps } from "./app.ts";
+import { Launch } from "./scripts.ts";
+
+function Root({ children, scripts, islands, transferState }: RootPageProps<unknown>) {
+  return (
+    <html>
+      <body>
+        {children}
+        <meta
+          name="island-scripts"
+          content={scripts?.body.islands.map((script) => script.path).join(" ")}
+        />
+        <Launch body={scripts?.body} islands={islands} transferState={transferState} />
+      </body>
+    </html>
+  );
+}
+
+// Two islands with the same file name in different directories, as the
+// Vite dev server serves them: by source path, without a hash prefix.
+function CounterA(): JSX.Element {
+  return <button>a</button>;
+}
+function CounterB(): JSX.Element {
+  return <button>b</button>;
+}
+
+function appWithIslands() {
+  const app = createUIApp(Root);
+  app.addScript("runtime.js", undefined, { isRuntime: true });
+  app.addIsland(CounterA, { path: "app/a/counter.client.tsx" });
+  app.addIsland(CounterB, { path: "app/b/counter.client.tsx" });
+  app.addPage("/", {
+    page: () => <CounterA />,
+    layouts: [],
+    middleware: [],
+    resolvers: [],
+    statusCode: 200,
+  });
+  return app.deliver();
+}
+
+const connection = { remoteAddr: { transport: "tcp" } };
+const get = (handle: ReturnType<typeof appWithIslands>, path: string) =>
+  handle(new Request(`http://localhost${path}`), connection);
+
+describe("scripts served elsewhere", () => {
+  test("load the page's island by path, even when file names repeat", async () => {
+    const html = await (await get(appWithIslands(), "/")).text();
+
+    expect(html).toContain('import { launch } from "/runtime.js";');
+    expect(html).toContain('import $I1 from "/app/a/counter.client.tsx";');
+    expect(html).not.toContain("/app/b/counter.client.tsx");
+    // The scripts a root component gets, e.g. to preload them.
+    expect(html).toContain('<meta name="island-scripts" content="app/a/counter.client.tsx"/>');
+  });
+
+  test("aren't served by the app", async () => {
+    const handle = appWithIslands();
+    expect((await get(handle, "/runtime.js")).status).toStrictEqual(404);
+    expect((await get(handle, "/app/a/counter.client.tsx")).status).toStrictEqual(404);
+  });
+
+  test("with contents, the app serves them", async () => {
+    const app = createUIApp(Root);
+    app.addScript("entry.js", new TextEncoder().encode("export {};"), { isEntryPoint: true });
+    const response = await app.deliver()(new Request("http://localhost/entry.js"), connection);
+
+    expect(response.headers.get("content-type")).toStrictEqual("application/javascript");
+    expect(await response.text()).toStrictEqual("export {};");
+  });
+});
+
+describe("pages", () => {
+  test("are sent as UTF-8, also without a <meta charset>", async () => {
+    const app = createUIApp(({ children }) => (
+      <html>
+        <body>{children}</body>
+      </html>
+    ));
+    app.addPage("/", {
+      page: () => <p>Zürich — ✓</p>,
+      layouts: [],
+      middleware: [],
+      resolvers: [],
+      statusCode: 200,
+    });
+    const response = await app.deliver()(new Request("http://localhost/"), connection);
+
+    expect(response.headers.get("content-type")).toStrictEqual("text/html; charset=utf-8");
+    expect(await response.text()).toContain("<p>Zürich — ✓</p>");
+  });
+
+  // Both from `@huuma/route` 0.3.2.
+  function appWithPage(path: string, page: PageLike<unknown>) {
+    const app = createUIApp(({ children }) => (
+      <html>
+        <body>{children}</body>
+      </html>
+    ));
+    app.addPage(path, { page, layouts: [], middleware: [], resolvers: [], statusCode: 200 });
+    return app.deliver();
+  }
+
+  test("answer HEAD like GET, without a body", async () => {
+    const handle = appWithPage("/", () => <p>Home</p>);
+    const response = await handle(new Request("http://localhost/", { method: "HEAD" }), connection);
+
+    expect(response.status).toStrictEqual(200);
+    expect(response.headers.get("content-type")).toStrictEqual("text/html; charset=utf-8");
+    expect(await response.text()).toStrictEqual("");
+  });
+
+  test("get their params decoded, once", async () => {
+    const handle = appWithPage("/blog/:slug", ({ params }) => <p>{params.slug}</p>);
+    for (const [path, slug] of [
+      ["/blog/caf%C3%A9", "café"],
+      ["/blog/a%20b", "a b"],
+      ["/blog/50%25", "50%"],
+    ]) {
+      const response = await handle(new Request(`http://localhost${path}`), connection);
+      expect(await response.text(), path).toContain(`<p>${slug}</p>`);
+    }
+    const malformed = await handle(new Request("http://localhost/blog/%E0%A4%A"), connection);
+    expect(malformed.status).toStrictEqual(400);
+  });
+});

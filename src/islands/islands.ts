@@ -1,8 +1,4 @@
-import {
-  isComponentNode,
-  type VComponent,
-  type VNodeBeforeCreateVisitor,
-} from "../v-node/mod.ts";
+import { isComponentNode, type VComponent, type VNodeBeforeCreateVisitor } from "../v-node/mod.ts";
 import { Fragment, type JSX, jsx } from "../jsx-runtime/mod.ts";
 import { generateRandomString } from "../utils/generate-random-string.ts";
 
@@ -17,10 +13,7 @@ export function markIslands(
   islands: Island[],
 ): VNodeBeforeCreateVisitor {
   return (node: JSX.Element) => {
-    if (
-      isComponentNode(node) &&
-      !islands.filter((island) => island.node === node).length
-    ) {
+    if (isComponentNode(node) && !islands.filter((island) => island.node === node).length) {
       const island = isIsland(node, islandsRef);
       if (island) {
         islands.push(island);
@@ -56,7 +49,7 @@ export function markIslands(
             },
             node,
             {
-              templates: [` <!--end_island_${island.id} -->`],
+              templates: [`<!--end_island_${island.id} -->`],
               nodes: [""],
             },
           ],

@@ -102,10 +102,7 @@ async function vComponent<T>(
     });
   }
 
-  vComponent[VNodeProps.AST] = await create(
-    node,
-    globalOptions,
-  );
+  vComponent[VNodeProps.AST] = await create(node, globalOptions);
 
   vComponent[VNodeProps.MODE] = VMode.Created;
   return vComponent;
@@ -126,20 +123,20 @@ async function vFragment<T>(
 
   let children: VNode<T>[];
   if (isTemplateNode(fragment)) {
-    children = (await Promise.all(
-      fragment.templates.map(async (template, i) => [
-        vText<T>(template, { skipEscaping: true }),
-        // Optional access: isTemplateNode only requires `templates`, so
-        // untyped callers can pass a TemplateNode without `nodes`.
-        await create<T>(fragment.nodes?.[i], globalOptions),
-      ]),
-    )).flat(1);
+    children = (
+      await Promise.all(
+        fragment.templates.map(async (template, i) => [
+          vText<T>(template, { skipEscaping: true }),
+          // Optional access: isTemplateNode only requires `templates`, so
+          // untyped callers can pass a TemplateNode without `nodes`.
+          await create<T>(fragment.nodes?.[i], globalOptions),
+        ]),
+      )
+    ).flat(1);
   } else {
     const _nodes = childrenFrom(fragment);
     const nodes = isArray(_nodes) ? _nodes : [_nodes];
-    children = await Promise.all(
-      nodes.map((node) => create<T>(node, globalOptions)),
-    );
+    children = await Promise.all(nodes.map((node) => create<T>(node, globalOptions)));
   }
   vFragment[VNodeProps.CHILDREN] = children;
   return vFragment;

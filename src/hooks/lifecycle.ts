@@ -9,10 +9,7 @@ export function $destroy(fn: () => void): void {
   $hook(fn, VHook.DESTROY);
 }
 
-export function $hook(
-  fn: (() => () => void) | (() => void),
-  vHook: VHook,
-) {
+export function $hook(fn: (() => () => void) | (() => void), vHook: VHook): void {
   const vNode = $scope();
 
   if (isVComponent(vNode) && vNode[VNodeProps.MODE] === VMode.NotCreated) {
@@ -20,15 +17,8 @@ export function $hook(
       vNode[VNodeProps.HOOKS] = {};
     }
 
-    vNode[VNodeProps.HOOKS][vHook] = Array.isArray(
-        vNode[VNodeProps.HOOKS][vHook],
-      )
-      ? [
-        ...(<((() => () => void) | (() => void))[]> (
-          vNode[VNodeProps.HOOKS][vHook]
-        )),
-        fn,
-      ]
+    vNode[VNodeProps.HOOKS][vHook] = Array.isArray(vNode[VNodeProps.HOOKS][vHook])
+      ? [...(<((() => () => void) | (() => void))[]>vNode[VNodeProps.HOOKS][vHook]), fn]
       : [fn];
   }
 }
