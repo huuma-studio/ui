@@ -3,9 +3,13 @@ import { parse } from "node:path";
 export interface PathMapping {
   path: string;
   statusCode: number;
+  /** A not-found page, like `!404`, for `UIApp.addNotFoundPage()`. */
+  notFound: boolean;
 }
 
-const pathMappings = new Map<string, PathMapping>([["/!404", { path: "/*", statusCode: 404 }]]);
+const pathMappings = new Map<string, PathMapping>([
+  ["/!404", { path: "/*", statusCode: 404, notFound: true }],
+]);
 
 export function mapPath(path: string): PathMapping {
   const parsedPath = parse(path);
@@ -24,5 +28,5 @@ export function mapPath(path: string): PathMapping {
    * Prepare dynamic path segments for URLPattern
    * https://developer.mozilla.org/en-US/docs/Web/API/URLPattern
    */
-  return { path: path.replace(/(\[(.+?)\])/g, ":$2"), statusCode };
+  return { path: path.replace(/(\[(.+?)\])/g, ":$2"), statusCode, notFound: !!mappedPath };
 }

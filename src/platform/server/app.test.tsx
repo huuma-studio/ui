@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 
 import type { JSX } from "../../jsx-runtime/mod.ts";
-import { createUIApp, type RootPageProps } from "./app.ts";
+import { createUIApp, type PageLike, type RootPageProps } from "./app.ts";
 import { Launch } from "./scripts.ts";
 
 function Root({ children, scripts, islands, transferState }: RootPageProps<unknown>) {
@@ -92,5 +92,39 @@ describe("pages", () => {
 
     expect(response.headers.get("content-type")).toStrictEqual("text/html; charset=utf-8");
     expect(await response.text()).toContain("<p>Zürich — ✓</p>");
+  });
+
+  // Both from `@huuma/route` 0.3.2.
+  function appWithPage(path: string, page: PageLike<unknown>) {
+    const app = createUIApp(({ children }) => (
+      <html>
+        <body>{children}</body>
+      </html>
+    ));
+    app.addPage(path, { page, layouts: [], middleware: [], resolvers: [], statusCode: 200 });
+    return app.deliver();
+  }
+
+  test("answer HEAD like GET, without a body", async () => {
+    const handle = appWithPage("/", () => <p>Home</p>);
+    const response = await handle(new Request("http://localhost/", { method: "HEAD" }), connection);
+
+    expect(response.status).toStrictEqual(200);
+    expect(response.headers.get("content-type")).toStrictEqual("text/html; charset=utf-8");
+    expect(await response.text()).toStrictEqual("");
+  });
+
+  test("get their params decoded, once", async () => {
+    const handle = appWithPage("/blog/:slug", ({ params }) => <p>{params.slug}</p>);
+    for (const [path, slug] of [
+      ["/blog/caf%C3%A9", "café"],
+      ["/blog/a%20b", "a b"],
+      ["/blog/50%25", "50%"],
+    ]) {
+      const response = await handle(new Request(`http://localhost${path}`), connection);
+      expect(await response.text(), path).toContain(`<p>${slug}</p>`);
+    }
+    const malformed = await handle(new Request("http://localhost/blog/%E0%A4%A"), connection);
+    expect(malformed.status).toStrictEqual(400);
   });
 });

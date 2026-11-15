@@ -176,8 +176,8 @@ importers:
   .:
     dependencies:
       '@huuma/route':
-        specifier: jsr:^0.3.1
-        version: '@jsr/huuma__route@0.3.1'
+        specifier: jsr:^0.3.2
+        version: '@jsr/huuma__route@0.3.2'
       '@huuma/validate':
         specifier: jsr:^0.2.1
         version: '@jsr/huuma__validate@0.2.1'
@@ -358,8 +358,8 @@ packages:
   '@jsr/huuma__route@0.2.2':
     resolution: {integrity: sha512-y6ggi/4gzJjxgSPxtPKTdE0IBTHtBjHka378/TVLVElBihrGN8ZuQIb5QFjNjd9T1mET7SyJLxWgU/j4eKy+yA==, tarball: https://npm.jsr.io/~/11/@jsr/huuma__route/0.2.2.tgz}
 
-  '@jsr/huuma__route@0.3.1':
-    resolution: {integrity: sha512-AhX2qQhxzwiFnHgg+ZAAV7j29pVJUfnRXulAgmo9TLXZhRflfXcybKmdLo6ZP5KoVlQ8PhCPPNX+jFSmQU1dAQ==, tarball: https://npm.jsr.io/~/11/@jsr/huuma__route/0.3.1.tgz}
+  '@jsr/huuma__route@0.3.2':
+    resolution: {integrity: sha512-soO73VfEJWBj+m7sP3D23mLQ4HuGJCht5AoKRIdnK7wdyMKU51suGqCpuHhiyEyLeUyAiULsqZo2Yq6zZHZnLg==, tarball: https://npm.jsr.io/~/11/@jsr/huuma__route/0.3.2.tgz}
 
   '@jsr/huuma__validate@0.2.1':
     resolution: {integrity: sha512-oW33m8qBZPr0H1gaVhtcwIgJpXhmvHZQYBIDqVmxaQaF8ZEoUwj7XpUg8muh16YU9UwBkPYFkwxYNhvQA1363Q==, tarball: https://npm.jsr.io/~/11/@jsr/huuma__validate/0.2.1.tgz}
@@ -1696,7 +1696,7 @@ snapshots:
     dependencies:
       '@jsr/std__path': 1.1.6
 
-  '@jsr/huuma__route@0.3.1': {}
+  '@jsr/huuma__route@0.3.2': {}
 
   '@jsr/huuma__validate@0.2.1':
     dependencies:

@@ -55,7 +55,7 @@ export function redirectNoLanguageSpecifiedExceptionTo(config: {
               ? [config.defaultLanguage, config.redirectTo].join("/")
               : config.defaultLanguage
           }`,
-          HttpStatus.TEMORARY_REDIRECTED,
+          HttpStatus.TEMPORARY_REDIRECT,
         );
       }
       throw e;
@@ -78,7 +78,7 @@ export function redirectLanguageNotSupportedExceptionTo(config: {
               ? [config.defaultLanguage, config.redirectTo].join("/")
               : config.defaultLanguage
           }`,
-          HttpStatus.TEMORARY_REDIRECTED,
+          HttpStatus.TEMPORARY_REDIRECT,
         );
       }
       throw e;

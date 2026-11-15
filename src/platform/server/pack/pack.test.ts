@@ -424,7 +424,8 @@ describe("an error a remote function throws", () => {
         status: 500,
         message: "Internal Server Error",
       });
-      expect(log).toHaveBeenCalledWith(expect.objectContaining({ message: "Name taken" }));
+      // `@huuma/route` logs it as text, with the message.
+      expect(log.mock.calls.flat().map(String).join("\n")).toContain("Name taken");
     } finally {
       log.mockRestore();
     }

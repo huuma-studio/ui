@@ -35,6 +35,12 @@ export interface StartOptions {
   hostname?: string;
   /** Stops the server when aborted. */
   signal?: AbortSignal;
+  /**
+   * How long the running requests may take to finish once the server
+   * stops, in milliseconds. Then their connections are closed. Defaults to
+   * 10 seconds.
+   */
+  shutdownTimeout?: number;
 }
 
 /**
@@ -59,27 +65,20 @@ export function start(app: FetchHandler, options: StartOptions): Promise<NodeSer
       port: options.port ?? port(process.env.PORT),
       hostname: options.hostname ?? (process.env.HOST || undefined),
       signal: options.signal,
+      shutdownTimeout: options.shutdownTimeout ?? 10_000,
     },
   );
-}
-
-export interface StopOptions {
-  /**
-   * How long the running requests may take to finish after the first
-   * signal, in milliseconds. Defaults to 10 seconds.
-   */
-  timeout?: number;
 }
 
 /**
  * Stops `server` gracefully on `SIGTERM` (a deploy or a restart) and
  * `SIGINT` (Ctrl+C): it accepts no new connections, lets the running
  * requests finish, then exits with code 0. If they take longer than
- * `timeout`, or a second signal comes, it exits right away with code 1,
- * cutting off what still runs. `server.js` calls it.
+ * `start()`'s `shutdownTimeout`, their connections are closed and it exits
+ * with code 1; on a second signal it exits with code 1 right away, cutting
+ * off what still runs. `server.js` calls it.
  */
-export function stopOnSignals(server: NodeServer, options: StopOptions = {}): void {
-  const timeout = options.timeout ?? 10_000;
+export function stopOnSignals(server: NodeServer): void {
   let stopping = false;
   const stop = (signal: string) => {
     if (stopping) {
@@ -88,12 +87,12 @@ export function stopOnSignals(server: NodeServer, options: StopOptions = {}): vo
     }
     stopping = true;
     info("NODE", `${signal}: finishing the running requests, then stopping.`);
-    // Unref'd: the timer alone doesn't keep the process running.
-    setTimeout(() => {
-      warn("NODE", `The running requests didn't finish in ${timeout} ms: stopping anyway.`);
-      process.exit(1);
-    }, timeout).unref();
-    void server.shutdown().then(() => process.exit(0));
+    void server.shutdown().then(({ forced }) => {
+      if (forced) {
+        warn("NODE", "The running requests didn't finish in time: closed their connections.");
+      }
+      process.exit(forced ? 1 : 0);
+    });
   };
   for (const signal of ["SIGTERM", "SIGINT"]) {
     try {
