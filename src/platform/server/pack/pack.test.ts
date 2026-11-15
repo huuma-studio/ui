@@ -326,3 +326,52 @@ describe("the body limit of remote functions", () => {
     );
   });
 });
+
+describe("a remote function's request the stub doesn't send", () => {
+  const endpoint = "http://localhost/_huuma/remote/1a2b3c4d/math.remote";
+  const app = createUIApp(({ children }) => children);
+  serveRemoteFunctions(app, new URL(endpoint).pathname, {
+    add: (a: number, b: number) => resolve(a + b),
+  });
+  const handle = app.deliver();
+  const send = (body: string) =>
+    handle(
+      new Request(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      }),
+      { remoteAddr: { transport: "tcp", hostname: "127.0.0.1", port: 1 } },
+    );
+
+  test("gets 400 for a body that isn't JSON", async () => {
+    for (const body of ["", "{", "add(1, 2)", '{"remoteFunction":"add"'] as const) {
+      const response = await send(body);
+      expect(response.status, JSON.stringify(body)).toStrictEqual(400);
+      expect(await response.json(), JSON.stringify(body)).toMatchObject({
+        message: "The request of a remote function must be JSON.",
+      });
+    }
+  });
+
+  test("gets 400 for JSON in another shape", async () => {
+    for (const body of [
+      {},
+      [],
+      null,
+      "add",
+      { remoteFunction: 5 },
+      { remoteFunction: "add", args: "1, 2" },
+    ]) {
+      const response = await send(JSON.stringify(body));
+      expect(response.status, JSON.stringify(body)).toStrictEqual(400);
+      await response.body?.cancel();
+    }
+  });
+
+  test("still calls the function for the stub's request", async () => {
+    const response = await send(JSON.stringify({ remoteFunction: "add", args: [1, 2] }));
+    expect(response.status).toStrictEqual(200);
+    expect(await response.json()).toStrictEqual(3);
+  });
+});

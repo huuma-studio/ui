@@ -58,7 +58,7 @@ The error body today carries only `{ name, message }`. Fields like `stack`, `cau
 - The framework validates the request body with `@huuma/validate` in the route it registers for each remote module.
 - Schema: `{ remoteFunction: string, args?: unknown[] }`.
 - The server looks up `remoteFunction` on the imported module and invokes it with the args.
-- If the body fails schema validation, `remoteFunctionsSchema.parse(body)` throws and is handled by the framework's global error handler — **not** yet by the structured error path above. The same applies to `NotFoundException` ("Remote function not found"). Both are open improvements; do not rely on a structured body for these yet.
+- A body that isn't JSON, or fails schema validation, gets `400`; an unknown function name gets `404` ("Remote function not found"). Both bodies are `{ status, message }` from the framework's global error handler, without a `name`, so the client sees `err.name === "RemoteFunctionError"`.
 - Validate **business** input inside the remote function itself and throw a descriptive `Error` — its `name` and `message` will reach the client.
 
 ## The request: auth, headers, bindings

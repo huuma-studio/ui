@@ -394,7 +394,7 @@ const handleSubmit = async (event: Event) => {
 };
 ```
 
-Note: request-body schema validation failures and unknown-function-name errors still go through the framework's global error handler and may not yet produce a structured `{ name, message }` body. Network-level fetch failures surface as `TypeError: Failed to fetch`.
+A request body that isn't JSON, or not in the stub's shape, gets `400`, and an unknown function name `404`. Their error bodies have a `message` but no `name`, so the error's `name` is `"RemoteFunctionError"`. Network-level fetch failures surface as `TypeError: Failed to fetch`.
 
 ### Calls from other sites
 
