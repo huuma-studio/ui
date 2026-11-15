@@ -47,7 +47,7 @@ Coming from 0.2, follow [Migrating from the Deno Setup](README.md#migrating-from
 - An `adapter` option for other platforms, with `node()` as the default. The adapter API is experimental.
 - The server entry's named exports are exports of the built app too, e.g. a Durable Object class.
 - Standard decorators are compiled with Babel in the modules that use them.
-- `server.js` stops gracefully on `SIGTERM` and Ctrl+C: it lets the running requests finish, for 10 seconds at most. `stopOnSignals()` from `@huuma/ui/vite/node` does the same for a server of your own.
+- `server.js` stops gracefully on `SIGTERM` and Ctrl+C: it lets the running requests finish, for 10 seconds at most, then closes their connections. `stopOnSignals()` from `@huuma/ui/vite/node` does the same for a server of your own, and `start()`'s `shutdownTimeout` sets the time.
 
 **Server**
 

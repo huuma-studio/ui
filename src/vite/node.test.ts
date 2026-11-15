@@ -163,9 +163,9 @@ describe(stopOnSignals.name, () => {
           return new Response("ok");
         },
       },
-      { client: ${JSON.stringify(tmpdir())}, port: 0, hostname: "127.0.0.1" },
+      { client: ${JSON.stringify(tmpdir())}, port: 0, hostname: "127.0.0.1", shutdownTimeout: ${timeout} },
     );
-    stopOnSignals(server, { timeout: ${timeout} });
+    stopOnSignals(server);
     console.log("ready " + server.port);
   `;
 
@@ -225,7 +225,7 @@ describe(stopOnSignals.name, () => {
     const hanging = fetch(`${origin}/hang`).catch(() => "cut off");
     await printed("running /hang");
     child.kill("SIGTERM");
-    await printed("didn't finish in 300 ms");
+    await printed("didn't finish in time");
     expect(await exited).toStrictEqual(1);
     expect(await hanging).toStrictEqual("cut off");
   });
