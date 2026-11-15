@@ -1,8 +1,9 @@
+import { BadRequestException } from "@huuma/route/http/exception/bad-request-exception";
 import { EntityTooLargeException } from "@huuma/route/http/exception/entity-too-large-exception";
 import { HttpException } from "@huuma/route/http/exception/http-exception";
 import { NotFoundException } from "@huuma/route/http/exception/not-found-exception";
 import { UnsupportedMediaTypeException } from "@huuma/route/http/exception/unsupported-media-type-exception";
-import { array, object, string, unknown } from "@huuma/validate";
+import { array, object, string, unknown, ValidationException } from "@huuma/validate";
 
 import type { PageLike, Resolver, UIApp, UIAppContext } from "../app.ts";
 
@@ -114,10 +115,37 @@ export async function readRemoteBody(request: Request, limit: number): Promise<u
 }
 
 /**
+ * The function's name and arguments from a remote function's request. A
+ * body that isn't JSON, or not in the stub's shape, gets `400`: it's the
+ * client's mistake, not a failure of the server.
+ */
+async function readRemoteCall(request: Request, limit: number) {
+  let body: unknown;
+  try {
+    body = await readRemoteBody(request, limit);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new BadRequestException("The request of a remote function must be JSON.");
+    }
+    throw error;
+  }
+  try {
+    return remoteFunctionsSchema.parse(body);
+  } catch (error) {
+    if (error instanceof ValidationException) {
+      throw new BadRequestException(
+        'The request of a remote function must be `{ "remoteFunction": string, "args"?: unknown[] }`.',
+      );
+    }
+    throw error;
+  }
+}
+
+/**
  * Serves the functions of one remote module at `endpoint`: the browser
  * stub posts the function's name and arguments as JSON. Other requests are
  * refused (`checkRemoteRequest()`), and so are bodies over the app's limit
- * (`readRemoteBody()`).
+ * (`readRemoteBody()`) and bodies the stub doesn't send (`readRemoteCall()`).
  */
 export function serveRemoteFunctions<T extends UIAppContext>(
   app: UIApp<T>,
@@ -127,9 +155,7 @@ export function serveRemoteFunctions<T extends UIAppContext>(
 ): UIApp<T> {
   app.post(endpoint, async ({ request }) => {
     checkRemoteRequest(request);
-    const { remoteFunction, args } = remoteFunctionsSchema.parse(
-      await readRemoteBody(request, app.remoteMaxBodySize),
-    );
+    const { remoteFunction, args } = await readRemoteCall(request, app.remoteMaxBodySize);
     if (
       remoteFunction in remoteFunctions &&
       typeof remoteFunctions[remoteFunction] === "function"
