@@ -94,27 +94,39 @@ export function launch(islands: Island[], transferState: TransferState): void {
           if (island) {
             const attachmentRef = createIslandAnchor(node);
             const nodes = collectIslandNodes(node, islandId);
-            const element = jsx(island.fn, {
-              // Todo re-construct Signals
-              ...island.props,
-              children: findIslandChildren({ nodes, islandId, islands }),
-            }) as JSX.ComponentNode<JSX.Component>;
-            const options = { url: new URL(globalThis.window.location.href), transferState };
-            const vNode = create<Node>(element, options);
-            if (isVComponent(vNode)) {
-              dispatch(hydrate(vNode, nodes, attachmentRef));
-              dropStale(nodes);
-              registerMountedIsland({ element, vNode, options });
+            try {
+              const element = jsx(island.fn, {
+                // Todo re-construct Signals
+                ...island.props,
+                children: findIslandChildren({ nodes, islandId, islands }),
+              }) as JSX.ComponentNode<JSX.Component>;
+              const options = {
+                url: new URL(globalThis.window.location.href),
+                transferState,
+              };
+              const vNode = create<Node>(element, options);
+              if (isVComponent(vNode)) {
+                dispatch(hydrate(vNode, nodes, attachmentRef));
+                dropStale(nodes);
+                registerMountedIsland({ element, vNode, options });
+              }
+            } catch (error) {
+              // One broken island must not leave the rest of the page
+              // un-hydrated and its updates queued forever. The island keeps
+              // the markup the server rendered for it.
+              console.error(`[huuma] Island "${islandId}" failed to hydrate:`, error);
             }
           }
         }
       }
     }
     removeIslandComments();
-    hydrationDone = true;
-    for (const update of queuedUpdates) {
-      update();
-    }
+  }
+
+  // A page without islands is hydrated as it is: updates run right away.
+  hydrationDone = true;
+  for (const update of queuedUpdates) {
+    update();
   }
 }
 
