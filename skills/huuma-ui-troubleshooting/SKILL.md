@@ -20,6 +20,7 @@ Use this skill when the agent (or user) hits a Huuma UI lint violation or runtim
 - **Rule:** `$`-hooks (`$signal`, `$effect`, `$mount`, `$ref`, `$url`, `$route`, `$t`, etc.) run only in sync island scope.
 - **Fix:** Move the hook call out of the `async` function or before any `await`. Use a wrapper sync component and call the hook at the top level. For async data, use `resolver()` (from `@huuma/ui/hooks/scope`) in the server component and pass the result down as props.
 - **How to verify:** your linter (lint `no-async-hook-calling`, via `@huuma/ui/lint`); the hook scope is provided by `@huuma/ui/hooks/scope`.
+- **Only in `vite` dev, in a sync island, after "optimized dependencies changed"?** Vite pre-bundled a dependency late and the page got a second copy of `@huuma/ui`. Update to `@huuma/ui` 0.3.1 or later, which finds the dependencies up front, and remove `optimizeDeps` workarounds for `@huuma/ui` or `@jsr/huuma__ui` from `vite.config.ts`.
 
 ### "client-side does not support async jsx"
 

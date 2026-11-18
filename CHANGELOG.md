@@ -2,7 +2,7 @@
 
 Notable changes to `@huuma/ui`, newest first. Versions before 0.3.0 have no entry here.
 
-## Unreleased
+## 0.3.1 (2026-11-18)
 
 ### Fixed
 
