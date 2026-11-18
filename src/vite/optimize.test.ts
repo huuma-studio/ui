@@ -60,10 +60,14 @@ describe("dependency pre-bundling", () => {
     }
   });
 
-  test("scans the routes and the server entry for the server, without tests", () => {
+  test("scans the routes, the server entry, the islands and the remote modules for the server, without tests", () => {
+    // Islands and remote modules anywhere in the project: the server loads
+    // them through virtual modules, like the routes.
     expect(server.environments.ssr.config.optimizeDeps.entries).toStrictEqual([
       "app/**/*.{ts,tsx}",
       "server.ts",
+      "**/*.client.tsx",
+      "**/*.remote.ts",
       "!**/*.test.*",
       "!**/*.spec.*",
     ]);

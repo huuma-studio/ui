@@ -6,7 +6,7 @@ Notable changes to `@huuma/ui`, newest first. Versions before 0.3.0 have no entr
 
 ### Fixed
 
-- The `huuma()` plugin lets Vite find the app's dependencies before the first request. The browser's scan starts from the islands, and the server's from the routes and the server entry. Found on the first request that used them, dependencies were pre-bundled again, which could give a page a second copy of `@huuma/ui` ("No sync vnode scope found") or of a library with global state, like ProseMirror. Apps no longer need `optimizeDeps` settings for this: `exclude: ["@huuma/ui"]`, aliases for `@jsr/huuma__ui`, and `include` lists for libraries like `@huuma/tiptap` can go.
+- The `huuma()` plugin lets Vite find the app's dependencies before the first request. The browser's scan starts from the islands, and the server's from the routes, the server entry, the islands and the remote modules. Found on the first request that used them, dependencies were pre-bundled again, which could give a page a second copy of `@huuma/ui` ("No sync vnode scope found") or of a library with global state, like ProseMirror. Apps no longer need `optimizeDeps` settings for this: `exclude: ["@huuma/ui"]`, aliases for `@jsr/huuma__ui`, and `include` lists for libraries like `@huuma/tiptap` can go.
 - The browser's scan stops at remote (`*.remote.ts`) and server-only (`*.server.*`) modules, so their dependencies aren't pre-bundled for the browser.
 
 ## 0.3.0 (2026-11-15)

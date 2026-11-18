@@ -12,6 +12,12 @@ export interface AppModules {
   server: string;
 }
 
+// Islands and remote modules, anywhere in the project, as Huuma discovers
+// them (`listIslands`, `listRemoteFunctions`). Vite's scan skips
+// `node_modules` and hidden directories too.
+const ISLANDS = "**/*.client.tsx";
+const REMOTE_MODULES = "**/*.remote.ts";
+
 // Patterns Vite's scan leaves out of the server's entries.
 const NOT_APP_CODE = ["!**/*.test.*", "!**/*.spec.*"];
 
@@ -36,7 +42,8 @@ export const INSTALLED: boolean =
  * a second copy of `@huuma/ui` ("No sync vnode scope found") or of a
  * library with global state (ProseMirror's "Duplicate use of selection
  * JSON ID"). So the scan starts from the islands (browser) and from the
- * routes and the server entry (ssr), and the browser runtime, which only
+ * routes, the server entry, the islands and the remote modules (ssr),
+ * which the server loads through virtual modules, and the browser runtime, which only
  * `virtual:huuma/runtime` imports, is included up front: unless `installed`
  * is false, as the islands' `@huuma/ui` imports then aren't pre-bundled
  * either.
@@ -53,7 +60,7 @@ export function optimizeDepsPlugin(app: () => AppModules, installed = INSTALLED)
       if ((config.consumer ?? (name === "client" ? "client" : "server")) === "client") {
         return {
           optimizeDeps: {
-            entries: ["**/*.client.tsx"],
+            entries: [ISLANDS],
             ...(installed ? { include: ["@huuma/ui/browser"] } : {}),
           },
         };
@@ -63,7 +70,7 @@ export function optimizeDepsPlugin(app: () => AppModules, installed = INSTALLED)
       if (name === "ssr") {
         return {
           optimizeDeps: {
-            entries: [`${routes}/**/*.{ts,tsx}`, server, ...NOT_APP_CODE],
+            entries: [`${routes}/**/*.{ts,tsx}`, server, ISLANDS, REMOTE_MODULES, ...NOT_APP_CODE],
           },
         };
       }
