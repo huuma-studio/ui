@@ -18,6 +18,7 @@ import { entryPlugin } from "./entry.ts";
 import { denoEnvPlugin } from "./env.ts";
 import { islandsPlugin } from "./islands.ts";
 import { node } from "./node-adapter.ts";
+import { optimizeDepsPlugin } from "./optimize.ts";
 import { remotePlugin } from "./remote.ts";
 import { routesPlugin } from "./routes.ts";
 import { serverOnlyPlugin } from "./server-only.ts";
@@ -79,6 +80,10 @@ export function huuma(options: HuumaOptions = {}): PluginOption[] {
     islandsPlugin(() => app),
     remotePlugin(() => app.root),
     serverOnlyPlugin(),
+    optimizeDepsPlugin(() => ({
+      routes: options.routes ?? "app",
+      server: options.server ?? "server.ts",
+    })),
     denoEnvPlugin(),
     decoratorsPlugin(
       () => options.decorators ?? "auto",
