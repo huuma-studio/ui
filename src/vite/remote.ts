@@ -15,7 +15,7 @@ export const REMOTE_ID = "virtual:huuma/remote";
 const RESOLVED_REMOTE_ID = `\0${REMOTE_ID}`;
 
 // A remote module, e.g. `app/todo.remote.ts`, with an optional query.
-const REMOTE_MODULE = /\.remote\.ts(\?.*)?$/;
+export const REMOTE_MODULE: RegExp = /\.remote\.ts(\?.*)?$/;
 
 /**
  * Serves `virtual:huuma/remote` for the remote modules (`*.remote.ts`)
